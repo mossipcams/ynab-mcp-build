@@ -4,6 +4,28 @@
 
 The v1 product surface is streamable HTTP MCP. The codebase is organized to keep HTTP transport, MCP protocol wiring, YNAB access, and OAuth state management separate.
 
+## Diagram
+
+```mermaid
+flowchart TD
+    A[src/index.ts]
+    B[src/app/create-app.ts]
+    C[src/http/routes/**]
+    D[src/mcp/**]
+    E[src/slices/**]
+    F[src/platform/ynab/**]
+    G[src/shared/**]
+    H[src/oauth/http/**]
+    I[src/oauth/core/**]
+    J[src/durable-objects/**]
+
+    A --> B --> C
+    C --> D --> E --> F
+    E --> G
+    C --> H --> I
+    I <--> J
+```
+
 ## Runtime Flow
 
 1. `src/index.ts` exports the Worker `fetch` handler and Durable Object classes.
