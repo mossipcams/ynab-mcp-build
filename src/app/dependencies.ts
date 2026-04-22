@@ -1,7 +1,7 @@
 import { createDurableObjectOAuthStore } from "../durable-objects/oauth-state-client.js";
 import { createYnabClient, type YnabClient } from "../platform/ynab/client.js";
 import { createOAuthCore } from "../oauth/core/auth.js";
-import { createInMemoryOAuthStore, type OAuthStore } from "../oauth/core/store.js";
+import type { OAuthStore } from "../oauth/core/store.js";
 import type { AppEnv } from "../shared/env.js";
 
 export type AppDependencies = {
@@ -10,8 +10,6 @@ export type AppDependencies = {
   oauthStore?: OAuthStore;
   ynabClient?: YnabClient;
 };
-
-let defaultOAuthStore: OAuthStore | undefined;
 
 export function resolveYnabClient(env: AppEnv, dependencies: AppDependencies): YnabClient {
   if (dependencies.ynabClient) {
@@ -89,15 +87,6 @@ export function resolveYnabClient(env: AppEnv, dependencies: AppDependencies): Y
   });
 }
 
-export function resolveOAuthStore(dependencies: AppDependencies): OAuthStore {
-  if (dependencies.oauthStore) {
-    return dependencies.oauthStore;
-  }
-  defaultOAuthStore ??= createInMemoryOAuthStore();
-
-  return defaultOAuthStore;
-}
-
 export function resolveOAuthCore(env: AppEnv, dependencies: AppDependencies) {
   if (!env.oauthEnabled || !env.publicUrl) {
     return undefined;
@@ -107,7 +96,13 @@ export function resolveOAuthCore(env: AppEnv, dependencies: AppDependencies) {
     ? dependencies.oauthStore
     : env.oauthStateNamespace
       ? createDurableObjectOAuthStore(env.oauthStateNamespace.get(env.oauthStateNamespace.idFromName("oauth-state")))
-      : resolveOAuthStore(dependencies);
+      : undefined;
+
+  if (!store) {
+    throw new Error(
+      "OAuth requires a Durable Object namespace or an injected OAuth store when MCP_OAUTH_ENABLED is true."
+    );
+  }
 
   return createOAuthCore({
     createId: dependencies.createId ?? (() => crypto.randomUUID()),
