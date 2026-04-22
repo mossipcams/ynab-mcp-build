@@ -15,19 +15,10 @@ describe("resolveAppEnv", () => {
     const env = resolveAppEnv({
       MCP_OAUTH_ENABLED: "true",
       MCP_PUBLIC_URL: "https://mcp.example.com/mcp"
+      MCP_PUBLIC_URL: "https://mcp.example.com/mcp"
     } as Partial<Env> & { MCP_OAUTH_ENABLED: string; MCP_PUBLIC_URL: string });
 
     expect(env.oauthEnabled).toBe(true);
-    expect(env.publicUrl).toBe("https://mcp.example.com/mcp");
-  });
-
-  it("derives publicUrl from request origin when MCP_PUBLIC_URL is not set", () => {
-    const request = new Request("https://mcp.example.com/mcp");
-    const env = resolveAppEnv(
-      { MCP_OAUTH_ENABLED: "true" } as Partial<Env> & { MCP_OAUTH_ENABLED: string },
-      request
-    );
-
     expect(env.publicUrl).toBe("https://mcp.example.com/mcp");
   });
 

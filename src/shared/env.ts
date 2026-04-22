@@ -30,7 +30,6 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
   const derivedPublicUrl = request
     ? `${new URL(request.url).origin}/mcp`
     : undefined;
-
   const resolvedEnv = {
     mcpServerName: runtimeEnv?.MCP_SERVER_NAME ?? DEFAULT_APP_ENV.mcpServerName,
     mcpServerVersion: runtimeEnv?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
