@@ -415,7 +415,7 @@ export async function getFinancialSnapshot(ynabClient: YnabClient, input: Financ
   };
 }
 
-export async function getBudgetHealthSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
+export async function getPlanHealthSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = input.topN ?? 5;
   const { monthDetail } = await getMonthContext(ynabClient, input);
 
@@ -1070,7 +1070,7 @@ export async function getDebtSummary(ynabClient: YnabClient, input: { planId?: s
   });
 }
 
-export async function getBudgetCleanupSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
+export async function getCleanupSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = input.topN ?? 5;
   const { monthDetail, transactions } = await getMonthContext(ynabClient, input);
   const monthTransactions = transactions.filter(

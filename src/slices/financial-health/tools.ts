@@ -3,15 +3,15 @@ import { z } from "zod";
 import type { McpToolDefinition } from "../../mcp/tools.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
 import {
-  getBudgetCleanupSummary,
+  getCleanupSummary,
   getCashFlowSummary,
   getCashRunway,
   getCategoryTrendSummary,
   getDebtSummary,
-  getBudgetHealthSummary,
   getEmergencyFundCoverage,
   getFinancialHealthCheck,
   getFinancialSnapshot,
+  getPlanHealthSummary,
   getGoalProgressSummary,
   getIncomeSummary,
   getMonthlyReview,
@@ -37,19 +37,19 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
     },
     {
       name: "ynab_get_budget_health_summary",
-      title: "Get YNAB Budget Health Summary",
+      title: "Get YNAB Plan Health Summary",
       description: "Summarizes available funds, overspending, underfunding, and assigned versus spent.",
       inputSchema: {
         planId: z.string().optional(),
         month: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getBudgetHealthSummary(ynabClient, input)
+      execute: (input) => getPlanHealthSummary(ynabClient, input)
     },
     {
       name: "ynab_get_financial_health_check",
       title: "Get YNAB Financial Health Check",
-      description: "Returns a compact score and top risk list across cash, cleanup, and budget stress.",
+      description: "Returns a compact score and top risk list across cash, cleanup, and plan stress.",
       inputSchema: {
         planId: z.string().optional(),
         month: z.string().optional(),
@@ -60,7 +60,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
     {
       name: "ynab_get_monthly_review",
       title: "Get YNAB Monthly Review",
-      description: "Returns a compact month summary with cash flow, budget health, and top spending categories.",
+      description: "Returns a compact month summary with cash flow, plan health, and top spending categories.",
       inputSchema: {
         planId: z.string().optional(),
         month: z.string().optional(),
@@ -198,14 +198,14 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
     },
     {
       name: "ynab_get_budget_cleanup_summary",
-      title: "Get YNAB Budget Cleanup Summary",
+      title: "Get YNAB Cleanup Summary",
       description: "Returns a compact cleanup punch-list for uncategorized, unapproved, uncleared, and overspent items.",
       inputSchema: {
         planId: z.string().optional(),
         month: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getBudgetCleanupSummary(ynabClient, input)
+      execute: (input) => getCleanupSummary(ynabClient, input)
     },
     {
       name: "ynab_get_net_worth_trajectory",
