@@ -9,7 +9,7 @@ function createTestEnv(): Env {
     MCP_SERVER_NAME: "ynab-mcp-build",
     MCP_SERVER_VERSION: "0.1.0",
     YNAB_API_BASE_URL: "https://api.ynab.com/v1"
-  } as Env;
+  } as unknown as Env;
 }
 
 describe("payees slice", () => {
