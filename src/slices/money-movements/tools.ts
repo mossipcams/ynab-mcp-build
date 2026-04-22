@@ -1,8 +1,7 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import type { McpToolDefinition } from "../../mcp/tools.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
-import { toErrorResult, toTextResult } from "../../shared/results.js";
 import {
   getMoneyMovementGroups,
   getMoneyMovementGroupsByMonth,
@@ -10,78 +9,45 @@ import {
   getMoneyMovementsByMonth
 } from "./service.js";
 
-export function registerMoneyMovementTools(server: McpServer, ynabClient: YnabClient) {
-  server.registerTool(
-    "ynab_get_money_movements",
+export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): McpToolDefinition[] {
+  return [
     {
+      name: "ynab_get_money_movements",
       title: "Get YNAB Money Movements",
       description: "Returns transfer-style money movements derived from YNAB transactions.",
       inputSchema: {
         planId: z.string().optional()
-      }
+      },
+      execute: (input) => getMoneyMovements(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await getMoneyMovements(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_money_movements_by_month",
     {
+      name: "ynab_get_money_movements_by_month",
       title: "Get YNAB Money Movements By Month",
       description: "Returns transfer-style money movements for a single plan month.",
       inputSchema: {
         planId: z.string().optional(),
         month: z.string().min(1)
-      }
+      },
+      execute: (input) => getMoneyMovementsByMonth(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await getMoneyMovementsByMonth(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_money_movement_groups",
     {
+      name: "ynab_get_money_movement_groups",
       title: "Get YNAB Money Movement Groups",
       description: "Groups transfer-style money movements by source and destination account.",
       inputSchema: {
         planId: z.string().optional()
-      }
+      },
+      execute: (input) => getMoneyMovementGroups(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await getMoneyMovementGroups(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_money_movement_groups_by_month",
     {
+      name: "ynab_get_money_movement_groups_by_month",
       title: "Get YNAB Money Movement Groups By Month",
       description: "Groups transfer-style money movements by source and destination account for a single month.",
       inputSchema: {
         planId: z.string().optional(),
         month: z.string().min(1)
-      }
-    },
-    async (input) => {
-      try {
-        return toTextResult(await getMoneyMovementGroupsByMonth(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
+      },
+      execute: (input) => getMoneyMovementGroupsByMonth(ynabClient, input)
     }
-  );
+  ];
 }

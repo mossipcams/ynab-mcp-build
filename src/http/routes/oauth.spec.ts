@@ -27,7 +27,9 @@ describe("oauth routes", () => {
   });
 
   it("serves OAuth authorization-server metadata when OAuth mode is enabled", async () => {
-    const app = createApp();
+    const app = createApp({
+      oauthStore: createInMemoryOAuthStore()
+    });
     const response = await app.request(
       "http://localhost/.well-known/oauth-authorization-server",
       undefined,
@@ -49,7 +51,9 @@ describe("oauth routes", () => {
   });
 
   it("registers a public client with a single redirect URI", async () => {
-    const app = createApp();
+    const app = createApp({
+      oauthStore: createInMemoryOAuthStore()
+    });
     const response = await app.request(
       "http://localhost/register",
       {

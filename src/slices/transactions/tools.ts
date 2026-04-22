@@ -1,8 +1,7 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import type { McpToolDefinition } from "../../mcp/tools.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
-import { toErrorResult, toTextResult } from "../../shared/results.js";
 import {
   getTransaction,
   getScheduledTransaction,
@@ -26,10 +25,10 @@ const scheduledTransactionFields = [
   "account_name"
 ] as const;
 
-export function registerTransactionTools(server: McpServer, ynabClient: YnabClient) {
-  server.registerTool(
-    "ynab_list_transactions",
+export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDefinition[] {
+  return [
     {
+      name: "ynab_list_transactions",
       title: "List YNAB Transactions",
       description: "Lists YNAB transactions with optional pagination and compact field projection.",
       inputSchema: {
@@ -38,39 +37,21 @@ export function registerTransactionTools(server: McpServer, ynabClient: YnabClie
         offset: z.number().int().min(0).optional(),
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
-      }
+      },
+      execute: (input) => listTransactions(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await listTransactions(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_transaction",
     {
+      name: "ynab_get_transaction",
       title: "Get YNAB Transaction",
       description: "Returns a compact summary for a single YNAB transaction.",
       inputSchema: {
         planId: z.string().optional(),
         transactionId: z.string().min(1)
-      }
+      },
+      execute: (input) => getTransaction(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await getTransaction(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_search_transactions",
     {
+      name: "ynab_search_transactions",
       title: "Search YNAB Transactions",
       description: "Searches YNAB transactions with compact filters, projections, pagination, and sorting.",
       inputSchema: {
@@ -90,20 +71,11 @@ export function registerTransactionTools(server: McpServer, ynabClient: YnabClie
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional(),
         sort: z.enum(sortableValues).optional()
-      }
+      },
+      execute: (input) => searchTransactions(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await searchTransactions(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_transactions_by_month",
     {
+      name: "ynab_get_transactions_by_month",
       title: "Get YNAB Transactions By Month",
       description: "Lists transactions for a single plan month.",
       inputSchema: {
@@ -113,20 +85,11 @@ export function registerTransactionTools(server: McpServer, ynabClient: YnabClie
         offset: z.number().int().min(0).optional(),
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
-      }
+      },
+      execute: (input) => getTransactionsByMonth(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await getTransactionsByMonth(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_transactions_by_account",
     {
+      name: "ynab_get_transactions_by_account",
       title: "Get YNAB Transactions By Account",
       description: "Lists transactions for a single account.",
       inputSchema: {
@@ -136,20 +99,11 @@ export function registerTransactionTools(server: McpServer, ynabClient: YnabClie
         offset: z.number().int().min(0).optional(),
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
-      }
+      },
+      execute: (input) => getTransactionsByAccount(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await getTransactionsByAccount(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_transactions_by_category",
     {
+      name: "ynab_get_transactions_by_category",
       title: "Get YNAB Transactions By Category",
       description: "Lists transactions for a single category.",
       inputSchema: {
@@ -159,20 +113,11 @@ export function registerTransactionTools(server: McpServer, ynabClient: YnabClie
         offset: z.number().int().min(0).optional(),
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
-      }
+      },
+      execute: (input) => getTransactionsByCategory(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await getTransactionsByCategory(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_transactions_by_payee",
     {
+      name: "ynab_get_transactions_by_payee",
       title: "Get YNAB Transactions By Payee",
       description: "Lists transactions for a single payee.",
       inputSchema: {
@@ -182,20 +127,11 @@ export function registerTransactionTools(server: McpServer, ynabClient: YnabClie
         offset: z.number().int().min(0).optional(),
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
-      }
+      },
+      execute: (input) => getTransactionsByPayee(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await getTransactionsByPayee(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_list_scheduled_transactions",
     {
+      name: "ynab_list_scheduled_transactions",
       title: "List YNAB Scheduled Transactions",
       description: "Lists scheduled transactions with optional pagination and compact field projection.",
       inputSchema: {
@@ -204,33 +140,18 @@ export function registerTransactionTools(server: McpServer, ynabClient: YnabClie
         offset: z.number().int().min(0).optional(),
         fields: z.array(z.enum(scheduledTransactionFields)).optional(),
         includeIds: z.boolean().optional()
-      }
+      },
+      execute: (input) => listScheduledTransactions(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await listScheduledTransactions(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_scheduled_transaction",
     {
+      name: "ynab_get_scheduled_transaction",
       title: "Get YNAB Scheduled Transaction",
       description: "Returns a compact summary for a single scheduled transaction.",
       inputSchema: {
         planId: z.string().optional(),
         scheduledTransactionId: z.string().min(1)
-      }
-    },
-    async (input) => {
-      try {
-        return toTextResult(await getScheduledTransaction(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
+      },
+      execute: (input) => getScheduledTransaction(ynabClient, input)
     }
-  );
+  ];
 }
