@@ -466,6 +466,40 @@ async function getJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function getDataRecord(payload: unknown): Record<string, unknown> {
+  if (payload == null || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("YNAB API response schema mismatch: expected a top-level object.");
+  }
+
+  const data = (payload as { data?: unknown }).data;
+
+  if (data == null || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("YNAB API response schema mismatch: expected data to be an object.");
+  }
+
+  return data as Record<string, unknown>;
+}
+
+function requireArrayField<T>(data: Record<string, unknown>, key: string): T[] {
+  const value = data[key];
+
+  if (!Array.isArray(value)) {
+    throw new Error(`YNAB API response schema mismatch: expected data.${key} to be an array.`);
+  }
+
+  return value as T[];
+}
+
+function requireObjectField<T>(data: Record<string, unknown>, key: string): T {
+  const value = data[key];
+
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`YNAB API response schema mismatch: expected data.${key} to be an object.`);
+  }
+
+  return value as T;
+}
+
 function toYnabTransaction(transaction: YnabTransactionRecord): YnabTransaction {
   return {
     id: transaction.id,
@@ -528,42 +562,51 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       });
       const payload = await getJson<YnabUserResponse>(response);
+      const data = getDataRecord(payload);
+      const user = requireObjectField<YnabUserResponse["data"]["user"]>(data, "user");
 
       return {
-        id: payload.data.user.id,
-        name: payload.data.user.name
+        id: user.id,
+        name: user.name
       };
     },
     async listPlans() {
-      const response = await fetchFn(`${baseUrl}/budgets`, {
+      const response = await fetchFn(`${baseUrl}/plans`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabPlansResponse>(response);
+      const data = getDataRecord(payload);
+      const plans = requireArrayField<YnabPlansResponse["data"]["plans"][number]>(data, "plans");
+      const defaultPlan =
+        data.default_plan == null
+          ? undefined
+          : requireObjectField<NonNullable<YnabPlansResponse["data"]["default_plan"]>>(data, "default_plan");
 
       return {
-        plans: payload.data.plans.map((plan) => ({
+        plans: plans.map((plan) => ({
           id: plan.id,
           name: plan.name,
           lastModifiedOn: plan.last_modified_on
         })),
-        defaultPlan: payload.data.default_plan
+        defaultPlan: defaultPlan
           ? {
-              id: payload.data.default_plan.id,
-              name: payload.data.default_plan.name
+              id: defaultPlan.id,
+              name: defaultPlan.name
             }
           : null
       };
     },
     async getPlan(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabPlanResponse>(response);
-      const plan = payload.data.plan;
+      const data = getDataRecord(payload);
+      const plan = requireObjectField<YnabPlanResponse["data"]["plan"]>(data, "plan");
 
       return {
         id: plan.id,
@@ -577,14 +620,19 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listCategories(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/categories`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/categories`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabCategoriesResponse>(response);
+      const data = getDataRecord(payload);
+      const categoryGroups = requireArrayField<YnabCategoriesResponse["data"]["category_groups"][number]>(
+        data,
+        "category_groups"
+      );
 
-      return payload.data.category_groups.map((group) => ({
+      return categoryGroups.map((group) => ({
         id: group.id,
         name: group.name,
         hidden: group.hidden,
@@ -600,7 +648,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getCategory(planId: string, categoryId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -608,7 +656,8 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       );
       const payload = await getJson<YnabCategoryResponse>(response);
-      const category = payload.data.category;
+      const data = getDataRecord(payload);
+      const category = requireObjectField<YnabCategoryResponse["data"]["category"]>(data, "category");
 
       return {
         id: category.id,
@@ -622,7 +671,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getMonthCategory(planId: string, month: string, categoryId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}/categories/${encodeURIComponent(categoryId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}/categories/${encodeURIComponent(categoryId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -630,7 +679,8 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       );
       const payload = await getJson<YnabCategoryResponse>(response);
-      const category = payload.data.category;
+      const data = getDataRecord(payload);
+      const category = requireObjectField<YnabCategoryResponse["data"]["category"]>(data, "category");
 
       return {
         id: category.id,
@@ -646,13 +696,14 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async getPlanSettings(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/settings`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/settings`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabPlanSettingsResponse>(response);
-      const settings = payload.data.settings;
+      const data = getDataRecord(payload);
+      const settings = requireObjectField<YnabPlanSettingsResponse["data"]["settings"]>(data, "settings");
 
       return {
         dateFormat: settings.date_format
@@ -675,14 +726,16 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listPlanMonths(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/months`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/months`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabPlanMonthsResponse>(response);
+      const data = getDataRecord(payload);
+      const months = requireArrayField<YnabPlanMonthsResponse["data"]["months"][number]>(data, "months");
 
-      return payload.data.months.map((month) => ({
+      return months.map((month) => ({
         month: month.month,
         income: month.income,
         budgeted: month.budgeted,
@@ -693,7 +746,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getPlanMonth(planId: string, month: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -701,7 +754,8 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       );
       const payload = await getJson<YnabPlanMonthResponse>(response);
-      const monthDetail = payload.data.month;
+      const data = getDataRecord(payload);
+      const monthDetail = requireObjectField<YnabPlanMonthResponse["data"]["month"]>(data, "month");
 
       return {
         month: monthDetail.month,
@@ -725,14 +779,16 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listAccounts(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/accounts`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/accounts`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabAccountsResponse>(response);
+      const data = getDataRecord(payload);
+      const accounts = requireArrayField<YnabAccountsResponse["data"]["accounts"][number]>(data, "accounts");
 
-      return payload.data.accounts.map((account) => ({
+      return accounts.map((account) => ({
         id: account.id,
         name: account.name,
         type: account.type,
@@ -743,7 +799,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getAccount(planId: string, accountId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -751,7 +807,8 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       );
       const payload = await getJson<YnabAccountResponse>(response);
-      const account = payload.data.account;
+      const data = getDataRecord(payload);
+      const account = requireObjectField<YnabAccountResponse["data"]["account"]>(data, "account");
 
       return {
         id: account.id,
@@ -763,7 +820,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listTransactions(planId: string, fromDate?: string) {
-      const url = new URL(`${baseUrl}/budgets/${encodeURIComponent(planId)}/transactions`);
+      const url = new URL(`${baseUrl}/plans/${encodeURIComponent(planId)}/transactions`);
 
       if (fromDate) {
         url.searchParams.set("since_date", fromDate);
@@ -775,12 +832,17 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       });
       const payload = await getJson<YnabTransactionsResponse>(response);
+      const data = getDataRecord(payload);
+      const transactions = requireArrayField<YnabTransactionsResponse["data"]["transactions"][number]>(
+        data,
+        "transactions"
+      );
 
-      return payload.data.transactions.map(toYnabTransaction);
+      return transactions.map(toYnabTransaction);
     },
     async getTransaction(planId: string, transactionId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -788,22 +850,29 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       );
       const payload = await getJson<YnabTransactionResponse>(response);
+      const data = getDataRecord(payload);
+      const transaction = requireObjectField<YnabTransactionResponse["data"]["transaction"]>(data, "transaction");
 
-      return toYnabTransaction(payload.data.transaction);
+      return toYnabTransaction(transaction);
     },
     async listScheduledTransactions(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/scheduled_transactions`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabScheduledTransactionsResponse>(response);
+      const data = getDataRecord(payload);
+      const transactions = requireArrayField<YnabScheduledTransactionsResponse["data"]["scheduled_transactions"][number]>(
+        data,
+        "scheduled_transactions"
+      );
 
-      return payload.data.scheduled_transactions.map(toYnabScheduledTransaction);
+      return transactions.map(toYnabScheduledTransaction);
     },
     async getScheduledTransaction(planId: string, scheduledTransactionId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/scheduled_transactions/${encodeURIComponent(scheduledTransactionId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions/${encodeURIComponent(scheduledTransactionId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -811,42 +880,56 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       );
       const payload = await getJson<YnabScheduledTransactionResponse>(response);
+      const data = getDataRecord(payload);
+      const transaction = requireObjectField<YnabScheduledTransactionResponse["data"]["scheduled_transaction"]>(
+        data,
+        "scheduled_transaction"
+      );
 
-      return toYnabScheduledTransaction(payload.data.scheduled_transaction);
+      return toYnabScheduledTransaction(transaction);
     },
     async listPayees(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payees`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/payees`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabPayeesResponse>(response);
+      const data = getDataRecord(payload);
+      const payees = requireArrayField<YnabPayeesResponse["data"]["payees"][number]>(data, "payees");
 
-      return payload.data.payees.map(toYnabPayee);
+      return payees.map(toYnabPayee);
     },
     async getPayee(planId: string, payeeId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabPayeeResponse>(response);
+      const data = getDataRecord(payload);
+      const payee = requireObjectField<YnabPayeeResponse["data"]["payee"]>(data, "payee");
 
-      return toYnabPayee(payload.data.payee);
+      return toYnabPayee(payee);
     },
     async listPayeeLocations(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payee_locations`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/payee_locations`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
       });
       const payload = await getJson<YnabPayeeLocationsResponse>(response);
+      const data = getDataRecord(payload);
+      const locations = requireArrayField<YnabPayeeLocationsResponse["data"]["payee_locations"][number]>(
+        data,
+        "payee_locations"
+      );
 
-      return payload.data.payee_locations.map(toYnabPayeeLocation);
+      return locations.map(toYnabPayeeLocation);
     },
     async getPayeeLocation(planId: string, payeeLocationId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/payee_locations/${encodeURIComponent(payeeLocationId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/payee_locations/${encodeURIComponent(payeeLocationId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -854,12 +937,14 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       );
       const payload = await getJson<YnabPayeeLocationResponse>(response);
+      const data = getDataRecord(payload);
+      const location = requireObjectField<YnabPayeeLocationResponse["data"]["payee_location"]>(data, "payee_location");
 
-      return toYnabPayeeLocation(payload.data.payee_location);
+      return toYnabPayeeLocation(location);
     },
     async getPayeeLocationsByPayee(planId: string, payeeId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/payee_locations`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/payee_locations`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -867,8 +952,13 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         }
       );
       const payload = await getJson<YnabPayeeLocationsResponse>(response);
+      const data = getDataRecord(payload);
+      const locations = requireArrayField<YnabPayeeLocationsResponse["data"]["payee_locations"][number]>(
+        data,
+        "payee_locations"
+      );
 
-      return payload.data.payee_locations.map(toYnabPayeeLocation);
+      return locations.map(toYnabPayeeLocation);
     }
   };
 }
