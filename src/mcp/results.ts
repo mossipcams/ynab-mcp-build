@@ -1,4 +1,4 @@
-export function toTextResult(payload: unknown) {
+export function toMcpTextResult(payload: unknown) {
   return {
     content: [
       {
@@ -9,10 +9,10 @@ export function toTextResult(payload: unknown) {
   };
 }
 
-export function toErrorResult(error: unknown) {
+export function toMcpErrorResult(error: unknown) {
   return {
     isError: true,
-    ...toTextResult({
+    ...toMcpTextResult({
       success: false,
       error: error instanceof Error ? error.message : String(error)
     })
