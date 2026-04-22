@@ -89,7 +89,7 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/plans",
+      "https://api.ynab.com/v1/budgets",
       expect.objectContaining({
         headers: {
           Authorization: "Bearer token-123"
@@ -98,7 +98,7 @@ describe("YNAB client", () => {
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/plans/plan-1",
+      "https://api.ynab.com/v1/budgets/plan-1",
       expect.objectContaining({
         headers: {
           Authorization: "Bearer token-123"
@@ -127,6 +127,31 @@ describe("YNAB client", () => {
       categoryGroupCount: 1,
       payeeCount: 3
     });
+  });
+
+  it("surfaces YNAB API error details when a request fails", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            detail: "The access token provided is invalid."
+          }
+        }),
+        {
+          status: 401,
+          statusText: "Unauthorized"
+        }
+      )
+    );
+    const client = createYnabClient({
+      accessToken: "token-123",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn
+    });
+
+    await expect(client.listPlans()).rejects.toThrow(
+      "YNAB API request failed with 401: The access token provided is invalid."
+    );
   });
 
   it("maps account endpoints into runtime-safe account shapes", async () => {
