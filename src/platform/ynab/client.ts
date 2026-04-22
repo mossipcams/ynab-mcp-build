@@ -6,7 +6,6 @@ export type YnabPlanSummary = {
 
 export type YnabUser = {
   id: string;
-  name: string;
 };
 
 export type YnabDefaultPlan = {
@@ -210,7 +209,6 @@ type YnabUserResponse = {
   data: {
     user: {
       id: string;
-      name: string;
     };
   };
 };
@@ -530,12 +528,11 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const payload = await getJson<YnabUserResponse>(response);
 
       return {
-        id: payload.data.user.id,
-        name: payload.data.user.name
+        id: payload.data.user.id
       };
     },
     async listPlans() {
-      const response = await fetchFn(`${baseUrl}/budgets`, {
+      const response = await fetchFn(`${baseUrl}/plans`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -557,7 +554,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async getPlan(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -577,7 +574,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listCategories(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/categories`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/categories`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -600,7 +597,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getCategory(planId: string, categoryId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -622,7 +619,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getMonthCategory(planId: string, month: string, categoryId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}/categories/${encodeURIComponent(categoryId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}/categories/${encodeURIComponent(categoryId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -646,7 +643,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async getPlanSettings(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/settings`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/settings`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -675,7 +672,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listPlanMonths(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/months`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/months`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -693,7 +690,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getPlanMonth(planId: string, month: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -725,7 +722,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listAccounts(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/accounts`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/accounts`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -743,7 +740,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getAccount(planId: string, accountId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -763,7 +760,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listTransactions(planId: string, fromDate?: string) {
-      const url = new URL(`${baseUrl}/budgets/${encodeURIComponent(planId)}/transactions`);
+      const url = new URL(`${baseUrl}/plans/${encodeURIComponent(planId)}/transactions`);
 
       if (fromDate) {
         url.searchParams.set("since_date", fromDate);
@@ -780,7 +777,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getTransaction(planId: string, transactionId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -792,7 +789,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       return toYnabTransaction(payload.data.transaction);
     },
     async listScheduledTransactions(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/scheduled_transactions`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -803,7 +800,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getScheduledTransaction(planId: string, scheduledTransactionId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/scheduled_transactions/${encodeURIComponent(scheduledTransactionId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions/${encodeURIComponent(scheduledTransactionId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -815,7 +812,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       return toYnabScheduledTransaction(payload.data.scheduled_transaction);
     },
     async listPayees(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payees`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/payees`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -825,7 +822,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       return payload.data.payees.map(toYnabPayee);
     },
     async getPayee(planId: string, payeeId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -835,7 +832,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       return toYnabPayee(payload.data.payee);
     },
     async listPayeeLocations(planId: string) {
-      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payee_locations`, {
+      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/payee_locations`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -846,7 +843,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getPayeeLocation(planId: string, payeeLocationId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/payee_locations/${encodeURIComponent(payeeLocationId)}`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/payee_locations/${encodeURIComponent(payeeLocationId)}`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`
@@ -859,7 +856,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getPayeeLocationsByPayee(planId: string, payeeId: string) {
       const response = await fetchFn(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/payee_locations`,
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/payee_locations`,
         {
           headers: {
             Authorization: `Bearer ${options.accessToken}`

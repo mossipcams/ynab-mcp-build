@@ -9,8 +9,7 @@ describe("YNAB client", () => {
         JSON.stringify({
           data: {
             user: {
-              id: "user-1",
-              name: "Casey Budgeter"
+              id: "user-1"
             }
           }
         })
@@ -33,8 +32,7 @@ describe("YNAB client", () => {
       })
     );
     expect(user).toMatchObject({
-      id: "user-1",
-      name: "Casey Budgeter"
+      id: "user-1"
     });
   });
 
@@ -89,7 +87,7 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/budgets",
+      "https://api.ynab.com/v1/plans",
       expect.objectContaining({
         headers: {
           Authorization: "Bearer token-123"
@@ -98,7 +96,7 @@ describe("YNAB client", () => {
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/budgets/plan-1",
+      "https://api.ynab.com/v1/plans/plan-1",
       expect.objectContaining({
         headers: {
           Authorization: "Bearer token-123"
@@ -202,12 +200,12 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/budgets/plan-1/accounts",
+      "https://api.ynab.com/v1/plans/plan-1/accounts",
       expect.any(Object)
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/budgets/plan-1/accounts/account-1",
+      "https://api.ynab.com/v1/plans/plan-1/accounts/account-1",
       expect.any(Object)
     );
     expect(accounts).toMatchObject([
@@ -279,7 +277,7 @@ describe("YNAB client", () => {
     const categoryGroups = await client.listCategories("plan-1");
 
     expect(fetchFn).toHaveBeenCalledWith(
-      "https://api.ynab.com/v1/budgets/plan-1/categories",
+      "https://api.ynab.com/v1/plans/plan-1/categories",
       expect.any(Object)
     );
     expect(categoryGroups).toMatchObject([
@@ -366,12 +364,12 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/budgets/plan-1/categories/category-1",
+      "https://api.ynab.com/v1/plans/plan-1/categories/category-1",
       expect.any(Object)
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/budgets/plan-1/months/2026-04-01/categories/category-1",
+      "https://api.ynab.com/v1/plans/plan-1/months/2026-04-01/categories/category-1",
       expect.any(Object)
     );
     expect(category).toMatchObject({
@@ -430,7 +428,7 @@ describe("YNAB client", () => {
     const settings = await client.getPlanSettings("plan-1");
 
     expect(fetchFn).toHaveBeenCalledWith(
-      "https://api.ynab.com/v1/budgets/plan-1/settings",
+      "https://api.ynab.com/v1/plans/plan-1/settings",
       expect.any(Object)
     );
     expect(settings).toMatchObject({
@@ -530,12 +528,12 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/budgets/plan-1/months",
+      "https://api.ynab.com/v1/plans/plan-1/months",
       expect.any(Object)
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/budgets/plan-1/months/2026-03-01",
+      "https://api.ynab.com/v1/plans/plan-1/months/2026-03-01",
       expect.any(Object)
     );
     expect(months).toMatchObject([
@@ -653,12 +651,12 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/budgets/plan-1/transactions?since_date=2026-03-01",
+      "https://api.ynab.com/v1/plans/plan-1/transactions?since_date=2026-03-01",
       expect.any(Object)
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/budgets/plan-1/transactions/transaction-1",
+      "https://api.ynab.com/v1/plans/plan-1/transactions/transaction-1",
       expect.any(Object)
     );
     expect(transactions).toMatchObject([
@@ -747,12 +745,12 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/budgets/plan-1/scheduled_transactions",
+      "https://api.ynab.com/v1/plans/plan-1/scheduled_transactions",
       expect.any(Object)
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/budgets/plan-1/scheduled_transactions/scheduled-1",
+      "https://api.ynab.com/v1/plans/plan-1/scheduled_transactions/scheduled-1",
       expect.any(Object)
     );
     expect(scheduledTransactions).toMatchObject([
@@ -823,12 +821,12 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/budgets/plan-1/payees",
+      "https://api.ynab.com/v1/plans/plan-1/payees",
       expect.any(Object)
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/budgets/plan-1/payees/payee-1",
+      "https://api.ynab.com/v1/plans/plan-1/payees/payee-1",
       expect.any(Object)
     );
     expect(payees).toMatchObject([
@@ -911,17 +909,17 @@ describe("YNAB client", () => {
 
     expect(fetchFn).toHaveBeenNthCalledWith(
       1,
-      "https://api.ynab.com/v1/budgets/plan-1/payee_locations",
+      "https://api.ynab.com/v1/plans/plan-1/payee_locations",
       expect.any(Object)
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/budgets/plan-1/payee_locations/location-1",
+      "https://api.ynab.com/v1/plans/plan-1/payee_locations/location-1",
       expect.any(Object)
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       3,
-      "https://api.ynab.com/v1/budgets/plan-1/payees/payee-1/payee_locations",
+      "https://api.ynab.com/v1/plans/plan-1/payees/payee-1/payee_locations",
       expect.any(Object)
     );
     expect(payeeLocations).toMatchObject([

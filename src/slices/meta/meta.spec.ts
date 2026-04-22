@@ -24,8 +24,7 @@ describe("meta slice", () => {
   it("returns the authenticated YNAB user", async () => {
     const ynabClient = {
       getUser: vi.fn().mockResolvedValue({
-        id: "user-1",
-        name: "Casey Budgeter"
+        id: "user-1"
       }),
       listPlans: vi.fn(),
       getPlan: vi.fn(),
@@ -76,8 +75,7 @@ describe("meta slice", () => {
     expect(ynabClient.getUser).toHaveBeenCalledOnce();
     expect(JSON.parse(textContent!.text!)).toMatchObject({
       user: {
-        id: "user-1",
-        name: "Casey Budgeter"
+        id: "user-1"
       }
     });
   });
