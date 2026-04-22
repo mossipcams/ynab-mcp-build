@@ -27,7 +27,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined): AppEnv {
     YNAB_API_TOKEN?: string;
   } | undefined;
 
-  return {
+  const resolvedEnv = {
     mcpServerName: runtimeEnv?.MCP_SERVER_NAME ?? DEFAULT_APP_ENV.mcpServerName,
     mcpServerVersion: runtimeEnv?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
     oauthEnabled: runtimeEnv?.MCP_OAUTH_ENABLED === "true",
@@ -36,4 +36,10 @@ export function resolveAppEnv(env: Partial<Env> | undefined): AppEnv {
     ynabApiBaseUrl: runtimeEnv?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
     ynabAccessToken: runtimeEnv?.YNAB_ACCESS_TOKEN ?? runtimeEnv?.YNAB_API_TOKEN
   };
+
+  if (resolvedEnv.oauthEnabled && !resolvedEnv.publicUrl) {
+    throw new Error("MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.");
+  }
+
+  return resolvedEnv;
 }
