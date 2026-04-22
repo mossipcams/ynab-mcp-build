@@ -440,7 +440,27 @@ type YnabPayeeLocationResponse = {
 
 async function getJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    throw new Error(`YNAB API request failed with ${response.status}`);
+    let detail = response.statusText;
+
+    try {
+      const payload = await response.json() as {
+        error?: {
+          detail?: string;
+        };
+      };
+
+      if (typeof payload.error?.detail === "string" && payload.error.detail.length > 0) {
+        detail = payload.error.detail;
+      }
+    } catch {
+      // Preserve the status-based fallback when YNAB does not return JSON.
+    }
+
+    throw new Error(
+      typeof detail === "string" && detail.length > 0
+        ? `YNAB API request failed with ${response.status}: ${detail}`
+        : `YNAB API request failed with ${response.status}`
+    );
   }
 
   return response.json() as Promise<T>;
@@ -515,7 +535,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listPlans() {
-      const response = await fetchFn(`${baseUrl}/plans`, {
+      const response = await fetchFn(`${baseUrl}/budgets`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }
@@ -537,7 +557,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async getPlan(planId: string) {
-      const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}`, {
+      const response = await fetchFn(`${baseUrl}/budgets/${encodeURIComponent(planId)}`, {
         headers: {
           Authorization: `Bearer ${options.accessToken}`
         }

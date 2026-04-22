@@ -24,6 +24,8 @@ export function resolveAppEnv(env: Partial<Env> | undefined): AppEnv {
     publicUrl: (env as { MCP_PUBLIC_URL?: string } | undefined)?.MCP_PUBLIC_URL,
     oauthStateNamespace: (env as { OAUTH_STATE?: DurableObjectNamespace } | undefined)?.OAUTH_STATE,
     ynabApiBaseUrl: env?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
-    ynabAccessToken: (env as { YNAB_ACCESS_TOKEN?: string } | undefined)?.YNAB_ACCESS_TOKEN
+    ynabAccessToken:
+      (env as { YNAB_ACCESS_TOKEN?: string; YNAB_API_TOKEN?: string } | undefined)?.YNAB_ACCESS_TOKEN
+      ?? (env as { YNAB_ACCESS_TOKEN?: string; YNAB_API_TOKEN?: string } | undefined)?.YNAB_API_TOKEN
   };
 }
