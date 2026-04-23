@@ -1,3 +1,4 @@
+import { resolvePlanId } from "../../shared/plans.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
 
 export async function listPlans(ynabClient: YnabClient) {
@@ -18,8 +19,9 @@ export async function listPlans(ynabClient: YnabClient) {
   };
 }
 
-export async function getPlan(ynabClient: YnabClient, planId: string) {
-  const plan = await ynabClient.getPlan(planId);
+export async function getPlan(ynabClient: YnabClient, planId: string | undefined) {
+  const resolvedPlanId = await resolvePlanId(ynabClient, planId);
+  const plan = await ynabClient.getPlan(resolvedPlanId);
 
   return {
     plan: {
@@ -35,8 +37,9 @@ export async function getPlan(ynabClient: YnabClient, planId: string) {
   };
 }
 
-export async function listCategories(ynabClient: YnabClient, planId: string) {
-  const categoryGroups = await ynabClient.listCategories(planId);
+export async function listCategories(ynabClient: YnabClient, planId: string | undefined) {
+  const resolvedPlanId = await resolvePlanId(ynabClient, planId);
+  const categoryGroups = await ynabClient.listCategories(resolvedPlanId);
   const visibleGroups = categoryGroups
     .filter((group) => !group.deleted && !group.hidden)
     .map((group) => ({
@@ -56,8 +59,9 @@ export async function listCategories(ynabClient: YnabClient, planId: string) {
   };
 }
 
-export async function getCategory(ynabClient: YnabClient, planId: string, categoryId: string) {
-  const category = await ynabClient.getCategory(planId, categoryId);
+export async function getCategory(ynabClient: YnabClient, planId: string | undefined, categoryId: string) {
+  const resolvedPlanId = await resolvePlanId(ynabClient, planId);
+  const category = await ynabClient.getCategory(resolvedPlanId, categoryId);
 
   return {
     category: {
@@ -74,11 +78,12 @@ export async function getCategory(ynabClient: YnabClient, planId: string, catego
 
 export async function getMonthCategory(
   ynabClient: YnabClient,
-  planId: string,
+  planId: string | undefined,
   month: string,
   categoryId: string
 ) {
-  const category = await ynabClient.getMonthCategory(planId, month, categoryId);
+  const resolvedPlanId = await resolvePlanId(ynabClient, planId);
+  const category = await ynabClient.getMonthCategory(resolvedPlanId, month, categoryId);
 
   return {
     category: {
@@ -96,8 +101,9 @@ export async function getMonthCategory(
   };
 }
 
-export async function getPlanSettings(ynabClient: YnabClient, planId: string) {
-  const settings = await ynabClient.getPlanSettings(planId);
+export async function getPlanSettings(ynabClient: YnabClient, planId: string | undefined) {
+  const resolvedPlanId = await resolvePlanId(ynabClient, planId);
+  const settings = await ynabClient.getPlanSettings(resolvedPlanId);
 
   return {
     settings: {
@@ -122,8 +128,9 @@ export async function getPlanSettings(ynabClient: YnabClient, planId: string) {
   };
 }
 
-export async function listPlanMonths(ynabClient: YnabClient, planId: string) {
-  const months = await ynabClient.listPlanMonths(planId);
+export async function listPlanMonths(ynabClient: YnabClient, planId: string | undefined) {
+  const resolvedPlanId = await resolvePlanId(ynabClient, planId);
+  const months = await ynabClient.listPlanMonths(resolvedPlanId);
   const visibleMonths = months
     .filter((month) => !month.deleted)
     .map((month) => ({
@@ -140,8 +147,9 @@ export async function listPlanMonths(ynabClient: YnabClient, planId: string) {
   };
 }
 
-export async function getPlanMonth(ynabClient: YnabClient, planId: string, month: string) {
-  const monthDetail = await ynabClient.getPlanMonth(planId, month);
+export async function getPlanMonth(ynabClient: YnabClient, planId: string | undefined, month: string) {
+  const resolvedPlanId = await resolvePlanId(ynabClient, planId);
+  const monthDetail = await ynabClient.getPlanMonth(resolvedPlanId, month);
 
   return {
     month: {

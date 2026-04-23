@@ -422,6 +422,8 @@ export async function getBudgetHealthSummary(ynabClient: YnabClient, input: Fina
   return summarizeBudgetHealthMonth(monthDetail, topN);
 }
 
+export const getPlanHealthSummary = getBudgetHealthSummary;
+
 export async function getFinancialHealthCheck(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = input.topN ?? 5;
   const { monthDetail, accounts, transactions } = await getMonthContext(ynabClient, input);
@@ -1070,7 +1072,7 @@ export async function getDebtSummary(ynabClient: YnabClient, input: { planId?: s
   });
 }
 
-export async function getBudgetCleanupSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
+export async function getCleanupSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = input.topN ?? 5;
   const { monthDetail, transactions } = await getMonthContext(ynabClient, input);
   const monthTransactions = transactions.filter(
@@ -1120,6 +1122,8 @@ export async function getBudgetCleanupSummary(ynabClient: YnabClient, input: Fin
     }))
   };
 }
+
+export const getBudgetCleanupSummary = getCleanupSummary;
 
 function reconstructHistoricalBalances(
   accounts: YnabAccountSummary[],
