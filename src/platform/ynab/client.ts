@@ -571,7 +571,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listPlans() {
-      const response = await authorizedFetch(`${baseUrl}/budgets`);
+      const response = await authorizedFetch(`${baseUrl}/plans`);
       const payload = await getJson<YnabPlansResponse>(response);
 
       return {
@@ -589,7 +589,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async getPlan(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}`);
       const payload = await getJson<YnabPlanResponse>(response);
       const plan = payload.data.plan;
 
@@ -605,7 +605,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listCategories(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}/categories`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/categories`);
       const payload = await getJson<YnabCategoriesResponse>(response);
 
       return payload.data.category_groups.map((group) => ({
@@ -624,7 +624,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getCategory(planId: string, categoryId: string) {
       const response = await authorizedFetch(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}`
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}`
       );
       const payload = await getJson<YnabCategoryResponse>(response);
       const category = payload.data.category;
@@ -641,7 +641,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getMonthCategory(planId: string, month: string, categoryId: string) {
       const response = await authorizedFetch(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}/categories/${encodeURIComponent(categoryId)}`
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}/categories/${encodeURIComponent(categoryId)}`
       );
       const payload = await getJson<YnabCategoryResponse>(response);
       const category = payload.data.category;
@@ -660,7 +660,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async getPlanSettings(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}/settings`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/settings`);
       const payload = await getJson<YnabPlanSettingsResponse>(response);
       const settings = payload.data.settings;
 
@@ -685,7 +685,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listPlanMonths(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}/months`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/months`);
       const payload = await getJson<YnabPlanMonthsResponse>(response);
 
       return payload.data.months.map((month) => ({
@@ -699,7 +699,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getPlanMonth(planId: string, month: string) {
       const response = await authorizedFetch(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}`
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}`
       );
       const payload = await getJson<YnabPlanMonthResponse>(response);
       const monthDetail = payload.data.month;
@@ -726,7 +726,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listAccounts(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}/accounts`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/accounts`);
       const payload = await getJson<YnabAccountsResponse>(response);
 
       return payload.data.accounts.map((account) => ({
@@ -740,7 +740,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getAccount(planId: string, accountId: string) {
       const response = await authorizedFetch(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}`
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}`
       );
       const payload = await getJson<YnabAccountResponse>(response);
       const account = payload.data.account;
@@ -755,7 +755,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       };
     },
     async listTransactions(planId: string, fromDate?: string) {
-      const url = new URL(`${baseUrl}/budgets/${encodeURIComponent(planId)}/transactions`);
+      const url = new URL(`${baseUrl}/plans/${encodeURIComponent(planId)}/transactions`);
 
       if (fromDate) {
         url.searchParams.set("since_date", fromDate);
@@ -768,47 +768,47 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getTransaction(planId: string, transactionId: string) {
       const response = await authorizedFetch(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`
       );
       const payload = await getJson<YnabTransactionResponse>(response);
 
       return toYnabTransaction(payload.data.transaction);
     },
     async listScheduledTransactions(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}/scheduled_transactions`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions`);
       const payload = await getJson<YnabScheduledTransactionsResponse>(response);
 
       return payload.data.scheduled_transactions.map(toYnabScheduledTransaction);
     },
     async getScheduledTransaction(planId: string, scheduledTransactionId: string) {
       const response = await authorizedFetch(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/scheduled_transactions/${encodeURIComponent(scheduledTransactionId)}`
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions/${encodeURIComponent(scheduledTransactionId)}`
       );
       const payload = await getJson<YnabScheduledTransactionResponse>(response);
 
       return toYnabScheduledTransaction(payload.data.scheduled_transaction);
     },
     async listPayees(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payees`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/payees`);
       const payload = await getJson<YnabPayeesResponse>(response);
 
       return payload.data.payees.map(toYnabPayee);
     },
     async getPayee(planId: string, payeeId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}`);
       const payload = await getJson<YnabPayeeResponse>(response);
 
       return toYnabPayee(payload.data.payee);
     },
     async listPayeeLocations(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/budgets/${encodeURIComponent(planId)}/payee_locations`);
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/payee_locations`);
       const payload = await getJson<YnabPayeeLocationsResponse>(response);
 
       return payload.data.payee_locations.map(toYnabPayeeLocation);
     },
     async getPayeeLocation(planId: string, payeeLocationId: string) {
       const response = await authorizedFetch(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/payee_locations/${encodeURIComponent(payeeLocationId)}`
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/payee_locations/${encodeURIComponent(payeeLocationId)}`
       );
       const payload = await getJson<YnabPayeeLocationResponse>(response);
 
@@ -816,7 +816,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getPayeeLocationsByPayee(planId: string, payeeId: string) {
       const response = await authorizedFetch(
-        `${baseUrl}/budgets/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/payee_locations`
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/payee_locations`
       );
       const payload = await getJson<YnabPayeeLocationsResponse>(response);
 
