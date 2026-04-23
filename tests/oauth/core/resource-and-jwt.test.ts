@@ -149,4 +149,101 @@ describe("oauth core resource indicators and jwt access tokens", () => {
     expect(typeof payload.jti).toBe("string");
     expect((payload.exp as number) > (payload.iat as number)).toBe(true);
   });
+
+  it("rejects bearer tokens whose audience or issuer does not match the protected resource", async () => {
+    // DEFECT: protected-resource verification can accept tokens minted for the wrong audience or issuer and allow token confusion.
+    const core = createCore();
+    const wrongAudienceCore = createOAuthCore({
+      createId: (() => {
+        const values = ["client-1", "auth-code-1", "refresh-token-1", "jti-1"];
+        return () => values.shift() ?? crypto.randomUUID();
+      })(),
+      issuer: "https://mcp.example.com/",
+      jwtSigningKey: "test-signing-key",
+      now: () => Date.UTC(2026, 3, 22, 12, 0, 0),
+      protectedResource: "https://other.example.com/mcp",
+      scopesSupported: ["mcp"],
+      store: createInMemoryOAuthStore()
+    });
+    const wrongIssuerCore = createOAuthCore({
+      createId: (() => {
+        const values = ["client-1", "auth-code-1", "refresh-token-1", "jti-1"];
+        return () => values.shift() ?? crypto.randomUUID();
+      })(),
+      issuer: "https://issuer.example.com/",
+      jwtSigningKey: "test-signing-key",
+      now: () => Date.UTC(2026, 3, 22, 12, 0, 0),
+      protectedResource: "https://mcp.example.com/mcp",
+      scopesSupported: ["mcp"],
+      store: createInMemoryOAuthStore()
+    });
+    const registration = await core.registerClient({
+      clientName: "Claude",
+      grantTypes: ["authorization_code", "refresh_token"],
+      redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
+      responseTypes: ["code"],
+      tokenEndpointAuthMethod: "none"
+    });
+
+    await core.startAuthorization({
+      clientId: registration.client_id,
+      codeChallenge: "0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU",
+      codeChallengeMethod: "S256",
+      redirectUri: "https://claude.ai/api/mcp/auth_callback",
+      resource: "https://mcp.example.com/mcp",
+      responseType: "code"
+    });
+
+    const tokens = await core.exchangeAuthorizationCode({
+      clientId: registration.client_id,
+      code: "auth-code-1",
+      codeVerifier: "test-code-verifier",
+      redirectUri: "https://claude.ai/api/mcp/auth_callback",
+      resource: "https://mcp.example.com/mcp"
+    });
+
+    await expect(wrongAudienceCore.verifyAccessToken(tokens.access_token)).rejects.toThrow(
+      "Bearer token is invalid or expired."
+    );
+    await expect(wrongIssuerCore.verifyAccessToken(tokens.access_token)).rejects.toThrow(
+      "Bearer token is invalid or expired."
+    );
+  });
+
+  it("publishes stable authorization and protected-resource metadata", () => {
+    // DEFECT: metadata helpers can drift from the supported OAuth surface and advertise the wrong issuer, endpoints, or methods.
+    const core = createCore();
+
+    expect(core.getAuthorizationServerMetadata()).toEqual({
+      authorization_endpoint: "https://mcp.example.com/authorize",
+      code_challenge_methods_supported: ["S256"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      issuer: "https://mcp.example.com/",
+      registration_endpoint: "https://mcp.example.com/register",
+      response_types_supported: ["code"],
+      scopes_supported: ["mcp"],
+      token_endpoint: "https://mcp.example.com/token",
+      token_endpoint_auth_methods_supported: ["none"]
+    });
+    expect(core.getOpenIdConfiguration()).toEqual({
+      authorization_endpoint: "https://mcp.example.com/authorize",
+      code_challenge_methods_supported: ["S256"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      issuer: "https://mcp.example.com/",
+      registration_endpoint: "https://mcp.example.com/register",
+      response_types_supported: ["code"],
+      scopes_supported: ["mcp"],
+      subject_types_supported: ["public"],
+      token_endpoint: "https://mcp.example.com/token",
+      token_endpoint_auth_methods_supported: ["none"]
+    });
+    expect(core.getProtectedResourceMetadata()).toEqual({
+      authorization_servers: ["https://mcp.example.com/"],
+      bearer_methods_supported: ["header"],
+      resource: "https://mcp.example.com/mcp"
+    });
+    expect(core.protectedResourceMetadataEndpoint).toBe(
+      "https://mcp.example.com/.well-known/oauth-protected-resource/mcp"
+    );
+  });
 });
