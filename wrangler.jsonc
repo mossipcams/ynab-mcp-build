@@ -12,7 +12,7 @@
     "YNAB_API_BASE_URL": "https://api.ynab.com/v1"
   },
   "secrets": {
-    "required": ["YNAB_ACCESS_TOKEN"]
+    "required": ["JWT_SIGNING_KEY", "YNAB_ACCESS_TOKEN"]
   },
   "durable_objects": {
     "bindings": [

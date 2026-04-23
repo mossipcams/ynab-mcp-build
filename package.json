@@ -10,6 +10,8 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest watch",
+    "test:mutation": "stryker run",
+    "test:mutation:dry": "stryker run --dryRunOnly",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:spec": "tsc --noEmit -p tsconfig.spec.json"
   },
@@ -20,6 +22,9 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.14.9",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "fast-check": "^4.7.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5",
     "wrangler": "^4.84.1"
