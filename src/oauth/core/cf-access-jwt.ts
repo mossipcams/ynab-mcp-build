@@ -120,8 +120,8 @@ export async function verifyCfAccessJwt(
     ? await importEcKey(matchingKey)
     : await importRsaKey(matchingKey);
 
-  const signedData = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
-  const signatureBytes = base64urlDecode(signatureB64);
+  const signedData = new TextEncoder().encode(`${headerB64}.${payloadB64}`) as Uint8Array<ArrayBuffer>;
+  const signatureBytes = base64urlDecode(signatureB64) as Uint8Array<ArrayBuffer>;
 
   const valid = await verifyJwtSignature(header.alg, cryptoKey, signedData, signatureBytes);
   if (!valid) {
