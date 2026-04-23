@@ -1123,6 +1123,8 @@ export async function getCleanupSummary(ynabClient: YnabClient, input: Financial
   };
 }
 
+export const getBudgetCleanupSummary = getCleanupSummary;
+
 function reconstructHistoricalBalances(
   accounts: YnabAccountSummary[],
   transactions: YnabTransaction[],

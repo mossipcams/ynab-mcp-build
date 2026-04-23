@@ -33,3 +33,6 @@ export function toErrorResult(error: unknown) {
     isError: true
   };
 }
+
+export const toMcpTextResult = toTextResult;
+export const toMcpErrorResult = toErrorResult;
