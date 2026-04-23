@@ -31,6 +31,16 @@ describe("resolveAppEnv", () => {
     expect(env.publicUrl).toBe("https://ynab-mcp.workers.dev/mcp");
   });
 
+  it("derives publicUrl from request origin when MCP_PUBLIC_URL is not set", () => {
+    const request = new Request("https://ynab-mcp.workers.dev/mcp");
+    const env = resolveAppEnv(
+      { MCP_OAUTH_ENABLED: "true" } as Partial<Env> & { MCP_OAUTH_ENABLED: string },
+      request
+    );
+
+    expect(env.publicUrl).toBe("https://ynab-mcp.workers.dev/mcp");
+  });
+
   it("uses YNAB_API_TOKEN as a fallback alias for YNAB access token", () => {
     const env = resolveAppEnv({
       YNAB_API_BASE_URL: "https://api.ynab.com/v1",
