@@ -4,6 +4,8 @@ import { createOAuthCore } from "./auth.js";
 import { createInMemoryOAuthStore } from "./store.js";
 
 describe("oauth core", () => {
+  const jwtSigningKey = "test-signing-key";
+
   it("registers clients and completes a PKCE authorization-code exchange", async () => {
     const core = createOAuthCore({
       createId: (() => {
@@ -17,6 +19,7 @@ describe("oauth core", () => {
         return () => values.shift() ?? crypto.randomUUID();
       })(),
       issuer: "https://mcp.example.com/",
+      jwtSigningKey,
       now: () => Date.UTC(2026, 3, 22, 12, 0, 0),
       protectedResource: "https://mcp.example.com/mcp",
       scopesSupported: ["mcp"],
@@ -80,6 +83,7 @@ describe("oauth core", () => {
         return () => values.shift() ?? crypto.randomUUID();
       })(),
       issuer: "https://mcp.example.com/",
+      jwtSigningKey,
       now: () => Date.UTC(2026, 3, 22, 12, 0, 0),
       protectedResource: "https://mcp.example.com/mcp",
       scopesSupported: ["mcp"],
