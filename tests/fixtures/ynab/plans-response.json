@@ -1,0 +1,15 @@
+{
+  "data": {
+    "plans": [
+      {
+        "id": "plan-1",
+        "name": "Household",
+        "last_modified_on": "2026-04-20T12:34:56Z"
+      }
+    ],
+    "default_plan": {
+      "id": "plan-1",
+      "name": "Household"
+    }
+  }
+}

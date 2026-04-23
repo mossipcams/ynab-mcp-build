@@ -1,4 +1,11 @@
-import type { OAuthAccessToken, OAuthAuthorizationCode, OAuthRefreshToken, OAuthRegisteredClient, OAuthStore } from "../oauth/core/store.js";
+import type {
+  OAuthAccessToken,
+  OAuthAuthorizationCode,
+  OAuthRefreshToken,
+  OAuthRefreshTokenRotationResult,
+  OAuthRegisteredClient,
+  OAuthStore
+} from "../oauth/core/store.js";
 
 type FetchLike = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
@@ -40,6 +47,9 @@ export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
     getAccessToken(token) {
       return getJson<OAuthAccessToken>(fetcher, `/access-tokens/${encodeURIComponent(token)}`);
     },
+    getAuthorizationCode(code) {
+      return getJson<OAuthAuthorizationCode>(fetcher, `/authorization-codes/${encodeURIComponent(code)}`);
+    },
     getRegisteredClient(clientId) {
       return getJson<OAuthRegisteredClient>(fetcher, `/clients/${encodeURIComponent(clientId)}`);
     },
@@ -58,11 +68,7 @@ export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
     async rotateRefreshToken(token) {
       const response = await postJson(fetcher, "/refresh-tokens/rotate", { token });
 
-      if (response.status === 404) {
-        return undefined;
-      }
-
-      return response.json() as Promise<OAuthRefreshToken>;
+      return response.json() as Promise<OAuthRefreshTokenRotationResult>;
     },
     async useAuthorizationCode(code) {
       const response = await postJson(fetcher, "/authorization-codes/use", { code });

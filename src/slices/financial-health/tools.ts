@@ -1,14 +1,14 @@
 import { z } from "zod";
 
-import type { McpToolDefinition } from "../../mcp/tools.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
+import type { SliceToolDefinition } from "../../shared/tool-definition.js";
 import {
   getBudgetCleanupSummary,
+  getBudgetHealthSummary,
   getCashFlowSummary,
   getCashRunway,
   getCategoryTrendSummary,
   getDebtSummary,
-  getBudgetHealthSummary,
   getEmergencyFundCoverage,
   getFinancialHealthCheck,
   getFinancialSnapshot,
@@ -22,7 +22,7 @@ import {
   getUpcomingObligations
 } from "./service.js";
 
-export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpToolDefinition[] {
+export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
   return [
     {
       name: "ynab_get_financial_snapshot",
@@ -33,7 +33,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         month: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getFinancialSnapshot(ynabClient, input)
+      execute: async (input) => getFinancialSnapshot(ynabClient, input)
     },
     {
       name: "ynab_get_budget_health_summary",
@@ -44,7 +44,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         month: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getBudgetHealthSummary(ynabClient, input)
+      execute: async (input) => getBudgetHealthSummary(ynabClient, input)
     },
     {
       name: "ynab_get_financial_health_check",
@@ -55,7 +55,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         month: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getFinancialHealthCheck(ynabClient, input)
+      execute: async (input) => getFinancialHealthCheck(ynabClient, input)
     },
     {
       name: "ynab_get_monthly_review",
@@ -66,7 +66,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         month: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getMonthlyReview(ynabClient, input)
+      execute: async (input) => getMonthlyReview(ynabClient, input)
     },
     {
       name: "ynab_get_cash_flow_summary",
@@ -77,7 +77,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         fromMonth: z.string().optional(),
         toMonth: z.string().optional()
       },
-      execute: (input) => getCashFlowSummary(ynabClient, input)
+      execute: async (input) => getCashFlowSummary(ynabClient, input)
     },
     {
       name: "ynab_get_spending_summary",
@@ -89,7 +89,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         toMonth: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getSpendingSummary(ynabClient, input)
+      execute: async (input) => getSpendingSummary(ynabClient, input)
     },
     {
       name: "ynab_get_spending_anomalies",
@@ -103,7 +103,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         thresholdMultiplier: z.number().min(1).optional(),
         minimumDifference: z.number().int().min(0).optional()
       },
-      execute: (input) => getSpendingAnomalies(ynabClient, input)
+      execute: async (input) => getSpendingAnomalies(ynabClient, input)
     },
     {
       name: "ynab_get_category_trend_summary",
@@ -116,7 +116,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         categoryId: z.string().optional(),
         categoryGroupName: z.string().optional()
       },
-      execute: (input) => getCategoryTrendSummary(ynabClient, input)
+      execute: async (input) => getCategoryTrendSummary(ynabClient, input)
     },
     {
       name: "ynab_get_cash_runway",
@@ -127,7 +127,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         asOfMonth: z.string().min(1),
         monthsBack: z.number().int().min(1).max(12).optional()
       },
-      execute: (input) => getCashRunway(ynabClient, input)
+      execute: async (input) => getCashRunway(ynabClient, input)
     },
     {
       name: "ynab_get_upcoming_obligations",
@@ -138,7 +138,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         asOfDate: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getUpcomingObligations(ynabClient, input)
+      execute: async (input) => getUpcomingObligations(ynabClient, input)
     },
     {
       name: "ynab_get_income_summary",
@@ -150,7 +150,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         toMonth: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getIncomeSummary(ynabClient, input)
+      execute: async (input) => getIncomeSummary(ynabClient, input)
     },
     {
       name: "ynab_get_recurring_expense_summary",
@@ -162,7 +162,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         toDate: z.string().min(1),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getRecurringExpenseSummary(ynabClient, input)
+      execute: async (input) => getRecurringExpenseSummary(ynabClient, input)
     },
     {
       name: "ynab_get_emergency_fund_coverage",
@@ -173,7 +173,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         asOfMonth: z.string().min(1),
         monthsBack: z.number().int().min(1).max(12).optional()
       },
-      execute: (input) => getEmergencyFundCoverage(ynabClient, input)
+      execute: async (input) => getEmergencyFundCoverage(ynabClient, input)
     },
     {
       name: "ynab_get_goal_progress_summary",
@@ -184,7 +184,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         month: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getGoalProgressSummary(ynabClient, input)
+      execute: async (input) => getGoalProgressSummary(ynabClient, input)
     },
     {
       name: "ynab_get_debt_summary",
@@ -194,7 +194,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         planId: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getDebtSummary(ynabClient, input)
+      execute: async (input) => getDebtSummary(ynabClient, input)
     },
     {
       name: "ynab_get_budget_cleanup_summary",
@@ -205,7 +205,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         month: z.string().optional(),
         topN: z.number().int().min(1).max(10).optional()
       },
-      execute: (input) => getBudgetCleanupSummary(ynabClient, input)
+      execute: async (input) => getBudgetCleanupSummary(ynabClient, input)
     },
     {
       name: "ynab_get_net_worth_trajectory",
@@ -216,7 +216,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): McpTo
         fromMonth: z.string().optional(),
         toMonth: z.string().optional()
       },
-      execute: (input) => getNetWorthTrajectory(ynabClient, input)
+      execute: async (input) => getNetWorthTrajectory(ynabClient, input)
     }
   ];
 }

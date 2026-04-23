@@ -1,0 +1,27 @@
+{
+  "data": {
+    "scheduled_transactions": [
+      {
+        "id": "scheduled-1",
+        "date_first": "2026-04-01",
+        "date_next": "2026-05-01",
+        "frequency": "monthly",
+        "amount": -120000,
+        "amount_formatted": "-$120.00",
+        "amount_currency": -120.0,
+        "payee_name": "Internet Provider",
+        "category_name": "Utilities",
+        "account_name": "Checking",
+        "deleted": false,
+        "subtransactions": [
+          {
+            "id": "sub-1",
+            "amount": -60000,
+            "payee_name": "Internet",
+            "category_name": "Utilities"
+          }
+        ]
+      }
+    ]
+  }
+}
