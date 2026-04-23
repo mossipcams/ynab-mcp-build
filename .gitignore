@@ -1,5 +1,7 @@
 node_modules/
 .wrangler/
 coverage/
+reports/mutation/
+.stryker-tmp/
 .dev.vars
 worker-configuration.d.ts

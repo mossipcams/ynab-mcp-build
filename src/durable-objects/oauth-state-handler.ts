@@ -3,6 +3,8 @@ type StorageLike = {
   put<T>(key: string, value: T): Promise<void>;
 };
 
+const storageLocks = new WeakMap<StorageLike, Promise<void>>();
+
 function clientKey(clientId: string) {
   return `client:${clientId}`;
 }
@@ -19,12 +21,38 @@ function refreshTokenKey(token: string) {
   return `refresh-token:${token}`;
 }
 
+function refreshTokenFamilyKey(familyId: string) {
+  return `refresh-token-family:${familyId}`;
+}
+
 function jsonResponse(payload: unknown, status = 200) {
   return Response.json(payload, { status });
 }
 
 function readJson(request: Request) {
   return request.json() as Promise<Record<string, unknown>>;
+}
+
+async function runStorageCriticalSection<T>(storage: StorageLike, action: () => Promise<T>) {
+  const previous = storageLocks.get(storage) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  storageLocks.set(storage, previous.then(() => next));
+
+  await previous;
+
+  try {
+    return await action();
+  } finally {
+    release();
+
+    if (storageLocks.get(storage) === next) {
+      storageLocks.delete(storage);
+    }
+  }
 }
 
 export function createMemoryOAuthStateStorage(): StorageLike {
@@ -66,23 +94,32 @@ export async function handleOAuthStateRequest(storage: StorageLike, request: Req
     return new Response(null, { status: 204 });
   }
 
+  if (request.method === "GET" && url.pathname.startsWith("/authorization-codes/")) {
+    const code = decodeURIComponent(url.pathname.slice("/authorization-codes/".length));
+    const record = await storage.get(authorizationCodeKey(code));
+
+    return record ? jsonResponse(record) : new Response(null, { status: 404 });
+  }
+
   if (request.method === "POST" && url.pathname === "/authorization-codes/use") {
-    const body = await readJson(request);
-    const code = String(body.code);
-    const record = await storage.get<Record<string, unknown> & { used?: boolean }>(
-      authorizationCodeKey(code)
-    );
+    return runStorageCriticalSection(storage, async () => {
+      const body = await readJson(request);
+      const code = String(body.code);
+      const record = await storage.get<Record<string, unknown> & { used?: boolean }>(
+        authorizationCodeKey(code)
+      );
 
-    if (!record || record.used) {
-      return new Response(null, { status: 404 });
-    }
+      if (!record || record.used) {
+        return new Response(null, { status: 404 });
+      }
 
-    await storage.put(authorizationCodeKey(code), {
-      ...record,
-      used: true
+      await storage.put(authorizationCodeKey(code), {
+        ...record,
+        used: true
+      });
+
+      return jsonResponse(record);
     });
-
-    return jsonResponse(record);
   }
 
   if (request.method === "POST" && url.pathname === "/access-tokens") {
@@ -109,20 +146,49 @@ export async function handleOAuthStateRequest(storage: StorageLike, request: Req
   }
 
   if (request.method === "POST" && url.pathname === "/refresh-tokens/rotate") {
-    const body = await readJson(request);
-    const token = String(body.token);
-    const record = await storage.get<Record<string, unknown> & { used?: boolean }>(refreshTokenKey(token));
+    return runStorageCriticalSection(storage, async () => {
+      const body = await readJson(request);
+      const token = String(body.token);
+      const record = await storage.get<Record<string, unknown> & { familyId?: string; used?: boolean }>(refreshTokenKey(token));
 
-    if (!record || record.used) {
-      return new Response(null, { status: 404 });
-    }
+      if (!record) {
+        return jsonResponse({
+          status: "not_found"
+        });
+      }
 
-    await storage.put(refreshTokenKey(token), {
-      ...record,
-      used: true
+      if (record.familyId) {
+        const familyRevoked = await storage.get<boolean>(refreshTokenFamilyKey(record.familyId));
+
+        if (familyRevoked) {
+          return jsonResponse({
+            record,
+            status: "replay_detected"
+          });
+        }
+      }
+
+      if (record.used) {
+        if (record.familyId) {
+          await storage.put(refreshTokenFamilyKey(record.familyId), true);
+        }
+
+        return jsonResponse({
+          record,
+          status: "replay_detected"
+        });
+      }
+
+      await storage.put(refreshTokenKey(token), {
+        ...record,
+        used: true
+      });
+
+      return jsonResponse({
+        record,
+        status: "rotated"
+      });
     });
-
-    return jsonResponse(record);
   }
 
   return new Response(null, { status: 404 });

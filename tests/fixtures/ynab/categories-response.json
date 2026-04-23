@@ -1,0 +1,26 @@
+{
+  "data": {
+    "category_groups": [
+      {
+        "id": "group-1",
+        "name": "Immediate Obligations",
+        "hidden": false,
+        "deleted": false,
+        "categories": [
+          {
+            "id": "category-1",
+            "name": "Rent",
+            "hidden": false,
+            "deleted": false,
+            "category_group_name": "Immediate Obligations",
+            "goal_type": "NEED",
+            "goal_target": 1500000,
+            "goal_target_date": "2026-05-01",
+            "goal_needs_whole_amount": true,
+            "goal_snoozed_at": null
+          }
+        ]
+      }
+    ]
+  }
+}

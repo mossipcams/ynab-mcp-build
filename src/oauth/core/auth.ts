@@ -1,13 +1,15 @@
 import { createCodeChallenge, verifyPkceCodeVerifier } from "./pkce.js";
+import { signJwt, verifyJwt } from "./jwt.js";
 import type {
   OAuthAccessToken,
   OAuthAuthorizationCode,
   OAuthRefreshToken,
+  OAuthRefreshTokenRotationResult,
   OAuthRegisteredClient,
   OAuthStore
 } from "./store.js";
 
-const DEFAULT_ACCESS_TOKEN_TTL_SEC = 60 * 60;
+const DEFAULT_ACCESS_TOKEN_TTL_SEC = 24 * 60 * 60;
 const DEFAULT_AUTHORIZATION_CODE_TTL_SEC = 5 * 60;
 const DEFAULT_REFRESH_TOKEN_TTL_SEC = 30 * 24 * 60 * 60;
 
@@ -16,6 +18,7 @@ type CreateOAuthCoreOptions = {
   authorizationCodeTtlSec?: number;
   createId: () => string;
   issuer: string;
+  jwtSigningKey: string;
   now: () => number;
   protectedResource: string;
   refreshTokenTtlSec?: number;
@@ -36,6 +39,7 @@ type AuthorizationInput = {
   codeChallenge: string;
   codeChallengeMethod: string;
   redirectUri: string;
+  resource?: string;
   responseType: string;
   scope?: string;
   state?: string;
@@ -46,11 +50,13 @@ type AuthorizationCodeExchangeInput = {
   code: string;
   codeVerifier: string;
   redirectUri: string;
+  resource?: string;
 };
 
 type RefreshTokenExchangeInput = {
   clientId: string;
   refreshToken: string;
+  resource?: string;
 };
 
 function getIssuer(input: string) {
@@ -68,11 +74,15 @@ function isLoopbackHost(hostname: string) {
 function validateRegisteredRedirectUri(redirectUri: string) {
   const parsed = new URL(redirectUri);
 
-  if (parsed.protocol === "https:" || isLoopbackHost(parsed.hostname)) {
+  if (parsed.protocol === "https:") {
     return;
   }
 
-  throw new Error("redirect_uris must use https unless they target a loopback host.");
+  if (parsed.protocol === "http:" && isLoopbackHost(parsed.hostname)) {
+    return;
+  }
+
+  throw new Error("redirect_uris must use https unless they target a loopback host over http.");
 }
 
 function getRedirectUriWithParams(redirectUri: string, params: Record<string, string | undefined>) {
@@ -113,25 +123,63 @@ function toClientResponse(record: OAuthRegisteredClient) {
   };
 }
 
-function createAccessTokenRecord(options: CreateOAuthCoreOptions, input: {
+function validateResource(resource: string | undefined, protectedResource: string) {
+  if (!resource) {
+    throw new Error("resource is required.");
+  }
+
+  if (resource !== protectedResource) {
+    throw new Error("resource must match the canonical protected resource.");
+  }
+
+  return resource;
+}
+
+async function createAccessTokenRecord(options: CreateOAuthCoreOptions, input: {
   clientId: string;
+  resource: string;
   scopes: string[];
-}): OAuthAccessToken {
+}): Promise<OAuthAccessToken> {
+  const issuedAt = Math.floor(options.now() / 1000);
+  const expiresAt = options.now() + (options.accessTokenTtlSec ?? DEFAULT_ACCESS_TOKEN_TTL_SEC) * 1000;
+  const jti = options.createId();
+  const issuer = getIssuer(options.issuer);
+  const token = await signJwt(
+    {
+      aud: input.resource,
+      exp: Math.floor(expiresAt / 1000),
+      iat: issuedAt,
+      iss: issuer,
+      jti,
+      scope: input.scopes.join(" "),
+      sub: input.clientId
+    },
+    options.jwtSigningKey
+  );
+
   return {
+    audience: input.resource,
     clientId: input.clientId,
-    expiresAt: options.now() + (options.accessTokenTtlSec ?? DEFAULT_ACCESS_TOKEN_TTL_SEC) * 1000,
+    expiresAt,
+    issuedAt,
+    issuer,
+    jti,
     scopes: input.scopes,
-    token: options.createId()
+    token
   };
 }
 
 function createRefreshTokenRecord(options: CreateOAuthCoreOptions, input: {
   clientId: string;
+  familyId?: string;
+  resource: string;
   scopes: string[];
 }): OAuthRefreshToken {
   return {
     clientId: input.clientId,
     expiresAt: options.now() + (options.refreshTokenTtlSec ?? DEFAULT_REFRESH_TOKEN_TTL_SEC) * 1000,
+    familyId: input.familyId ?? options.createId(),
+    resource: input.resource,
     scopes: input.scopes,
     token: options.createId(),
     used: false
@@ -189,6 +237,10 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       throw new Error("response_type must be code.");
     }
 
+    if (input.codeChallenge.length === 0) {
+      throw new Error("code_challenge is required.");
+    }
+
     if (input.codeChallengeMethod !== "S256") {
       throw new Error("code_challenge_method must be S256.");
     }
@@ -203,12 +255,14 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       throw new Error("redirect_uri is not registered for this client.");
     }
 
+    const resource = validateResource(input.resource, options.protectedResource);
     const scopes = getRequestedScopes(input.scope, client.scopes);
     const record: OAuthAuthorizationCode = {
       clientId: client.clientId,
       code: options.createId(),
       codeChallenge: input.codeChallenge,
       expiresAt: options.now() + (options.authorizationCodeTtlSec ?? DEFAULT_AUTHORIZATION_CODE_TTL_SEC) * 1000,
+      resource,
       redirectUri: input.redirectUri,
       scopes,
       used: false
@@ -226,9 +280,9 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
   }
 
   async function exchangeAuthorizationCode(input: AuthorizationCodeExchangeInput) {
-    const code = await options.store.useAuthorizationCode(input.code);
+    const code = await options.store.getAuthorizationCode(input.code);
 
-    if (!code) {
+    if (!code || code.used) {
       throw new Error("Authorization code is invalid or has already been used.");
     }
 
@@ -244,14 +298,28 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       throw new Error("redirect_uri does not match the authorization request.");
     }
 
+    const resource = validateResource(input.resource, options.protectedResource);
+
+    if (code.resource !== resource) {
+      throw new Error("resource does not match the authorization request.");
+    }
+
     await verifyPkceCodeVerifier(input.codeVerifier, code.codeChallenge);
 
-    const accessToken = createAccessTokenRecord(options, {
+    const usedCode = await options.store.useAuthorizationCode(input.code);
+
+    if (!usedCode) {
+      throw new Error("Authorization code is invalid or has already been used.");
+    }
+
+    const accessToken = await createAccessTokenRecord(options, {
       clientId: code.clientId,
+      resource,
       scopes: code.scopes
     });
     const refreshToken = createRefreshTokenRecord(options, {
       clientId: code.clientId,
+      resource,
       scopes: code.scopes
     });
 
@@ -268,11 +336,17 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
   }
 
   async function refreshAccessToken(input: RefreshTokenExchangeInput) {
-    const refreshToken = await options.store.rotateRefreshToken(input.refreshToken);
+    const rotation = await options.store.rotateRefreshToken(input.refreshToken);
 
-    if (!refreshToken) {
-      throw new Error("Refresh token is invalid or has already been used.");
+    if (rotation.status !== "rotated") {
+      if (rotation.status === "not_found") {
+        throw new Error("Refresh token is invalid or has already been used.");
+      }
+
+      throw new Error("Refresh token replay detected; token family revoked.");
     }
+
+    const refreshToken = rotation.record;
 
     if (refreshToken.expiresAt <= options.now()) {
       throw new Error("Refresh token has expired.");
@@ -282,12 +356,21 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       throw new Error("Refresh token does not belong to this client.");
     }
 
-    const accessToken = createAccessTokenRecord(options, {
+    const resource = validateResource(input.resource ?? refreshToken.resource, options.protectedResource);
+
+    if (refreshToken.resource !== resource) {
+      throw new Error("resource does not match the refresh token.");
+    }
+
+    const accessToken = await createAccessTokenRecord(options, {
       clientId: refreshToken.clientId,
+      resource,
       scopes: refreshToken.scopes
     });
     const nextRefreshToken = createRefreshTokenRecord(options, {
       clientId: refreshToken.clientId,
+      familyId: refreshToken.familyId,
+      resource,
       scopes: refreshToken.scopes
     });
 
@@ -304,16 +387,20 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
   }
 
   async function verifyAccessToken(token: string) {
-    const accessToken = await options.store.getAccessToken(token);
+    const payload = await verifyJwt(token, options.jwtSigningKey);
 
-    if (!accessToken || accessToken.expiresAt <= options.now()) {
+    if (payload.exp * 1000 <= options.now()) {
+      throw new Error("Bearer token is invalid or expired.");
+    }
+
+    if (payload.aud !== options.protectedResource || payload.iss !== issuer) {
       throw new Error("Bearer token is invalid or expired.");
     }
 
     return {
-      clientId: accessToken.clientId,
-      scopes: accessToken.scopes,
-      token: accessToken.token
+      clientId: payload.sub,
+      scopes: payload.scope.split(/\s+/u).filter(Boolean),
+      token
     };
   }
 
