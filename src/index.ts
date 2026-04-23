@@ -1,4 +1,5 @@
 import { OAuthStateDO } from "./durable-objects/OAuthStateDO.js";
+import { McpSessionDO } from "./durable-objects/McpSessionDO.js";
 import { createApp } from "./app/create-app.js";
 
 const app = createApp();
@@ -9,4 +10,4 @@ export default {
   }
 } satisfies ExportedHandler<Env>;
 
-export { OAuthStateDO };
+export { OAuthStateDO, McpSessionDO };
