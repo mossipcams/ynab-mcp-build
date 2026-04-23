@@ -71,20 +71,7 @@ export function createInMemoryOAuthStore(): OAuthStore {
       registeredClients.set(record.clientId, record);
     },
     async rotateRefreshToken(token) {
-      const record = refreshTokens.get(token);
-
-      if (!record || record.used) {
-        return undefined;
-      }
-
-      const nextRecord = {
-        ...record,
-        used: true
-      };
-
-      refreshTokens.set(token, nextRecord);
-
-      return record;
+      return refreshTokens.get(token);
     },
     async useAuthorizationCode(code) {
       const record = authorizationCodes.get(code);
