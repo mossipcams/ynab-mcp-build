@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import type { YnabClient } from "../../platform/ynab/client.js";
 import type { SliceToolDefinition } from "../../shared/tool-definition.js";
+import type { YnabClient } from "../../platform/ynab/client.js";
 import {
   getCategory,
   getMonthCategory,
@@ -27,7 +27,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       title: "Get YNAB Plan",
       description: "Returns a compact summary for a single YNAB plan.",
       inputSchema: {
-        planId: z.string().min(1)
+        planId: z.string().optional()
       },
       execute: async ({ planId }) => getPlan(ynabClient, planId)
     },
@@ -36,7 +36,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       title: "List YNAB Categories",
       description: "Lists visible category groups and categories for a YNAB plan.",
       inputSchema: {
-        planId: z.string().min(1)
+        planId: z.string().optional()
       },
       execute: async ({ planId }) => listCategories(ynabClient, planId)
     },
@@ -45,7 +45,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       title: "Get YNAB Category",
       description: "Returns a compact summary for a single category in a YNAB plan.",
       inputSchema: {
-        planId: z.string().min(1),
+        planId: z.string().optional(),
         categoryId: z.string().min(1)
       },
       execute: async ({ planId, categoryId }) => getCategory(ynabClient, planId, categoryId)
@@ -55,7 +55,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       title: "Get YNAB Month Category",
       description: "Returns a compact summary for a single category in a specific plan month.",
       inputSchema: {
-        planId: z.string().min(1),
+        planId: z.string().optional(),
         month: z.string().min(1),
         categoryId: z.string().min(1)
       },
@@ -67,7 +67,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       title: "Get YNAB Plan Settings",
       description: "Returns plan-level formatting settings for a YNAB plan.",
       inputSchema: {
-        planId: z.string().min(1)
+        planId: z.string().optional()
       },
       execute: async ({ planId }) => getPlanSettings(ynabClient, planId)
     },
@@ -76,7 +76,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       title: "List YNAB Plan Months",
       description: "Lists visible month summaries for a YNAB plan.",
       inputSchema: {
-        planId: z.string().min(1)
+        planId: z.string().optional()
       },
       execute: async ({ planId }) => listPlanMonths(ynabClient, planId)
     },
@@ -85,7 +85,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       title: "Get YNAB Plan Month",
       description: "Returns a compact summary for a specific month in a YNAB plan.",
       inputSchema: {
-        planId: z.string().min(1),
+        planId: z.string().optional(),
         month: z.string().min(1)
       },
       execute: async ({ planId, month }) => getPlanMonth(ynabClient, planId, month)
