@@ -39,8 +39,8 @@ describe("ynab client transport errors", () => {
     });
   });
 
-  it("keeps using the legacy /budgets collection path", async () => {
-    // DEFECT: test rewrites can accidentally force a transport migration when the client is intentionally pinned to the backward-compatible budget path.
+  it("uses the /plans collection path", async () => {
+    // DEFECT: transport path regressions can silently revert to the legacy /budgets endpoint after migration.
     const requests: Array<string | URL | Request> = [];
     const plansResponse = readYnabFixture<{
       data: {
@@ -68,11 +68,11 @@ describe("ynab client transport errors", () => {
 
     await client.listPlans();
 
-    expect(String(requests[0])).toBe("https://api.ynab.com/v1/budgets");
+    expect(String(requests[0])).toBe("https://api.ynab.com/v1/plans");
   });
 
-  it("keeps using the legacy /budgets resource path for plan-scoped endpoints", async () => {
-    // DEFECT: test rewrites can accidentally migrate plan-scoped transport paths instead of just updating schema fixtures.
+  it("uses the /plans resource path for plan-scoped endpoints", async () => {
+    // DEFECT: plan-scoped transport paths can silently revert to the legacy /budgets prefix after migration.
     const requests: Array<string | URL | Request> = [];
     const accountsResponse = readYnabFixture<{
       data: {
@@ -99,7 +99,7 @@ describe("ynab client transport errors", () => {
 
     await client.listAccounts("plan-1");
 
-    expect(String(requests[0])).toBe("https://api.ynab.com/v1/budgets/plan-1/accounts");
+    expect(String(requests[0])).toBe("https://api.ynab.com/v1/plans/plan-1/accounts");
   });
 
   it("maps 429 responses into retryable rate-limit errors", async () => {
