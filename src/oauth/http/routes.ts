@@ -31,7 +31,7 @@ export function registerOAuthHttpRoutes(
   dependencies: AppDependencies = {}
 ) {
   app.get("/.well-known/oauth-authorization-server", (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
 
     if (!core) {
       return context.notFound();
@@ -41,7 +41,7 @@ export function registerOAuthHttpRoutes(
   });
 
   app.get("/.well-known/openid-configuration", (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
 
     if (!core) {
       return context.notFound();
@@ -51,7 +51,7 @@ export function registerOAuthHttpRoutes(
   });
 
   app.get("/.well-known/oauth-protected-resource/mcp", (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
 
     if (!core) {
       return context.notFound();
@@ -61,7 +61,7 @@ export function registerOAuthHttpRoutes(
   });
 
   app.post("/register", async (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
 
     if (!core) {
       return context.notFound();
@@ -96,7 +96,7 @@ export function registerOAuthHttpRoutes(
   });
 
   app.get("/authorize", async (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
 
     if (!core) {
       return context.notFound();
@@ -120,7 +120,7 @@ export function registerOAuthHttpRoutes(
   });
 
   app.post("/token", async (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
 
     if (!core) {
       return context.notFound();
