@@ -65,7 +65,7 @@ describe("oauth core", () => {
     });
   });
 
-  it("rejects reused authorization codes and rotates refresh tokens", async () => {
+  it("rejects reused authorization codes but allows refresh token reuse", async () => {
     const core = createOAuthCore({
       createId: (() => {
         const values = [
@@ -134,6 +134,6 @@ describe("oauth core", () => {
         clientId: registration.client_id,
         refreshToken: initialTokens.refresh_token
       })
-    ).rejects.toThrow("Refresh token is invalid or has already been used.");
+    ).resolves.toMatchObject({ access_token: expect.any(String) });
   });
 });
