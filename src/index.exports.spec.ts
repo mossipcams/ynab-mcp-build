@@ -1,5 +1,10 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import workerEntrypoint from "./index.ts?raw";
+
+const sourceDirectory = dirname(fileURLToPath(import.meta.url));
+const workerEntrypoint = readFileSync(join(sourceDirectory, "index.ts"), "utf8");
 
 describe("worker entrypoint exports", () => {
   it("keeps the legacy oauth durable object export available for deploy compatibility", () => {
