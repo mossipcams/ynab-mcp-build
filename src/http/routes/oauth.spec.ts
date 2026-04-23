@@ -170,7 +170,7 @@ describe("oauth routes", () => {
         const request = input instanceof Request ? input : new Request(input, init);
         const headers = new Headers(request.headers);
 
-        headers.set("authorization", `Bearer ${tokenPayload.access_token}`);
+        headers.set("cf-access-jwt-assertion", "cf-access-token");
 
         return app.fetch(
           new Request(request, {
