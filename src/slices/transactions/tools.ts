@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import type { McpToolDefinition } from "../../mcp/tools.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
+import type { SliceToolDefinition } from "../../shared/tool-definition.js";
 import {
   getTransaction,
   getScheduledTransaction,
@@ -25,7 +25,7 @@ const scheduledTransactionFields = [
   "account_name"
 ] as const;
 
-export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDefinition[] {
+export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
   return [
     {
       name: "ynab_list_transactions",
@@ -38,7 +38,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
       },
-      execute: (input) => listTransactions(ynabClient, input)
+      execute: async (input) => listTransactions(ynabClient, input)
     },
     {
       name: "ynab_get_transaction",
@@ -48,7 +48,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         planId: z.string().optional(),
         transactionId: z.string().min(1)
       },
-      execute: (input) => getTransaction(ynabClient, input)
+      execute: async (input) => getTransaction(ynabClient, input)
     },
     {
       name: "ynab_search_transactions",
@@ -72,7 +72,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         includeIds: z.boolean().optional(),
         sort: z.enum(sortableValues).optional()
       },
-      execute: (input) => searchTransactions(ynabClient, input)
+      execute: async (input) => searchTransactions(ynabClient, input)
     },
     {
       name: "ynab_get_transactions_by_month",
@@ -86,7 +86,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
       },
-      execute: (input) => getTransactionsByMonth(ynabClient, input)
+      execute: async (input) => getTransactionsByMonth(ynabClient, input)
     },
     {
       name: "ynab_get_transactions_by_account",
@@ -100,7 +100,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
       },
-      execute: (input) => getTransactionsByAccount(ynabClient, input)
+      execute: async (input) => getTransactionsByAccount(ynabClient, input)
     },
     {
       name: "ynab_get_transactions_by_category",
@@ -114,7 +114,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
       },
-      execute: (input) => getTransactionsByCategory(ynabClient, input)
+      execute: async (input) => getTransactionsByCategory(ynabClient, input)
     },
     {
       name: "ynab_get_transactions_by_payee",
@@ -128,7 +128,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         fields: z.array(z.enum(transactionFields)).optional(),
         includeIds: z.boolean().optional()
       },
-      execute: (input) => getTransactionsByPayee(ynabClient, input)
+      execute: async (input) => getTransactionsByPayee(ynabClient, input)
     },
     {
       name: "ynab_list_scheduled_transactions",
@@ -141,7 +141,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         fields: z.array(z.enum(scheduledTransactionFields)).optional(),
         includeIds: z.boolean().optional()
       },
-      execute: (input) => listScheduledTransactions(ynabClient, input)
+      execute: async (input) => listScheduledTransactions(ynabClient, input)
     },
     {
       name: "ynab_get_scheduled_transaction",
@@ -151,7 +151,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): McpToolDe
         planId: z.string().optional(),
         scheduledTransactionId: z.string().min(1)
       },
-      execute: (input) => getScheduledTransaction(ynabClient, input)
+      execute: async (input) => getScheduledTransaction(ynabClient, input)
     }
   ];
 }
