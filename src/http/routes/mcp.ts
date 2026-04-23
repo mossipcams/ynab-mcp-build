@@ -1,13 +1,15 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { Hono } from "hono";
+import { z } from "zod";
 
-import { OAuthConfigurationError, type AppDependencies } from "../../app/dependencies.js";
+import { OAuthConfigurationError, resolveOAuthCore, type AppDependencies } from "../../app/dependencies.js";
 import { getRegisteredToolDefinitions } from "../../mcp/register-slices.js";
 import { createMcpServer } from "../../mcp/server.js";
 import { resolveAppEnv } from "../../shared/env.js";
-import { resolveOAuthCore } from "../../app/dependencies.js";
-import { z } from "zod";
 
+type WorkerOAuthBindings = Env & {
+  OAUTH_PROVIDER?: unknown;
+};
 function writeProtectedResourceAuthError(resourceMetadataUrl: string, errorDescription?: string) {
   return Response.json(
     {
@@ -69,6 +71,8 @@ function writeJsonRpcInvalidParams(id: string | number | null, message: string) 
 export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: AppDependencies = {}) {
   app.all("/mcp", async (context) => {
     const env = resolveAppEnv(context.env);
+    const providerAwareEnv = context.env as unknown as WorkerOAuthBindings;
+    const usesWorkerOAuthProvider = "OAUTH_PROVIDER" in providerAwareEnv;
     let oauthCore;
 
     try {
@@ -81,7 +85,7 @@ export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: Ap
       throw error;
     }
 
-    if (oauthCore) {
+    if (oauthCore && !usesWorkerOAuthProvider) {
       const authorization = context.req.header("authorization");
       let tokenContext;
 
@@ -147,13 +151,35 @@ export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: Ap
       }
     }
 
-    const transport = new WebStandardStreamableHTTPServerTransport();
-    const server = createMcpServer(env, dependencies);
+    const namespace = providerAwareEnv.MCP_SESSION;
 
-    await server.connect(transport);
+    if (!namespace) {
+      const transport = new WebStandardStreamableHTTPServerTransport();
+      const server = createMcpServer(env, dependencies);
 
-    return transport.handleRequest(context.req.raw, {
-      ...(parsedBody !== undefined ? { parsedBody } : {})
-    });
+      await server.connect(transport);
+
+      return transport.handleRequest(context.req.raw, {
+        ...(parsedBody !== undefined ? { parsedBody } : {})
+      });
+    }
+
+    const sessionId = context.req.header("mcp-session-id");
+    let stub: DurableObjectStub;
+
+    if (sessionId) {
+      try {
+        stub = namespace.get(namespace.idFromString(sessionId));
+      } catch {
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Session not found" }, id: null }),
+          { status: 404, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      stub = namespace.get(namespace.newUniqueId());
+    }
+
+    return stub.fetch(context.req.raw);
   });
 }
