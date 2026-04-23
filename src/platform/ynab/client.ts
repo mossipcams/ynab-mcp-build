@@ -841,19 +841,14 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       return transactions.map(toYnabTransaction);
     },
     async getTransaction(planId: string, transactionId: string) {
-      const response = await fetchFn(
-        `${baseUrl}/plans/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${options.accessToken}`
-          }
-        }
-      );
-      const payload = await getJson<YnabTransactionResponse>(response);
-      const data = getDataRecord(payload);
-      const transaction = requireObjectField<YnabTransactionResponse["data"]["transaction"]>(data, "transaction");
+      const all = await this.listTransactions(planId, undefined);
+      const transaction = all.find((t) => t.id === transactionId);
 
-      return toYnabTransaction(transaction);
+      if (!transaction) {
+        throw new Error(`YNAB API request failed with 404: Resource not found`);
+      }
+
+      return transaction;
     },
     async listScheduledTransactions(planId: string) {
       const response = await fetchFn(`${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions`, {
