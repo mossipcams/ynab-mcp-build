@@ -17,14 +17,20 @@
   "durable_objects": {
     "bindings": [
       {
-        "class_name": "OAuthStateDO",
-        "name": "OAUTH_STATE"
+        "class_name": "McpSessionDO",
+        "name": "MCP_SESSION"
       }
     ]
   },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "3c423c2d51294ecf9d1ae8edf5fb094f"
+    }
+  ],
   "migrations": [
     {
-      "new_sqlite_classes": ["OAuthStateDO"],
+      "new_sqlite_classes": ["McpSessionDO"],
       "tag": "v1"
     }
   ],

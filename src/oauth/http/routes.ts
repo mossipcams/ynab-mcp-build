@@ -1,5 +1,22 @@
 import type { Hono } from "hono";
 
+type OAuthProviderHelpers = {
+  completeAuthorization(options: {
+    metadata: Record<string, string>;
+    props: Record<string, never>;
+    request: {
+      clientId: string;
+      scope: string[];
+    };
+    scope: string[];
+    userId: string;
+  }): Promise<{ redirectTo: string }>;
+  lookupClient(clientId: string): Promise<unknown | null>;
+  parseAuthRequest(request: Request): Promise<{
+    clientId: string;
+    scope: string[];
+  }>;
+};
 import type { AppDependencies } from "../../app/dependencies.js";
 import { OAuthConfigurationError, resolveOAuthCore } from "../../app/dependencies.js";
 import { resolveAppEnv } from "../../shared/env.js";
@@ -12,6 +29,10 @@ function getStringArray(value: unknown) {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
     : undefined;
+}
+
+function getOAuthProviderHelpers(env: Env) {
+  return (env as Env & { OAUTH_PROVIDER?: OAuthProviderHelpers }).OAUTH_PROVIDER;
 }
 
 function sanitizeOAuthErrorDescription(errorDescription: string) {
@@ -159,6 +180,33 @@ export function registerOAuthHttpRoutes(
   });
 
   app.get("/authorize", async (context) => {
+    const oauthProvider = getOAuthProviderHelpers(context.env);
+
+    if (oauthProvider) {
+      try {
+        const request = await oauthProvider.parseAuthRequest(context.req.raw);
+        const client = await oauthProvider.lookupClient(request.clientId);
+
+        if (!client) {
+          return writeOAuthError("invalid_client", "OAuth client was not found.", 401);
+        }
+
+        const result = await oauthProvider.completeAuthorization({
+          metadata: {
+            client_id: request.clientId
+          },
+          props: {},
+          request,
+          scope: request.scope.length > 0 ? request.scope : ["mcp"],
+          userId: "ynab-static-user"
+        });
+
+        return context.redirect(result.redirectTo, 302);
+      } catch (error) {
+        return writeOAuthError("invalid_request", error instanceof Error ? error.message : String(error));
+      }
+    }
+
     let core;
 
     try {

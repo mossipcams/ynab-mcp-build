@@ -3,8 +3,9 @@ export type AppEnv = {
   mcpServerName: string;
   mcpServerVersion: string;
   oauthEnabled: boolean;
-  publicUrl?: string;
+  oauthKvNamespace?: KVNamespace;
   oauthStateNamespace?: DurableObjectNamespace;
+  publicUrl?: string;
   ynabApiBaseUrl: string;
   ynabAccessToken?: string;
 };
@@ -22,6 +23,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     MCP_PUBLIC_URL?: string;
     MCP_SERVER_NAME?: string;
     MCP_SERVER_VERSION?: string;
+    OAUTH_KV?: KVNamespace;
     JWT_SIGNING_KEY?: string;
     OAUTH_STATE?: DurableObjectNamespace;
     YNAB_ACCESS_TOKEN?: string;
@@ -38,6 +40,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     jwtSigningKey: runtimeEnv?.JWT_SIGNING_KEY,
     oauthEnabled: runtimeEnv?.MCP_OAUTH_ENABLED === "true",
     publicUrl: runtimeEnv?.MCP_PUBLIC_URL ?? derivedPublicUrl,
+    oauthKvNamespace: runtimeEnv?.OAUTH_KV,
     oauthStateNamespace: runtimeEnv?.OAUTH_STATE,
     ynabApiBaseUrl: runtimeEnv?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
     ynabAccessToken: runtimeEnv?.YNAB_ACCESS_TOKEN ?? runtimeEnv?.YNAB_API_TOKEN
@@ -47,8 +50,8 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     throw new Error("MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.");
   }
 
-  if (resolvedEnv.oauthEnabled && !resolvedEnv.jwtSigningKey) {
-    throw new Error("JWT_SIGNING_KEY is required when MCP_OAUTH_ENABLED is true.");
+  if (resolvedEnv.oauthEnabled && !resolvedEnv.jwtSigningKey && !resolvedEnv.oauthKvNamespace) {
+    throw new Error("JWT_SIGNING_KEY or OAUTH_KV is required when MCP_OAUTH_ENABLED is true.");
   }
 
   return resolvedEnv;
