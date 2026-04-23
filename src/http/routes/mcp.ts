@@ -121,6 +121,7 @@ export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: Ap
         id?: number | string | null;
         method?: string;
         params?: {
+          arguments?: Record<string, unknown>;
           name?: string;
         };
       };
