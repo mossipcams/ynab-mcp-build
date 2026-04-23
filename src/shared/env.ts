@@ -1,4 +1,6 @@
 export type AppEnv = {
+  cfAccessAudience?: string;
+  cfAccessTeamDomain?: string;
   jwtSigningKey?: string;
   mcpServerName: string;
   mcpServerVersion: string;
@@ -18,6 +20,8 @@ const DEFAULT_APP_ENV: AppEnv = {
 
 export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request): AppEnv {
   const runtimeEnv = env as {
+    CF_ACCESS_AUD?: string;
+    CF_ACCESS_TEAM_DOMAIN?: string;
     JWT_SIGNING_KEY?: string;
     MCP_OAUTH_ENABLED?: string;
     MCP_PUBLIC_URL?: string;
@@ -33,6 +37,8 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     ? `${new URL(request.url).origin}/mcp`
     : undefined;
   const resolvedEnv = {
+    cfAccessAudience: runtimeEnv?.CF_ACCESS_AUD,
+    cfAccessTeamDomain: runtimeEnv?.CF_ACCESS_TEAM_DOMAIN,
     jwtSigningKey: runtimeEnv?.JWT_SIGNING_KEY,
     mcpServerName: runtimeEnv?.MCP_SERVER_NAME ?? DEFAULT_APP_ENV.mcpServerName,
     mcpServerVersion: runtimeEnv?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
