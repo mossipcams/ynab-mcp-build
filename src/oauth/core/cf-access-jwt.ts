@@ -21,7 +21,11 @@ function base64urlDecode(input: string): Uint8Array {
     "="
   );
   const binary = atob(base64);
-  return Uint8Array.from(binary, c => c.charCodeAt(0));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 function parseJsonFromBase64url<T>(input: string): T {
