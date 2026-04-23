@@ -23,7 +23,7 @@ function writeProtectedResourceAuthError(resourceMetadataUrl: string, errorDescr
 
 export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: AppDependencies = {}) {
   app.all("/mcp", async (context) => {
-    const env = resolveAppEnv(context.env);
+    const env = resolveAppEnv(context.env, context.req.raw);
     const oauthCore = resolveOAuthCore(env, dependencies);
 
     if (oauthCore) {
