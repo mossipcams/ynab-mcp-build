@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 
 import type { AppDependencies } from "../../app/dependencies.js";
-import { resolveOAuthCore } from "../../app/dependencies.js";
+import { OAuthConfigurationError, resolveOAuthCore } from "../../app/dependencies.js";
 import { resolveAppEnv } from "../../shared/env.js";
 
 function getString(value: FormDataEntryValue | string | null | undefined) {
@@ -14,11 +14,18 @@ function getStringArray(value: unknown) {
     : undefined;
 }
 
+function sanitizeOAuthErrorDescription(errorDescription: string) {
+  return errorDescription
+    .split(/\r?\n/u)[0]
+    .replace(/\/Users\/[^\s"]+/gu, "[REDACTED_PATH]")
+    .replace(/[A-Za-z]:\\[^\s"]+/gu, "[REDACTED_PATH]");
+}
+
 function writeOAuthError(error: string, errorDescription: string, status = 400) {
   return Response.json(
     {
       error,
-      error_description: errorDescription
+      error_description: sanitizeOAuthErrorDescription(errorDescription)
     },
     {
       status
@@ -26,42 +33,98 @@ function writeOAuthError(error: string, errorDescription: string, status = 400) 
   );
 }
 
+function writeOAuthConfigurationError(error: unknown) {
+  return writeOAuthError(
+    "server_error",
+    error instanceof Error ? error.message : String(error),
+    503
+  );
+}
+
+function jsonWithCacheControl(payload: unknown) {
+  return Response.json(payload, {
+    headers: {
+      "cache-control": "public, max-age=300"
+    }
+  });
+}
+
 export function registerOAuthHttpRoutes(
   app: Hono<{ Bindings: Env }>,
   dependencies: AppDependencies = {}
 ) {
   app.get("/.well-known/oauth-authorization-server", (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+    let core;
+
+    try {
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    } catch (error) {
+      if (error instanceof OAuthConfigurationError) {
+        return writeOAuthConfigurationError(error);
+      }
+
+      throw error;
+    }
 
     if (!core) {
       return context.notFound();
     }
 
-    return context.json(core.getAuthorizationServerMetadata());
+    return jsonWithCacheControl(core.getAuthorizationServerMetadata());
   });
 
   app.get("/.well-known/openid-configuration", (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+    let core;
+
+    try {
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    } catch (error) {
+      if (error instanceof OAuthConfigurationError) {
+        return writeOAuthConfigurationError(error);
+      }
+
+      throw error;
+    }
 
     if (!core) {
       return context.notFound();
     }
 
-    return context.json(core.getOpenIdConfiguration());
+    return jsonWithCacheControl(core.getOpenIdConfiguration());
   });
 
   app.get("/.well-known/oauth-protected-resource/mcp", (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+    let core;
+
+    try {
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    } catch (error) {
+      if (error instanceof OAuthConfigurationError) {
+        return writeOAuthConfigurationError(error);
+      }
+
+      throw error;
+    }
 
     if (!core) {
       return context.notFound();
     }
 
-    return context.json(core.getProtectedResourceMetadata());
+    return jsonWithCacheControl(core.getProtectedResourceMetadata());
   });
 
   app.post("/register", async (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+    let core;
+
+    try {
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    } catch (error) {
+      if (error instanceof OAuthConfigurationError) {
+        return writeOAuthConfigurationError(error);
+      }
+
+      throw error;
+    }
 
     if (!core) {
       return context.notFound();
@@ -96,7 +159,17 @@ export function registerOAuthHttpRoutes(
   });
 
   app.get("/authorize", async (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+    let core;
+
+    try {
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    } catch (error) {
+      if (error instanceof OAuthConfigurationError) {
+        return writeOAuthConfigurationError(error);
+      }
+
+      throw error;
+    }
 
     if (!core) {
       return context.notFound();
@@ -108,6 +181,7 @@ export function registerOAuthHttpRoutes(
         codeChallenge: context.req.query("code_challenge") ?? "",
         codeChallengeMethod: context.req.query("code_challenge_method") ?? "",
         redirectUri: context.req.query("redirect_uri") ?? "",
+        ...(context.req.query("resource") ? { resource: context.req.query("resource") } : {}),
         responseType: context.req.query("response_type") ?? "",
         ...(context.req.query("scope") ? { scope: context.req.query("scope") } : {}),
         ...(context.req.query("state") ? { state: context.req.query("state") } : {})
@@ -120,7 +194,17 @@ export function registerOAuthHttpRoutes(
   });
 
   app.post("/token", async (context) => {
-    const core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+    let core;
+
+    try {
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
+    } catch (error) {
+      if (error instanceof OAuthConfigurationError) {
+        return writeOAuthConfigurationError(error);
+      }
+
+      throw error;
+    }
 
     if (!core) {
       return context.notFound();
@@ -136,7 +220,8 @@ export function registerOAuthHttpRoutes(
           clientId,
           code: getString(formData.get("code")) ?? "",
           codeVerifier: getString(formData.get("code_verifier")) ?? "",
-          redirectUri: getString(formData.get("redirect_uri")) ?? ""
+          redirectUri: getString(formData.get("redirect_uri")) ?? "",
+          ...(getString(formData.get("resource")) ? { resource: getString(formData.get("resource")) } : {})
         });
 
         return context.json(tokens);
@@ -145,7 +230,8 @@ export function registerOAuthHttpRoutes(
       if (grantType === "refresh_token") {
         const tokens = await core.refreshAccessToken({
           clientId,
-          refreshToken: getString(formData.get("refresh_token")) ?? ""
+          refreshToken: getString(formData.get("refresh_token")) ?? "",
+          ...(getString(formData.get("resource")) ? { resource: getString(formData.get("resource")) } : {})
         });
 
         return context.json(tokens);
