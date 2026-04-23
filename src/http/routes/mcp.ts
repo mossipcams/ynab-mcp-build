@@ -2,14 +2,12 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import type { Hono } from "hono";
 import { z } from "zod";
 
-import { OAuthConfigurationError, resolveOAuthCore, type AppDependencies } from "../../app/dependencies.js";
+import type { AppDependencies } from "../../app/dependencies.js";
 import { getRegisteredToolDefinitions } from "../../mcp/register-slices.js";
 import { createMcpServer } from "../../mcp/server.js";
 import { resolveAppEnv } from "../../shared/env.js";
+import { resolveOAuthCore } from "../../app/dependencies.js";
 
-type WorkerOAuthBindings = Env & {
-  OAUTH_PROVIDER?: unknown;
-};
 function writeProtectedResourceAuthError(resourceMetadataUrl: string, errorDescription?: string) {
   return Response.json(
     {
@@ -40,18 +38,6 @@ function writeProtectedResourceScopeError(resourceMetadataUrl: string, errorDesc
   );
 }
 
-function writeOAuthConfigurationError(error: unknown) {
-  return Response.json(
-    {
-      error: "server_error",
-      error_description: error instanceof Error ? error.message : String(error)
-    },
-    {
-      status: 503
-    }
-  );
-}
-
 function writeJsonRpcInvalidParams(id: string | number | null, message: string) {
   return Response.json(
     {
@@ -70,28 +56,17 @@ function writeJsonRpcInvalidParams(id: string | number | null, message: string) 
 
 export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: AppDependencies = {}) {
   app.all("/mcp", async (context) => {
-    const env = resolveAppEnv(context.env, context.req.raw);
-    const providerAwareEnv = context.env as unknown as WorkerOAuthBindings;
-    const usesWorkerOAuthProvider = "OAUTH_PROVIDER" in providerAwareEnv;
-    let oauthCore;
+    const env = resolveAppEnv(context.env);
+    const oauthCore = resolveOAuthCore(env, dependencies);
 
-    try {
-      oauthCore = resolveOAuthCore(env, dependencies);
-    } catch (error) {
-      if (error instanceof OAuthConfigurationError) {
-        return writeOAuthConfigurationError(error);
-      }
-
-      throw error;
-    }
-
-    if (oauthCore && !usesWorkerOAuthProvider) {
+    if (oauthCore) {
       const authorization = context.req.header("authorization");
-      let tokenContext;
 
       if (!authorization?.startsWith("Bearer ")) {
         return writeProtectedResourceAuthError(oauthCore.protectedResourceMetadataEndpoint);
       }
+
+      let tokenContext;
 
       try {
         tokenContext = await oauthCore.verifyAccessToken(authorization.slice("Bearer ".length).trim());
@@ -151,35 +126,13 @@ export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: Ap
       }
     }
 
-    const namespace = providerAwareEnv.MCP_SESSION;
+    const transport = new WebStandardStreamableHTTPServerTransport();
+    const server = createMcpServer(env, dependencies);
 
-    if (!namespace) {
-      const transport = new WebStandardStreamableHTTPServerTransport();
-      const server = createMcpServer(env, dependencies);
+    await server.connect(transport);
 
-      await server.connect(transport);
-
-      return transport.handleRequest(context.req.raw, {
-        ...(parsedBody !== undefined ? { parsedBody } : {})
-      });
-    }
-
-    const sessionId = context.req.header("mcp-session-id");
-    let stub: DurableObjectStub;
-
-    if (sessionId) {
-      try {
-        stub = namespace.get(namespace.idFromString(sessionId));
-      } catch {
-        return new Response(
-          JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Session not found" }, id: null }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
-      }
-    } else {
-      stub = namespace.get(namespace.newUniqueId());
-    }
-
-    return stub.fetch(context.req.raw);
+    return transport.handleRequest(context.req.raw, {
+      ...(parsedBody !== undefined ? { parsedBody } : {})
+    });
   });
 }
