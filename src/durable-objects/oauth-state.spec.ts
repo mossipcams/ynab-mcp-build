@@ -37,7 +37,7 @@ describe("oauth state durable-object handler", () => {
     });
   });
 
-  it("marks authorization and refresh tokens as used when consumed", async () => {
+  it("marks authorization codes as used when consumed but allows refresh token reuse", async () => {
     const storage = createMemoryOAuthStateStorage();
 
     await handleOAuthStateRequest(
@@ -109,6 +109,6 @@ describe("oauth state durable-object handler", () => {
     expect(firstCodeResponse.status).toBe(200);
     expect(secondCodeResponse.status).toBe(404);
     expect(firstRefreshResponse.status).toBe(200);
-    expect(secondRefreshResponse.status).toBe(404);
+    expect(secondRefreshResponse.status).toBe(200);
   });
 });
