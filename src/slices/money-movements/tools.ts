@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import type { McpToolDefinition } from "../../mcp/tools.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
+import type { SliceToolDefinition } from "../../shared/tool-definition.js";
 import {
   getMoneyMovementGroups,
   getMoneyMovementGroupsByMonth,
@@ -9,7 +9,7 @@ import {
   getMoneyMovementsByMonth
 } from "./service.js";
 
-export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): McpToolDefinition[] {
+export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
   return [
     {
       name: "ynab_get_money_movements",
@@ -18,7 +18,7 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): McpTool
       inputSchema: {
         planId: z.string().optional()
       },
-      execute: (input) => getMoneyMovements(ynabClient, input)
+      execute: async (input) => getMoneyMovements(ynabClient, input)
     },
     {
       name: "ynab_get_money_movements_by_month",
@@ -28,7 +28,7 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): McpTool
         planId: z.string().optional(),
         month: z.string().min(1)
       },
-      execute: (input) => getMoneyMovementsByMonth(ynabClient, input)
+      execute: async (input) => getMoneyMovementsByMonth(ynabClient, input)
     },
     {
       name: "ynab_get_money_movement_groups",
@@ -37,7 +37,7 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): McpTool
       inputSchema: {
         planId: z.string().optional()
       },
-      execute: (input) => getMoneyMovementGroups(ynabClient, input)
+      execute: async (input) => getMoneyMovementGroups(ynabClient, input)
     },
     {
       name: "ynab_get_money_movement_groups_by_month",
@@ -47,7 +47,7 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): McpTool
         planId: z.string().optional(),
         month: z.string().min(1)
       },
-      execute: (input) => getMoneyMovementGroupsByMonth(ynabClient, input)
+      execute: async (input) => getMoneyMovementGroupsByMonth(ynabClient, input)
     }
   ];
 }

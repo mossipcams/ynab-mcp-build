@@ -1,12 +1,12 @@
 import type { YnabClient } from "../../platform/ynab/client.js";
 
 export function getMcpVersion(metadata: {
-  name: string;
-  version: string;
+  mcpServerName: string;
+  mcpServerVersion: string;
 }) {
   return {
-    name: metadata.name,
-    version: metadata.version
+    name: metadata.mcpServerName,
+    version: metadata.mcpServerVersion
   };
 }
 
