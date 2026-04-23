@@ -5,7 +5,7 @@ import { registerOAuthHttpRoutes } from "../../oauth/http/routes.js";
 
 export function registerOAuthRoutes(
   app: Hono<{ Bindings: Env }>,
-  _dependencies: AppDependencies = {}
+  dependencies: AppDependencies = {}
 ) {
-  registerOAuthHttpRoutes(app);
+  registerOAuthHttpRoutes(app, dependencies);
 }
