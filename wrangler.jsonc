@@ -5,6 +5,7 @@
   "compatibility_date": "2026-04-21",
   "keep_vars": true,
   "vars": {
+    "CF_ACCESS_TEAM_DOMAIN": "https://mossipcams.cloudflareaccess.com",
     "MCP_OAUTH_ENABLED": "true",
     "MCP_PUBLIC_URL": "https://ynab-mcp-build.mossipcams.workers.dev/mcp",
     "MCP_SERVER_NAME": "ynab-mcp-build",
@@ -19,10 +20,6 @@
       {
         "class_name": "OAuthStateDO",
         "name": "OAUTH_STATE"
-      },
-      {
-        "class_name": "McpSessionDO",
-        "name": "MCP_SESSION"
       }
     ]
   },
@@ -30,10 +27,6 @@
     {
       "new_sqlite_classes": ["OAuthStateDO"],
       "tag": "v1"
-    },
-    {
-      "new_sqlite_classes": ["McpSessionDO"],
-      "tag": "v2"
     }
   ],
   "observability": {

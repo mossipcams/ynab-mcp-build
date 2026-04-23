@@ -1,0 +1,18 @@
+{
+  "data": {
+    "accounts": [
+      {
+        "id": "account-1",
+        "name": "Checking",
+        "type": "checking",
+        "on_budget": true,
+        "closed": false,
+        "note": null,
+        "balance": 123450,
+        "balance_formatted": "$123.45",
+        "balance_currency": 123.45,
+        "deleted": false
+      }
+    ]
+  }
+}
