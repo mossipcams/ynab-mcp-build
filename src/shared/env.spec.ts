@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { resolveAppEnv } from "./env.js";
 
 describe("resolveAppEnv", () => {
-  it("throws when OAuth is enabled without MCP_PUBLIC_URL or a request", () => {
+  it("throws when OAuth is enabled without MCP_PUBLIC_URL", () => {
     expect(() =>
       resolveAppEnv({
         MCP_OAUTH_ENABLED: "true"
@@ -15,21 +15,10 @@ describe("resolveAppEnv", () => {
     const env = resolveAppEnv({
       MCP_OAUTH_ENABLED: "true",
       MCP_PUBLIC_URL: "https://mcp.example.com/mcp"
-      MCP_PUBLIC_URL: "https://mcp.example.com/mcp"
     } as Partial<Env> & { MCP_OAUTH_ENABLED: string; MCP_PUBLIC_URL: string });
 
     expect(env.oauthEnabled).toBe(true);
     expect(env.publicUrl).toBe("https://mcp.example.com/mcp");
-  });
-
-  it("derives publicUrl from request origin when MCP_PUBLIC_URL is not set", () => {
-    const request = new Request("https://ynab-mcp.workers.dev/mcp");
-    const env = resolveAppEnv(
-      { MCP_OAUTH_ENABLED: "true" } as Partial<Env> & { MCP_OAUTH_ENABLED: string },
-      request
-    );
-
-    expect(env.publicUrl).toBe("https://ynab-mcp.workers.dev/mcp");
   });
 
   it("uses YNAB_API_TOKEN as a fallback alias for YNAB access token", () => {

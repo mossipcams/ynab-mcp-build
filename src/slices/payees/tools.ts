@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import type { McpToolDefinition } from "../../mcp/tools.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
+import type { SliceToolDefinition } from "../../shared/tool-definition.js";
 import {
   getPayee,
   getPayeeLocation,
@@ -12,7 +12,7 @@ import {
 
 const payeeFields = ["name", "transfer_account_id"] as const;
 
-export function getPayeeToolDefinitions(ynabClient: YnabClient): McpToolDefinition[] {
+export function getPayeeToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
   return [
     {
       name: "ynab_list_payees",
@@ -25,7 +25,7 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): McpToolDefiniti
         fields: z.array(z.enum(payeeFields)).optional(),
         includeIds: z.boolean().optional()
       },
-      execute: (input) => listPayees(ynabClient, input)
+      execute: async (input) => listPayees(ynabClient, input)
     },
     {
       name: "ynab_get_payee",
@@ -35,7 +35,7 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): McpToolDefiniti
         planId: z.string().optional(),
         payeeId: z.string().min(1)
       },
-      execute: (input) => getPayee(ynabClient, input)
+      execute: async (input) => getPayee(ynabClient, input)
     },
     {
       name: "ynab_list_payee_locations",
@@ -44,7 +44,7 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): McpToolDefiniti
       inputSchema: {
         planId: z.string().optional()
       },
-      execute: (input) => listPayeeLocations(ynabClient, input)
+      execute: async (input) => listPayeeLocations(ynabClient, input)
     },
     {
       name: "ynab_get_payee_location",
@@ -54,7 +54,7 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): McpToolDefiniti
         planId: z.string().optional(),
         payeeLocationId: z.string().min(1)
       },
-      execute: (input) => getPayeeLocation(ynabClient, input)
+      execute: async (input) => getPayeeLocation(ynabClient, input)
     },
     {
       name: "ynab_get_payee_locations_by_payee",
@@ -64,7 +64,7 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): McpToolDefiniti
         planId: z.string().optional(),
         payeeId: z.string().min(1)
       },
-      execute: (input) => getPayeeLocationsByPayee(ynabClient, input)
+      execute: async (input) => getPayeeLocationsByPayee(ynabClient, input)
     }
   ];
 }

@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import type { McpToolDefinition } from "../../mcp/tools.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
+import type { SliceToolDefinition } from "../../shared/tool-definition.js";
 import { getAccount, listAccounts } from "./service.js";
 
-export function getAccountToolDefinitions(ynabClient: YnabClient): McpToolDefinition[] {
+export function getAccountToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
   return [
     {
       name: "ynab_list_accounts",
@@ -17,7 +17,7 @@ export function getAccountToolDefinitions(ynabClient: YnabClient): McpToolDefini
         fields: z.array(z.enum(["name", "type", "closed", "balance"])).optional(),
         includeIds: z.boolean().optional()
       },
-      execute: (input) => listAccounts(ynabClient, input)
+      execute: async (input) => listAccounts(ynabClient, input)
     },
     {
       name: "ynab_get_account",
@@ -27,7 +27,7 @@ export function getAccountToolDefinitions(ynabClient: YnabClient): McpToolDefini
         planId: z.string().optional(),
         accountId: z.string().min(1)
       },
-      execute: (input) => getAccount(ynabClient, input)
+      execute: async (input) => getAccount(ynabClient, input)
     }
   ];
 }
