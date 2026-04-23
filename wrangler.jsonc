@@ -6,30 +6,25 @@
   "keep_vars": true,
   "vars": {
     "MCP_OAUTH_ENABLED": "true",
+    "MCP_PUBLIC_URL": "https://ynab-mcp-build.mossipcams.workers.dev/mcp",
     "MCP_SERVER_NAME": "ynab-mcp-build",
     "MCP_SERVER_VERSION": "0.1.0",
     "YNAB_API_BASE_URL": "https://api.ynab.com/v1"
   },
   "secrets": {
-    "required": ["JWT_SIGNING_KEY", "YNAB_ACCESS_TOKEN"]
+    "required": ["YNAB_ACCESS_TOKEN"]
   },
   "durable_objects": {
     "bindings": [
       {
-        "class_name": "McpSessionDO",
-        "name": "MCP_SESSION"
+        "class_name": "OAuthStateDO",
+        "name": "OAUTH_STATE"
       }
     ]
   },
-  "kv_namespaces": [
-    {
-      "binding": "OAUTH_KV",
-      "id": "3c423c2d51294ecf9d1ae8edf5fb094f"
-    }
-  ],
   "migrations": [
     {
-      "new_sqlite_classes": ["McpSessionDO"],
+      "new_sqlite_classes": ["OAuthStateDO"],
       "tag": "v1"
     }
   ],

@@ -5,19 +5,19 @@ import { generateOAuthTokenId } from "../oauth/core/token-id.js";
 import type { OAuthStore } from "../oauth/core/store.js";
 import type { AppEnv } from "../shared/env.js";
 
-export type AppDependencies = {
-  createId?: () => string;
-  now?: () => number;
-  oauthStore?: OAuthStore;
-  ynabClient?: YnabClient;
-};
-
 export class OAuthConfigurationError extends Error {
   constructor(message = "OAuth state storage is not configured.") {
     super(message);
     this.name = "OAuthConfigurationError";
   }
 }
+
+export type AppDependencies = {
+  createId?: () => string;
+  now?: () => number;
+  oauthStore?: OAuthStore;
+  ynabClient?: YnabClient;
+};
 
 export function resolveYnabClient(env: AppEnv, dependencies: AppDependencies): YnabClient {
   if (dependencies.ynabClient) {
@@ -101,9 +101,10 @@ export function resolveOAuthCore(env: AppEnv, dependencies: AppDependencies) {
   }
 
   const store = dependencies.oauthStore
-    ?? (env.oauthStateNamespace
+    ? dependencies.oauthStore
+    : env.oauthStateNamespace
       ? createDurableObjectOAuthStore(env.oauthStateNamespace.get(env.oauthStateNamespace.idFromName("oauth-state")))
-      : undefined);
+      : undefined;
 
   if (!store) {
     throw new OAuthConfigurationError();
