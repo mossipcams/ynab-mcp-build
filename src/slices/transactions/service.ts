@@ -157,7 +157,7 @@ function buildTransactionCollectionResult(
 
 function matchesTransactionFilters(transaction: YnabTransaction, input: SearchTransactionsInput) {
   return [
-    input.includeTransfers !== false || !transaction.transferAccountId,
+    input.includeTransfers === true || !transaction.transferAccountId,
     !input.toDate || transaction.date <= input.toDate,
     !input.payeeId || transaction.payeeId === input.payeeId,
     !input.accountId || transaction.accountId === input.accountId,

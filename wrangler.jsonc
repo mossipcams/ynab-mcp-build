@@ -6,12 +6,13 @@
   "keep_vars": true,
   "vars": {
     "MCP_OAUTH_ENABLED": "true",
+    "MCP_PUBLIC_URL": "https://mcp.example.com/mcp",
     "MCP_SERVER_NAME": "ynab-mcp-build",
     "MCP_SERVER_VERSION": "0.1.0",
     "YNAB_API_BASE_URL": "https://api.ynab.com/v1"
   },
   "secrets": {
-    "required": ["YNAB_ACCESS_TOKEN"]
+    "required": ["JWT_SIGNING_KEY", "YNAB_ACCESS_TOKEN"]
   },
   "durable_objects": {
     "bindings": [

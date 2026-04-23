@@ -1,0 +1,25 @@
+{
+  "data": {
+    "transactions": [
+      {
+        "id": "txn-1",
+        "date": "2026-04-01",
+        "amount": -4560,
+        "amount_formatted": "-$4.56",
+        "amount_currency": -4.56,
+        "memo": null,
+        "cleared": "cleared",
+        "approved": true,
+        "flag_name": null,
+        "account_id": "account-1",
+        "account_name": "Checking",
+        "payee_id": "payee-1",
+        "payee_name": "Coffee Shop",
+        "category_id": "category-1",
+        "category_name": "Dining Out",
+        "transfer_account_id": null,
+        "deleted": false
+      }
+    ]
+  }
+}
