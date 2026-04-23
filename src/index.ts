@@ -7,8 +7,8 @@ import { resolveAppEnv } from "./shared/env.js";
 
 const app = createApp();
 
-function createOAuthProvider(env: Env) {
-  const appEnv = resolveAppEnv(env);
+function createOAuthProvider(env: Env, request: Request) {
+  const appEnv = resolveAppEnv(env, request);
   const baseUrl = appEnv.publicUrl ? new URL("/", appEnv.publicUrl).href : undefined;
 
   return new OAuthProvider<Env>({
@@ -33,13 +33,13 @@ function createOAuthProvider(env: Env) {
 
 export default {
   fetch(request: Request, env: Env, executionContext: ExecutionContext) {
-    const appEnv = resolveAppEnv(env);
+    const appEnv = resolveAppEnv(env, request);
 
     if (!appEnv.oauthEnabled) {
       return app.fetch(request, env, executionContext);
     }
 
-    return createOAuthProvider(env).fetch(request, env, executionContext);
+    return createOAuthProvider(env, request).fetch(request, env, executionContext);
   }
 } satisfies ExportedHandler<Env>;
 

@@ -17,6 +17,20 @@ const DEFAULT_APP_ENV: AppEnv = {
   ynabApiBaseUrl: "https://api.ynab.com/v1"
 };
 
+function resolvePublicUrl(runtimeEnv: { MCP_PUBLIC_URL?: string } | undefined, request?: Request) {
+  if (!request) {
+    return runtimeEnv?.MCP_PUBLIC_URL;
+  }
+
+  const requestUrl = new URL(request.url);
+  const derivedPublicUrl = `${requestUrl.origin}/mcp`;
+  const isLocalRequest = requestUrl.hostname === "localhost" || requestUrl.hostname === "127.0.0.1";
+
+  return isLocalRequest
+    ? runtimeEnv?.MCP_PUBLIC_URL ?? derivedPublicUrl
+    : derivedPublicUrl;
+}
+
 export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request): AppEnv {
   const runtimeEnv = env as {
     MCP_OAUTH_ENABLED?: string;
@@ -31,15 +45,12 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     YNAB_API_TOKEN?: string;
   } | undefined;
 
-  const derivedPublicUrl = request
-    ? `${new URL(request.url).origin}/mcp`
-    : undefined;
   const resolvedEnv = {
     mcpServerName: runtimeEnv?.MCP_SERVER_NAME ?? DEFAULT_APP_ENV.mcpServerName,
     mcpServerVersion: runtimeEnv?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
     jwtSigningKey: runtimeEnv?.JWT_SIGNING_KEY,
     oauthEnabled: runtimeEnv?.MCP_OAUTH_ENABLED === "true",
-    publicUrl: runtimeEnv?.MCP_PUBLIC_URL ?? derivedPublicUrl,
+    publicUrl: resolvePublicUrl(runtimeEnv, request),
     oauthKvNamespace: runtimeEnv?.OAUTH_KV,
     oauthStateNamespace: runtimeEnv?.OAUTH_STATE,
     ynabApiBaseUrl: runtimeEnv?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
