@@ -111,16 +111,11 @@ export async function handleOAuthStateRequest(storage: StorageLike, request: Req
   if (request.method === "POST" && url.pathname === "/refresh-tokens/rotate") {
     const body = await readJson(request);
     const token = String(body.token);
-    const record = await storage.get<Record<string, unknown> & { used?: boolean }>(refreshTokenKey(token));
+    const record = await storage.get<Record<string, unknown>>(refreshTokenKey(token));
 
-    if (!record || record.used) {
+    if (!record) {
       return new Response(null, { status: 404 });
     }
-
-    await storage.put(refreshTokenKey(token), {
-      ...record,
-      used: true
-    });
 
     return jsonResponse(record);
   }
