@@ -53,5 +53,9 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     throw new Error("MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.");
   }
 
+  if (resolvedEnv.cfAccessTeamDomain && !resolvedEnv.cfAccessAudience) {
+    throw new Error("CF_ACCESS_AUD is required when CF_ACCESS_TEAM_DOMAIN is set.");
+  }
+
   return resolvedEnv;
 }
