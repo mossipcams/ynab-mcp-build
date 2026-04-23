@@ -644,21 +644,23 @@ describe("YNAB client", () => {
         new Response(
           JSON.stringify({
             data: {
-              transaction: {
-                id: "transaction-1",
-                date: "2026-03-15",
-                amount: -123450,
-                payee_id: "payee-1",
-                payee_name: "Groceries",
-                category_id: "category-1",
-                category_name: "Food",
-                account_id: "account-1",
-                account_name: "Checking",
-                approved: true,
-                cleared: "cleared",
-                deleted: false,
-                transfer_account_id: null
-              }
+              transactions: [
+                {
+                  id: "transaction-1",
+                  date: "2026-03-15",
+                  amount: -123450,
+                  payee_id: "payee-1",
+                  payee_name: "Groceries",
+                  category_id: "category-1",
+                  category_name: "Food",
+                  account_id: "account-1",
+                  account_name: "Checking",
+                  approved: true,
+                  cleared: "cleared",
+                  deleted: false,
+                  transfer_account_id: null
+                }
+              ]
             }
           })
         )
@@ -679,7 +681,7 @@ describe("YNAB client", () => {
     );
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
-      "https://api.ynab.com/v1/plans/plan-1/transactions/transaction-1",
+      "https://api.ynab.com/v1/plans/plan-1/transactions",
       expect.any(Object)
     );
     expect(transactions).toMatchObject([
