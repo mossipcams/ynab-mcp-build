@@ -7,7 +7,7 @@ import type {
   OAuthStore
 } from "./store.js";
 
-const DEFAULT_ACCESS_TOKEN_TTL_SEC = 60 * 60;
+const DEFAULT_ACCESS_TOKEN_TTL_SEC = 24 * 60 * 60;
 const DEFAULT_AUTHORIZATION_CODE_TTL_SEC = 5 * 60;
 const DEFAULT_REFRESH_TOKEN_TTL_SEC = 30 * 24 * 60 * 60;
 
