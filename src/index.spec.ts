@@ -44,7 +44,7 @@ describe("worker entrypoint", () => {
         MCP_SERVER_VERSION: "0.1.0",
         OAUTH_KV: {} as KVNamespace,
         YNAB_API_BASE_URL: "https://api.ynab.com/v1"
-      } as unknown as Env,
+      } as Env,
       {} as ExecutionContext
     );
 
@@ -64,7 +64,7 @@ describe("worker entrypoint", () => {
       MCP_SERVER_VERSION: "0.1.0",
       OAUTH_KV: createMemoryKvNamespace(),
       YNAB_API_BASE_URL: "https://api.ynab.com/v1"
-    } as unknown as Env;
+    } as Env;
     const registrationResponse = await worker.fetch(
       new Request(`${publicBaseUrl}/register`, {
         method: "POST",
@@ -145,7 +145,7 @@ describe("worker entrypoint", () => {
         MCP_SERVER_VERSION: "0.1.0",
         OAUTH_KV: createMemoryKvNamespace(),
         YNAB_API_BASE_URL: "https://api.ynab.com/v1"
-      } as unknown as Env,
+      } as Env,
       {} as ExecutionContext
     );
 
