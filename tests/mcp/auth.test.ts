@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../../src/app/create-app.js";
 import { signJwt } from "../../src/oauth/core/jwt.js";
@@ -14,6 +14,81 @@ function createOauthEnv(): Env {
     YNAB_API_BASE_URL: "https://api.ynab.com/v1"
   } as unknown as Env;
 }
+
+function createCfAccessEnv(): Env {
+  return {
+    CF_ACCESS_AUD: "access-app-audience",
+    CF_ACCESS_TEAM_DOMAIN: "https://access-team.example.com",
+    MCP_SERVER_NAME: "ynab-mcp-build",
+    MCP_SERVER_VERSION: "0.1.0",
+    YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+  } as unknown as Env;
+}
+
+function toBase64Url(input: string | Uint8Array) {
+  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
+}
+
+async function createCfAccessJwt(input: {
+  aud: string | string[];
+  email?: string;
+  exp?: number;
+  iss?: string;
+  kid?: string;
+  sub?: string;
+}) {
+  const keyPair = await crypto.subtle.generateKey(
+    {
+      hash: "SHA-256",
+      modulusLength: 2048,
+      name: "RSASSA-PKCS1-v1_5",
+      publicExponent: new Uint8Array([1, 0, 1])
+    },
+    true,
+    ["sign", "verify"]
+  );
+  const kid = input.kid ?? "test-kid-1";
+  const header = toBase64Url(JSON.stringify({
+    alg: "RS256",
+    kid,
+    typ: "JWT"
+  }));
+  const payload = toBase64Url(JSON.stringify({
+    aud: input.aud,
+    ...(input.email ? { email: input.email } : {}),
+    exp: input.exp ?? Math.floor(Date.now() / 1000) + 60 * 60,
+    iss: input.iss ?? "https://access-team.example.com",
+    sub: input.sub ?? "user-1"
+  }));
+  const signingInput = `${header}.${payload}`;
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    keyPair.privateKey,
+    new TextEncoder().encode(signingInput)
+  );
+  const publicJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+
+  return {
+    jwk: {
+      ...publicJwk,
+      alg: "RS256",
+      kid,
+      use: "sig"
+    },
+    token: `${signingInput}.${toBase64Url(new Uint8Array(signature))}`
+  };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function createToolListRequest(headers?: HeadersInit) {
   return new Request("http://localhost/mcp", {
@@ -230,6 +305,87 @@ describe("mcp bearer auth", () => {
     expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
     await expect(response.json()).resolves.toMatchObject({
       error: "insufficient_scope"
+    });
+  });
+});
+
+describe("mcp cloudflare access auth", () => {
+  it("returns an unauthenticated response when the Cloudflare Access JWT assertion is missing", async () => {
+    // DEFECT: self-hosted Access mode can fall through to MCP handling without proof that Cloudflare authenticated the caller.
+    const app = createApp();
+
+    const response = await app.fetch(createToolListRequest(), createCfAccessEnv());
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "unauthenticated",
+      error_description: "Cloudflare Access authentication required."
+    });
+  });
+
+  it("accepts a valid Cloudflare Access JWT assertion for the configured audience", async () => {
+    // DEFECT: self-hosted Access mode can reject legitimate Access-authenticated callers and break the managed OAuth handoff.
+    const app = createApp();
+    const { jwk, token } = await createCfAccessJwt({
+      aud: "access-app-audience",
+      email: "user@example.com"
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+
+      if (url === "https://access-team.example.com/cdn-cgi/access/certs") {
+        return Response.json({
+          keys: [jwk]
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch);
+
+    const response = await app.fetch(
+      createToolListRequest({
+        accept: "application/json, text/event-stream",
+        "cf-access-jwt-assertion": token
+      }),
+      createCfAccessEnv()
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+  });
+
+  it("rejects Cloudflare Access JWT assertions issued for a different audience", async () => {
+    // DEFECT: a valid Access token for one protected app can be replayed against this MCP server when audience binding is skipped.
+    const app = createApp();
+    const { jwk, token } = await createCfAccessJwt({
+      aud: "other-access-app-audience"
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+
+      if (url === "https://access-team.example.com/cdn-cgi/access/certs") {
+        return Response.json({
+          keys: [jwk]
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch);
+
+    const response = await app.fetch(
+      createToolListRequest({
+        accept: "application/json, text/event-stream",
+        "cf-access-jwt-assertion": token
+      }),
+      createCfAccessEnv()
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "unauthenticated",
+      error_description: "Cloudflare Access authentication required."
     });
   });
 });

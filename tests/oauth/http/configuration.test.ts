@@ -14,6 +14,14 @@ function createOAuthEnvWithoutStore(): Env {
   } as unknown as Env;
 }
 
+function createCfAccessEnv(): Env {
+  return {
+    ...createOAuthEnvWithoutStore(),
+    CF_ACCESS_AUD: "access-app-audience",
+    CF_ACCESS_TEAM_DOMAIN: "https://access-team.example.com"
+  } as unknown as Env;
+}
+
 describe("oauth store configuration", () => {
   it("returns a configuration error when oauth is enabled without a DO binding or injected store", async () => {
     // DEFECT: OAuth can silently fall back to in-memory state and mask a catastrophic production misconfiguration.
@@ -58,6 +66,33 @@ describe("oauth store configuration", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+  });
+
+  it("does not expose custom OAuth discovery metadata when self-hosted Access manages oauth", async () => {
+    // DEFECT: a self-hosted Access deployment can advertise an app-owned OAuth server and send clients into the wrong authorization flow.
+    const app = createApp({
+      oauthStore: createInMemoryOAuthStore()
+    });
+
+    const authorizationServerResponse = await app.request(
+      "http://localhost/.well-known/oauth-authorization-server",
+      undefined,
+      createCfAccessEnv()
+    );
+    const openIdConfigurationResponse = await app.request(
+      "http://localhost/.well-known/openid-configuration",
+      undefined,
+      createCfAccessEnv()
+    );
+    const protectedResourceResponse = await app.request(
+      "http://localhost/.well-known/oauth-protected-resource/mcp",
+      undefined,
+      createCfAccessEnv()
+    );
+
+    expect(authorizationServerResponse.status).toBe(404);
+    expect(openIdConfigurationResponse.status).toBe(404);
+    expect(protectedResourceResponse.status).toBe(404);
   });
 
   it("sets Cache-Control on protected-resource metadata responses", async () => {

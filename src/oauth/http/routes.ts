@@ -54,6 +54,10 @@ export function registerOAuthHttpRoutes(
   dependencies: AppDependencies = {}
 ) {
   app.get("/.well-known/oauth-authorization-server", (context) => {
+    if (resolveAppEnv(context.env).cfAccessTeamDomain) {
+      return context.notFound();
+    }
+
     let core;
 
     try {
@@ -74,6 +78,10 @@ export function registerOAuthHttpRoutes(
   });
 
   app.get("/.well-known/openid-configuration", (context) => {
+    if (resolveAppEnv(context.env).cfAccessTeamDomain) {
+      return context.notFound();
+    }
+
     let core;
 
     try {
@@ -94,6 +102,10 @@ export function registerOAuthHttpRoutes(
   });
 
   app.get("/.well-known/oauth-protected-resource/mcp", (context) => {
+    if (resolveAppEnv(context.env).cfAccessTeamDomain) {
+      return context.notFound();
+    }
+
     let core;
 
     try {
@@ -114,6 +126,10 @@ export function registerOAuthHttpRoutes(
   });
 
   app.post("/register", async (context) => {
+    if (resolveAppEnv(context.env).cfAccessTeamDomain) {
+      return context.notFound();
+    }
+
     let core;
 
     try {
@@ -159,6 +175,10 @@ export function registerOAuthHttpRoutes(
   });
 
   app.get("/authorize", async (context) => {
+    if (resolveAppEnv(context.env).cfAccessTeamDomain) {
+      return context.notFound();
+    }
+
     let core;
 
     try {
@@ -194,6 +214,10 @@ export function registerOAuthHttpRoutes(
   });
 
   app.post("/token", async (context) => {
+    if (resolveAppEnv(context.env).cfAccessTeamDomain) {
+      return context.notFound();
+    }
+
     let core;
 
     try {
