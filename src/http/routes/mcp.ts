@@ -70,7 +70,7 @@ function writeJsonRpcInvalidParams(id: string | number | null, message: string) 
 
 export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: AppDependencies = {}) {
   app.all("/mcp", async (context) => {
-    const env = resolveAppEnv(context.env, context.req.raw);
+    const env = resolveAppEnv(context.env);
     const providerAwareEnv = context.env as unknown as WorkerOAuthBindings;
     const usesWorkerOAuthProvider = "OAUTH_PROVIDER" in providerAwareEnv;
     let oauthCore;
