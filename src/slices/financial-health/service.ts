@@ -415,12 +415,14 @@ export async function getFinancialSnapshot(ynabClient: YnabClient, input: Financ
   };
 }
 
-export async function getPlanHealthSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
+export async function getBudgetHealthSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = input.topN ?? 5;
   const { monthDetail } = await getMonthContext(ynabClient, input);
 
   return summarizeBudgetHealthMonth(monthDetail, topN);
 }
+
+export const getPlanHealthSummary = getBudgetHealthSummary;
 
 export async function getFinancialHealthCheck(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = input.topN ?? 5;
@@ -1120,6 +1122,8 @@ export async function getCleanupSummary(ynabClient: YnabClient, input: Financial
     }))
   };
 }
+
+export const getBudgetCleanupSummary = getCleanupSummary;
 
 function reconstructHistoricalBalances(
   accounts: YnabAccountSummary[],
