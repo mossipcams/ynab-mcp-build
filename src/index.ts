@@ -1,7 +1,6 @@
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 
 import { McpSessionDO } from "./durable-objects/McpSessionDO.js";
-import { OAuthStateDO } from "./durable-objects/OAuthStateDO.js";
 import { createApp } from "./app/create-app.js";
 import { resolveAppEnv } from "./shared/env.js";
 
@@ -43,4 +42,4 @@ export default {
   }
 } satisfies ExportedHandler<Env>;
 
-export { McpSessionDO, OAuthStateDO };
+export { McpSessionDO };
