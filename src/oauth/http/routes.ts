@@ -78,7 +78,7 @@ export function registerOAuthHttpRoutes(
     let core;
 
     try {
-      core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
     } catch (error) {
       if (error instanceof OAuthConfigurationError) {
         return writeOAuthConfigurationError(error);
@@ -98,7 +98,7 @@ export function registerOAuthHttpRoutes(
     let core;
 
     try {
-      core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
     } catch (error) {
       if (error instanceof OAuthConfigurationError) {
         return writeOAuthConfigurationError(error);
@@ -118,7 +118,7 @@ export function registerOAuthHttpRoutes(
     let core;
 
     try {
-      core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
     } catch (error) {
       if (error instanceof OAuthConfigurationError) {
         return writeOAuthConfigurationError(error);
@@ -138,7 +138,7 @@ export function registerOAuthHttpRoutes(
     let core;
 
     try {
-      core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
     } catch (error) {
       if (error instanceof OAuthConfigurationError) {
         return writeOAuthConfigurationError(error);
@@ -210,7 +210,7 @@ export function registerOAuthHttpRoutes(
     let core;
 
     try {
-      core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
     } catch (error) {
       if (error instanceof OAuthConfigurationError) {
         return writeOAuthConfigurationError(error);
@@ -245,7 +245,7 @@ export function registerOAuthHttpRoutes(
     let core;
 
     try {
-      core = resolveOAuthCore(resolveAppEnv(context.env, context.req.raw), dependencies);
+      core = resolveOAuthCore(resolveAppEnv(context.env), dependencies);
     } catch (error) {
       if (error instanceof OAuthConfigurationError) {
         return writeOAuthConfigurationError(error);
