@@ -1,13 +1,7 @@
-import { createDurableObjectOAuthStore } from "../durable-objects/oauth-state-client.js";
 import { createYnabClient, type YnabClient } from "../platform/ynab/client.js";
-import { createOAuthCore } from "../oauth/core/auth.js";
-import type { OAuthStore } from "../oauth/core/store.js";
 import type { AppEnv } from "../shared/env.js";
 
 export type AppDependencies = {
-  createId?: () => string;
-  now?: () => number;
-  oauthStore?: OAuthStore;
   ynabClient?: YnabClient;
 };
 
@@ -84,32 +78,5 @@ export function resolveYnabClient(env: AppEnv, dependencies: AppDependencies): Y
   return createYnabClient({
     accessToken: env.ynabAccessToken,
     baseUrl: env.ynabApiBaseUrl
-  });
-}
-
-export function resolveOAuthCore(env: AppEnv, dependencies: AppDependencies) {
-  if (!env.oauthEnabled || !env.publicUrl) {
-    return undefined;
-  }
-
-  const store = dependencies.oauthStore
-    ? dependencies.oauthStore
-    : env.oauthStateNamespace
-      ? createDurableObjectOAuthStore(env.oauthStateNamespace.get(env.oauthStateNamespace.idFromName("oauth-state")))
-      : undefined;
-
-  if (!store) {
-    throw new Error(
-      "OAuth requires a Durable Object namespace or an injected OAuth store when MCP_OAUTH_ENABLED is true."
-    );
-  }
-
-  return createOAuthCore({
-    createId: dependencies.createId ?? (() => crypto.randomUUID()),
-    issuer: env.publicUrl,
-    now: dependencies.now ?? (() => Date.now()),
-    protectedResource: env.publicUrl,
-    scopesSupported: ["mcp"],
-    store
   });
 }
