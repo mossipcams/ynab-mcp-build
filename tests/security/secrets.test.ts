@@ -108,7 +108,7 @@ describe("response secret leakage", () => {
     const accessToken = await signJwt(
       {
         aud: "https://mcp.example.com/mcp",
-        exp: Math.floor(Date.UTC(2026, 3, 23, 13, 0, 0) / 1000),
+        exp: Math.floor(Date.UTC(2030, 0, 1, 0, 0, 0) / 1000),
         iat: Math.floor(Date.UTC(2026, 3, 23, 12, 0, 0) / 1000),
         iss: "https://mcp.example.com/",
         jti: "jti-tool-redaction",
@@ -178,7 +178,7 @@ describe("response secret leakage", () => {
     const accessToken = await signJwt(
       {
         aud: "https://mcp.example.com/mcp",
-        exp: Math.floor(Date.UTC(2026, 3, 23, 13, 0, 0) / 1000),
+        exp: Math.floor(Date.UTC(2030, 0, 1, 0, 0, 0) / 1000),
         iat: Math.floor(Date.UTC(2026, 3, 23, 12, 0, 0) / 1000),
         iss: "https://mcp.example.com/",
         jti: "jti-key-redaction",

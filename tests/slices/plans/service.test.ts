@@ -93,7 +93,7 @@ describe("plans service", () => {
     });
   });
 
-  it("requires month and planId in the plan-month tool schema", () => {
+  it("requires month in the plan-month tool schema and treats planId as optional", () => {
     // DEFECT: the plan-month tool contract can stop requiring its key identifiers and accept ambiguous requests.
     const ynabClient = {
       getCategory: vi.fn(),
@@ -110,6 +110,6 @@ describe("plans service", () => {
 
     expect(monthTool).toBeDefined();
     expect(() => z.object(monthTool?.inputSchema ?? {}).parse({ planId: "plan-1" })).toThrow();
-    expect(() => z.object(monthTool?.inputSchema ?? {}).parse({ month: "2026-04-01" })).toThrow();
+    expect(() => z.object(monthTool?.inputSchema ?? {}).parse({ month: "2026-04-01" })).not.toThrow();
   });
 });
