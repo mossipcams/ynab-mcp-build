@@ -97,6 +97,35 @@ describe("oauth core pkce and client registration", () => {
     });
   });
 
+  it("allows IPv4 and IPv6 loopback redirect URIs over http", async () => {
+    // DEFECT: loopback validation can accidentally reject standards-compliant 127.0.0.1 and ::1 development callbacks.
+    const core = createCore();
+
+    await expect(
+      core.registerClient({
+        clientName: "Local IPv4",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: ["http://127.0.0.1:8788/callback"],
+        responseTypes: ["code"],
+        tokenEndpointAuthMethod: "none"
+      })
+    ).resolves.toMatchObject({
+      redirect_uris: ["http://127.0.0.1:8788/callback"]
+    });
+
+    await expect(
+      core.registerClient({
+        clientName: "Local IPv6",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: ["http://[::1]:8788/callback"],
+        responseTypes: ["code"],
+        tokenEndpointAuthMethod: "none"
+      })
+    ).resolves.toMatchObject({
+      redirect_uris: ["http://[::1]:8788/callback"]
+    });
+  });
+
   it("rejects loopback redirect URIs that use non-http schemes", async () => {
     // DEFECT: loopback exceptions can accidentally permit arbitrary redirect URI schemes and weaken client registration constraints.
     const core = createCore();
@@ -106,6 +135,64 @@ describe("oauth core pkce and client registration", () => {
         clientName: "Local Claude",
         grantTypes: ["authorization_code", "refresh_token"],
         redirectUris: ["ftp://localhost/callback"],
+        responseTypes: ["code"],
+        tokenEndpointAuthMethod: "none"
+      })
+    ).rejects.toThrow("redirect_uris must use https unless they target a loopback host over http.");
+  });
+
+  it("rejects invalid client registration shapes before issuing a client id", async () => {
+    // DEFECT: client registration can accept malformed grant, response, auth-method, or redirect-uri combinations and create unusable clients.
+    const core = createCore();
+
+    await expect(
+      core.registerClient({
+        clientName: "Too Many Redirects",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: [
+          "https://claude.ai/api/mcp/auth_callback",
+          "https://claude.ai/api/mcp/other"
+        ],
+        responseTypes: ["code"],
+        tokenEndpointAuthMethod: "none"
+      })
+    ).rejects.toThrow("redirect_uris must contain exactly one redirect URI.");
+
+    await expect(
+      core.registerClient({
+        clientName: "Missing Grant",
+        grantTypes: ["refresh_token"],
+        redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
+        responseTypes: ["code"],
+        tokenEndpointAuthMethod: "none"
+      })
+    ).rejects.toThrow("grant_types must include authorization_code.");
+
+    await expect(
+      core.registerClient({
+        clientName: "Missing Response",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
+        responseTypes: ["token"],
+        tokenEndpointAuthMethod: "none"
+      })
+    ).rejects.toThrow("response_types must include code.");
+
+    await expect(
+      core.registerClient({
+        clientName: "Wrong Auth Method",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
+        responseTypes: ["code"],
+        tokenEndpointAuthMethod: "client_secret_post"
+      })
+    ).rejects.toThrow("token_endpoint_auth_method must be none.");
+
+    await expect(
+      core.registerClient({
+        clientName: "Wrong Host",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: ["http://example.com/callback"],
         responseTypes: ["code"],
         tokenEndpointAuthMethod: "none"
       })
