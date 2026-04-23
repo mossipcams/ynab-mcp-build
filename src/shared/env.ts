@@ -15,7 +15,7 @@ const DEFAULT_APP_ENV: AppEnv = {
   ynabApiBaseUrl: "https://api.ynab.com/v1"
 };
 
-export function resolveAppEnv(env: Partial<Env> | undefined): AppEnv {
+export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request): AppEnv {
   const runtimeEnv = env as {
     MCP_OAUTH_ENABLED?: string;
     MCP_PUBLIC_URL?: string;
@@ -27,11 +27,15 @@ export function resolveAppEnv(env: Partial<Env> | undefined): AppEnv {
     YNAB_API_TOKEN?: string;
   } | undefined;
 
+  const derivedPublicUrl = request
+    ? `${new URL(request.url).origin}/mcp`
+    : undefined;
+
   const resolvedEnv = {
     mcpServerName: runtimeEnv?.MCP_SERVER_NAME ?? DEFAULT_APP_ENV.mcpServerName,
     mcpServerVersion: runtimeEnv?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
     oauthEnabled: runtimeEnv?.MCP_OAUTH_ENABLED === "true",
-    publicUrl: runtimeEnv?.MCP_PUBLIC_URL,
+    publicUrl: runtimeEnv?.MCP_PUBLIC_URL ?? derivedPublicUrl,
     oauthStateNamespace: runtimeEnv?.OAUTH_STATE,
     ynabApiBaseUrl: runtimeEnv?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
     ynabAccessToken: runtimeEnv?.YNAB_ACCESS_TOKEN ?? runtimeEnv?.YNAB_API_TOKEN
