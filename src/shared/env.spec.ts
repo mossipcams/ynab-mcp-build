@@ -11,10 +11,11 @@ describe("resolveAppEnv", () => {
     ).toThrowError("MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.");
   });
 
-  it("allows OAuth when MCP_PUBLIC_URL is present", () => {
+  it("allows OAuth when MCP_PUBLIC_URL and state backing are present", () => {
     const env = resolveAppEnv({
       MCP_OAUTH_ENABLED: "true",
-      MCP_PUBLIC_URL: "https://mcp.example.com/mcp"
+      MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
+      OAUTH_STATE: {} as DurableObjectNamespace
     } as Partial<Env> & { MCP_OAUTH_ENABLED: string; MCP_PUBLIC_URL: string });
 
     expect(env.oauthEnabled).toBe(true);

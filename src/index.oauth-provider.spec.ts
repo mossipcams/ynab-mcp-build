@@ -137,7 +137,12 @@ describe("Worker OAuth provider", () => {
       client_id: string;
     };
 
-    expect(await env.OAUTH_KV.get(`client:${registration.client_id}`, { type: "json" })).toBeTruthy();
+    expect(
+      await (env as unknown as { OAUTH_KV: KVNamespace }).OAUTH_KV.get(
+        `client:${registration.client_id}`,
+        { type: "json" }
+      )
+    ).toBeTruthy();
     const authorizeResponse = await worker.fetch(
       new Request(
         `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`
@@ -172,6 +177,87 @@ describe("Worker OAuth provider", () => {
     await expect(tokenResponse.json()).resolves.toMatchObject({
       scope: "mcp",
       token_type: "bearer"
+    });
+  });
+
+  it("rejects provider-issued access tokens that do not grant the MCP scope", async () => {
+    const env = createOAuthProviderEnv();
+    const executionContext = {} as ExecutionContext;
+    const registrationResponse = await worker.fetch(
+      new Request("https://mcp.example.com/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          client_name: "Claude",
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none"
+        })
+      }),
+      env,
+      executionContext
+    );
+    const registration = await registrationResponse.json() as {
+      client_id: string;
+    };
+    const authorizeResponse = await worker.fetch(
+      new Request(
+        `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`
+      ),
+      env,
+      executionContext
+    );
+    const redirectLocation = authorizeResponse.headers.get("location");
+    const code = redirectLocation ? new URL(redirectLocation).searchParams.get("code") : null;
+    const tokenResponse = await worker.fetch(
+      new Request("https://mcp.example.com/token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams({
+          client_id: registration.client_id,
+          code: code ?? "",
+          code_verifier: "test-code-verifier",
+          grant_type: "authorization_code",
+          redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+          scope: "not-mcp"
+        }).toString()
+      }),
+      env,
+      executionContext
+    );
+    const tokenPayload = await tokenResponse.json() as {
+      access_token: string;
+      scope: string;
+    };
+    const mcpResponse = await worker.fetch(
+      new Request("https://mcp.example.com/mcp", {
+        method: "POST",
+        headers: {
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${tokenPayload.access_token}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: "2.0",
+          method: "tools/list",
+          params: {}
+        })
+      }),
+      env,
+      executionContext
+    );
+
+    expect(tokenPayload.scope).toBe("");
+    expect(mcpResponse.status).toBe(403);
+    await expect(mcpResponse.json()).resolves.toMatchObject({
+      error: "insufficient_scope",
+      error_description: "Bearer token does not grant the mcp scope."
     });
   });
 });

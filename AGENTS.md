@@ -8,6 +8,7 @@ Before making code changes, read `architecture.md` to refresh the current module
 
 - Use TDD for implementation work.
 - Follow test-first development for any non-trivial code change.
+- When integrating `@cloudflare/workers-oauth-provider`, test the provider contracts through this MCP server's Worker/app behavior rather than testing or reimplementing the provider internals.
 - Keep transport concerns in transport modules only.
 - Keep streamable HTTP transport handling in `src/http/**`.
 - Keep MCP SDK imports, `registerTool(...)` wiring, server creation, and MCP result formatting in `src/mcp/**` only.
