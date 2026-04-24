@@ -1,10 +1,12 @@
 import type { YnabClient } from "../../platform/ynab/client.js";
-import type { AppEnv } from "../../shared/env.js";
 
-export function getMcpVersion(env: AppEnv) {
+export function getMcpVersion(metadata: {
+  mcpServerName: string;
+  mcpServerVersion: string;
+}) {
   return {
-    name: env.mcpServerName,
-    version: env.mcpServerVersion
+    name: metadata.mcpServerName,
+    version: metadata.mcpServerVersion
   };
 }
 
