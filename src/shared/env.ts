@@ -2,8 +2,8 @@ export type AppEnv = {
   mcpServerName: string;
   mcpServerVersion: string;
   oauthEnabled: boolean;
+  oauthKvNamespace?: KVNamespace;
   publicUrl?: string;
-  oauthStateNamespace?: DurableObjectNamespace;
   ynabApiBaseUrl: string;
   ynabAccessToken?: string;
 };
@@ -21,8 +21,8 @@ export function resolveAppEnv(env: Partial<Env> | undefined): AppEnv {
     mcpServerVersion: env?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
     oauthEnabled:
       (env as { MCP_OAUTH_ENABLED?: string } | undefined)?.MCP_OAUTH_ENABLED === "true",
+    oauthKvNamespace: (env as { OAUTH_KV?: KVNamespace } | undefined)?.OAUTH_KV,
     publicUrl: (env as { MCP_PUBLIC_URL?: string } | undefined)?.MCP_PUBLIC_URL,
-    oauthStateNamespace: (env as { OAUTH_STATE?: DurableObjectNamespace } | undefined)?.OAUTH_STATE,
     ynabApiBaseUrl: env?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
     ynabAccessToken: (env as { YNAB_ACCESS_TOKEN?: string } | undefined)?.YNAB_ACCESS_TOKEN
   };

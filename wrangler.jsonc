@@ -3,18 +3,10 @@
   "name": "ynab-mcp-build",
   "main": "src/index.ts",
   "compatibility_date": "2026-04-21",
-  "durable_objects": {
-    "bindings": [
-      {
-        "class_name": "OAuthStateDO",
-        "name": "OAUTH_STATE"
-      }
-    ]
-  },
-  "migrations": [
+  "kv_namespaces": [
     {
-      "new_sqlite_classes": ["OAuthStateDO"],
-      "tag": "v1"
+      "binding": "OAUTH_KV",
+      "id": "00000000000000000000000000000000"
     }
   ],
   "observability": {

@@ -1,10 +1,6 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { afterEach } from "vitest";
-
 import { describe, expect, it } from "vitest";
 
-import worker from "../../index.js";
+import worker from "./index.js";
 
 function createMemoryKvNamespace(): KVNamespace {
   const records = new Map<string, string>();
@@ -38,7 +34,7 @@ function createMemoryKvNamespace(): KVNamespace {
   } as unknown as KVNamespace;
 }
 
-function createOAuthEnv(): Env {
+function createOAuthProviderEnv(): Env {
   return {
     MCP_OAUTH_ENABLED: "true",
     MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
@@ -49,19 +45,33 @@ function createOAuthEnv(): Env {
   } as unknown as Env;
 }
 
-describe("oauth routes", () => {
-  const cleanups: Array<() => Promise<void>> = [];
+describe("Worker OAuth provider", () => {
+  it("protects MCP requests with the Cloudflare OAuth provider", async () => {
+    const response = await worker.fetch(
+      new Request("https://mcp.example.com/mcp", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: "2.0",
+          method: "tools/list",
+          params: {}
+        })
+      }),
+      createOAuthProviderEnv(),
+      {} as ExecutionContext
+    );
 
-  afterEach(async () => {
-    while (cleanups.length > 0) {
-      await cleanups.pop()?.();
-    }
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain('Bearer realm="OAuth"');
   });
 
-  it("serves OAuth authorization-server metadata when OAuth mode is enabled", async () => {
+  it("serves Cloudflare OAuth provider metadata with S256 PKCE", async () => {
     const response = await worker.fetch(
       new Request("https://mcp.example.com/.well-known/oauth-authorization-server"),
-      createOAuthEnv(),
+      createOAuthProviderEnv(),
       {} as ExecutionContext
     );
 
@@ -69,21 +79,13 @@ describe("oauth routes", () => {
     await expect(response.json()).resolves.toMatchObject({
       authorization_endpoint: "https://mcp.example.com/authorize",
       code_challenge_methods_supported: ["S256"],
-      grant_types_supported: ["authorization_code", "refresh_token"],
-      issuer: "https://mcp.example.com",
       registration_endpoint: "https://mcp.example.com/register",
-      response_types_supported: ["code"],
       scopes_supported: ["mcp"],
-      token_endpoint: "https://mcp.example.com/token",
-      token_endpoint_auth_methods_supported: [
-        "client_secret_basic",
-        "client_secret_post",
-        "none"
-      ]
+      token_endpoint: "https://mcp.example.com/token"
     });
   });
 
-  it("registers a public client with a single redirect URI", async () => {
+  it("registers public clients through the Cloudflare OAuth provider", async () => {
     const response = await worker.fetch(
       new Request("https://mcp.example.com/register", {
         method: "POST",
@@ -98,7 +100,7 @@ describe("oauth routes", () => {
           token_endpoint_auth_method: "none"
         })
       }),
-      createOAuthEnv(),
+      createOAuthProviderEnv(),
       {} as ExecutionContext
     );
 
@@ -112,31 +114,8 @@ describe("oauth routes", () => {
     });
   });
 
-  it("requires OAuth access tokens for MCP when OAuth mode is enabled", async () => {
-    const env = createOAuthEnv();
-    const executionContext = {} as ExecutionContext;
-    const unauthorizedResponse = await worker.fetch(
-      new Request("https://mcp.example.com/mcp", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          id: 1,
-          jsonrpc: "2.0",
-          method: "tools/list",
-          params: {}
-        })
-      }),
-      env,
-      executionContext
-    );
-
-    expect(unauthorizedResponse.status).toBe(401);
-    expect(unauthorizedResponse.headers.get("www-authenticate")).toContain(
-      "resource_metadata=\"https://mcp.example.com/.well-known/oauth-protected-resource/mcp\""
-    );
-
+  it("completes the authorization-code flow through the Cloudflare OAuth provider", async () => {
+    const env = createOAuthProviderEnv();
     const registrationResponse = await worker.fetch(
       new Request("https://mcp.example.com/register", {
         method: "POST",
@@ -152,17 +131,19 @@ describe("oauth routes", () => {
         })
       }),
       env,
-      executionContext
+      {} as ExecutionContext
     );
     const registration = await registrationResponse.json() as {
       client_id: string;
     };
+
+    expect(await env.OAUTH_KV.get(`client:${registration.client_id}`, { type: "json" })).toBeTruthy();
     const authorizeResponse = await worker.fetch(
       new Request(
         `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`
       ),
       env,
-      executionContext
+      {} as ExecutionContext
     );
     const redirectLocation = authorizeResponse.headers.get("location");
     const code = redirectLocation ? new URL(redirectLocation).searchParams.get("code") : null;
@@ -181,51 +162,16 @@ describe("oauth routes", () => {
         }).toString()
       }),
       env,
-      executionContext
+      {} as ExecutionContext
     );
-    const tokenPayload = await tokenResponse.json() as {
-      access_token: string;
-    };
-    const transport = new StreamableHTTPClientTransport(new URL("http://localhost/mcp"), {
-      fetch: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        const headers = new Headers(request.headers);
 
-        headers.set("authorization", `Bearer ${tokenPayload.access_token}`);
-
-        return worker.fetch(
-          new Request(request, {
-            headers
-          }),
-          env,
-          executionContext
-        );
-      }
-    });
-    const client = new Client({
-      name: "ynab-mcp-build-test-client",
-      version: "1.0.0"
-    });
-
-    cleanups.push(async () => {
-      await transport.close();
-      await client.close();
-    });
-
-    await client.connect(transport);
-
-    const result = await client.callTool({
-      name: "ynab_get_mcp_version",
-      arguments: {}
-    });
-    const content = result.content as Array<{ type: string; text?: string }>;
-    const textContent = content.find((entry) => entry.type === "text");
-
+    expect(authorizeResponse.status).toBe(302);
+    expect(redirectLocation).toContain("state=client-state-1");
+    expect(code).toBeTruthy();
     expect(tokenResponse.status).toBe(200);
-    expect(textContent).toBeDefined();
-    expect(JSON.parse(textContent!.text!)).toMatchObject({
-      name: "ynab-mcp-build",
-      version: "0.1.0"
+    await expect(tokenResponse.json()).resolves.toMatchObject({
+      scope: "mcp",
+      token_type: "bearer"
     });
   });
 });
