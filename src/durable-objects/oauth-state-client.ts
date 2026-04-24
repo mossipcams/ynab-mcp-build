@@ -81,3 +81,57 @@ export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
     }
   };
 }
+
+export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNamespace {
+  return {
+    async get(key: string, options?: { type?: string }) {
+      const response = await expectOk(
+        await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`)
+      );
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      const value = await response.text();
+
+      if (options?.type === "json") {
+        return JSON.parse(value);
+      }
+
+      return value;
+    },
+    async put(key: string, value: string, options?: { expirationTtl?: number }) {
+      await expectOk(
+        await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`, {
+          body: value,
+          headers: {
+            ...(options?.expirationTtl ? { "x-expiration-ttl": String(options.expirationTtl) } : {})
+          },
+          method: "PUT"
+        })
+      );
+    },
+    async delete(key: string) {
+      await expectOk(
+        await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`, {
+          method: "DELETE"
+        })
+      );
+    },
+    async list(options?: { prefix?: string }) {
+      const params = new URLSearchParams();
+
+      if (options?.prefix) {
+        params.set("prefix", options.prefix);
+      }
+
+      const query = params.toString();
+      const response = await expectOk(
+        await fetcher.fetch(`https://oauth-state/kv${query ? `?${query}` : ""}`)
+      );
+
+      return response.json();
+    }
+  } as unknown as KVNamespace;
+}
