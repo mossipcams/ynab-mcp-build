@@ -5,6 +5,7 @@ export type AppEnv = {
   mcpServerVersion: string;
   oauthEnabled: boolean;
   oauthKvNamespace?: KVNamespace;
+  oauthStateNamespace?: DurableObjectNamespace;
   publicUrl?: string;
   ynabApiBaseUrl: string;
   ynabAccessToken?: string;
@@ -26,6 +27,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     MCP_SERVER_NAME?: string;
     MCP_SERVER_VERSION?: string;
     OAUTH_KV?: KVNamespace;
+    OAUTH_STATE?: DurableObjectNamespace;
     YNAB_ACCESS_TOKEN?: string;
     YNAB_API_BASE_URL?: string;
     YNAB_API_TOKEN?: string;
@@ -40,6 +42,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     mcpServerVersion: runtimeEnv?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
     oauthEnabled: runtimeEnv?.MCP_OAUTH_ENABLED === "true",
     oauthKvNamespace: runtimeEnv?.OAUTH_KV,
+    oauthStateNamespace: runtimeEnv?.OAUTH_STATE,
     publicUrl: runtimeEnv?.MCP_PUBLIC_URL ?? derivedPublicUrl,
     ynabApiBaseUrl: runtimeEnv?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
     ynabAccessToken: runtimeEnv?.YNAB_ACCESS_TOKEN ?? runtimeEnv?.YNAB_API_TOKEN
@@ -47,6 +50,10 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
 
   if (resolvedEnv.oauthEnabled && !resolvedEnv.publicUrl) {
     throw new Error("MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.");
+  }
+
+  if (resolvedEnv.oauthEnabled && !resolvedEnv.oauthStateNamespace && !resolvedEnv.oauthKvNamespace) {
+    throw new Error("OAuth requires a Durable Object namespace or an injected OAuth KV store when MCP_OAUTH_ENABLED is true.");
   }
 
   if (resolvedEnv.cfAccessTeamDomain && !resolvedEnv.cfAccessAudience) {

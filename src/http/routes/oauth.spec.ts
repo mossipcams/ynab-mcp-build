@@ -112,6 +112,83 @@ describe("oauth routes", () => {
     });
   });
 
+  it("requires authorization-code requests to use S256 PKCE", async () => {
+    const env = createOAuthEnv();
+    const executionContext = {} as ExecutionContext;
+    const registrationResponse = await worker.fetch(
+      new Request("https://mcp.example.com/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          client_name: "Claude",
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none"
+        })
+      }),
+      env,
+      executionContext
+    );
+    const registration = await registrationResponse.json() as {
+      client_id: string;
+    };
+    const baseParams = new URLSearchParams({
+      client_id: registration.client_id,
+      redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+      scope: "mcp",
+      state: "client-state-1"
+    });
+
+    const implicitResponse = await worker.fetch(
+      new Request(`https://mcp.example.com/authorize?${new URLSearchParams({
+        ...Object.fromEntries(baseParams),
+        code_challenge: "0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU",
+        code_challenge_method: "S256",
+        response_type: "token"
+      }).toString()}`),
+      env,
+      executionContext
+    );
+    const missingChallengeResponse = await worker.fetch(
+      new Request(`https://mcp.example.com/authorize?${new URLSearchParams({
+        ...Object.fromEntries(baseParams),
+        code_challenge_method: "S256",
+        response_type: "code"
+      }).toString()}`),
+      env,
+      executionContext
+    );
+    const wrongMethodResponse = await worker.fetch(
+      new Request(`https://mcp.example.com/authorize?${new URLSearchParams({
+        ...Object.fromEntries(baseParams),
+        code_challenge: "test-code-verifier",
+        code_challenge_method: "plain",
+        response_type: "code"
+      }).toString()}`),
+      env,
+      executionContext
+    );
+
+    await expect(implicitResponse.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      error_description: "response_type must be code."
+    });
+    await expect(missingChallengeResponse.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      error_description: "code_challenge is required."
+    });
+    await expect(wrongMethodResponse.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      error_description: "code_challenge_method must be S256."
+    });
+    expect(implicitResponse.status).toBe(400);
+    expect(missingChallengeResponse.status).toBe(400);
+    expect(wrongMethodResponse.status).toBe(400);
+  });
+
   it("requires OAuth access tokens for MCP when OAuth mode is enabled", async () => {
     const env = createOAuthEnv();
     const executionContext = {} as ExecutionContext;

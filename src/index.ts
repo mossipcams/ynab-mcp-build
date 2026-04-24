@@ -1,7 +1,9 @@
 import { McpSessionDO } from "./durable-objects/McpSessionDO.js";
+import { OAuthStateDO } from "./durable-objects/OAuthStateDO.js";
+import { createDurableObjectOAuthKvNamespace } from "./durable-objects/oauth-state-client.js";
 import { createApp } from "./app/create-app.js";
 import { createOAuthProvider } from "./oauth/http/provider.js";
-import { resolveAppEnv } from "./shared/env.js";
+import { type AppEnv, resolveAppEnv } from "./shared/env.js";
 
 const app = createApp();
 const appHandler = {
@@ -11,14 +13,30 @@ const appHandler = {
 } satisfies ExportedHandler<Env>;
 const oauthProvider = createOAuthProvider(appHandler);
 
+function createOAuthProviderEnv(env: Env, appEnv: AppEnv) {
+  if (appEnv.oauthKvNamespace) {
+    return env;
+  }
+
+  const oauthStateNamespace = appEnv.oauthStateNamespace!;
+  const oauthState = oauthStateNamespace.get(oauthStateNamespace.idFromName("oauth-state"));
+
+  return {
+    ...env,
+    OAUTH_KV: createDurableObjectOAuthKvNamespace(oauthState)
+  } as Env;
+}
+
 export default {
   fetch(request: Request, env: Env, executionContext: ExecutionContext) {
-    if (resolveAppEnv(env, request).oauthEnabled) {
-      return oauthProvider.fetch(request, env, executionContext);
+    const appEnv = resolveAppEnv(env, request);
+
+    if (appEnv.oauthEnabled) {
+      return oauthProvider.fetch(request, createOAuthProviderEnv(env, appEnv), executionContext);
     }
 
     return appHandler.fetch(request, env, executionContext);
   }
 } satisfies ExportedHandler<Env>;
 
-export { McpSessionDO };
+export { McpSessionDO, OAuthStateDO };

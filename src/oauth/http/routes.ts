@@ -37,6 +37,22 @@ function getGrantedScopes(requestedScopes: string[]) {
   return requestedScopes;
 }
 
+function validateAuthorizationCodePkce(request: Request) {
+  const params = new URL(request.url).searchParams;
+
+  if (params.get("response_type") !== "code") {
+    throw new Error("response_type must be code.");
+  }
+
+  if (!params.get("code_challenge")) {
+    throw new Error("code_challenge is required.");
+  }
+
+  if (params.get("code_challenge_method") !== "S256") {
+    throw new Error("code_challenge_method must be S256.");
+  }
+}
+
 export function registerOAuthHttpRoutes(
   app: Hono<{ Bindings: Env }>,
   _dependencies: AppDependencies = {}
@@ -49,6 +65,8 @@ export function registerOAuthHttpRoutes(
     }
 
     try {
+      validateAuthorizationCodePkce(context.req.raw);
+
       const oauth = createOAuthProviderApi(context.env);
       const request = await oauth.parseAuthRequest(context.req.raw);
       const result = await oauth.completeAuthorization({

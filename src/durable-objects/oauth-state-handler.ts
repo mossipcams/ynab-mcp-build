@@ -1,5 +1,7 @@
 type StorageLike = {
+  delete?(key: string): Promise<boolean | void>;
   get<T>(key: string): Promise<T | undefined>;
+  list?<T>(options?: { prefix?: string }): Promise<Map<string, T>>;
   put<T>(key: string, value: T): Promise<void>;
 };
 
@@ -23,6 +25,10 @@ function refreshTokenKey(token: string) {
 
 function refreshTokenFamilyKey(familyId: string) {
   return `refresh-token-family:${familyId}`;
+}
+
+function kvRecordKey(key: string) {
+  return `kv:${key}`;
 }
 
 function jsonResponse(payload: unknown, status = 200) {
@@ -59,8 +65,18 @@ export function createMemoryOAuthStateStorage(): StorageLike {
   const values = new Map<string, unknown>();
 
   return {
+    async delete(key) {
+      values.delete(key);
+    },
     async get(key) {
       return values.get(key) as never;
+    },
+    async list(options) {
+      return new Map(
+        [...values.entries()].filter(([key]) =>
+          options?.prefix ? key.startsWith(options.prefix) : true
+        )
+      ) as never;
     },
     async put(key, value) {
       values.set(key, value);
@@ -68,8 +84,88 @@ export function createMemoryOAuthStateStorage(): StorageLike {
   };
 }
 
+type KvRecord = {
+  expiresAt?: number;
+  value: string;
+};
+
+function isExpired(record: KvRecord, now = Date.now()) {
+  return record.expiresAt !== undefined && record.expiresAt <= now;
+}
+
+async function getKvRecord(storage: StorageLike, key: string) {
+  const storageKey = kvRecordKey(key);
+  const record = await storage.get<KvRecord>(storageKey);
+
+  if (!record) {
+    return undefined;
+  }
+
+  if (isExpired(record)) {
+    await storage.delete?.(storageKey);
+
+    return undefined;
+  }
+
+  return record;
+}
+
 export async function handleOAuthStateRequest(storage: StorageLike, request: Request) {
   const url = new URL(request.url);
+
+  if (request.method === "GET" && url.pathname === "/kv") {
+    const prefix = url.searchParams.get("prefix") ?? "";
+    const records = await storage.list?.<KvRecord>({
+      prefix: kvRecordKey(prefix)
+    });
+    const keys = [];
+
+    for (const [key, record] of records ?? new Map<string, KvRecord>()) {
+      if (!isExpired(record)) {
+        keys.push({
+          name: key.slice("kv:".length)
+        });
+      } else {
+        await storage.delete?.(key);
+      }
+    }
+
+    return jsonResponse({
+      keys,
+      list_complete: true
+    });
+  }
+
+  if (url.pathname.startsWith("/kv/")) {
+    const key = decodeURIComponent(url.pathname.slice("/kv/".length));
+
+    if (request.method === "GET") {
+      const record = await getKvRecord(storage, key);
+
+      return record ? new Response(record.value) : new Response(null, { status: 404 });
+    }
+
+    if (request.method === "PUT") {
+      const expirationTtl = request.headers.get("x-expiration-ttl");
+      const ttlSeconds = expirationTtl ? Number(expirationTtl) : undefined;
+      const value = await request.text();
+
+      await storage.put(kvRecordKey(key), {
+        ...(ttlSeconds && Number.isFinite(ttlSeconds)
+          ? { expiresAt: Date.now() + ttlSeconds * 1000 }
+          : {}),
+        value
+      });
+
+      return new Response(null, { status: 204 });
+    }
+
+    if (request.method === "DELETE") {
+      await storage.delete?.(kvRecordKey(key));
+
+      return new Response(null, { status: 204 });
+    }
+  }
 
   if (request.method === "POST" && url.pathname === "/clients") {
     const body = await readJson(request);
