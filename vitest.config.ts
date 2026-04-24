@@ -3,7 +3,7 @@ import { defineConfig, defineProject } from "vitest/config";
 
 const unitIncludes = [
   "tests/architecture/**/*.test.ts",
-  "tests/oauth/core/**/*.test.ts",
+  "tests/platform/ynab/client.test.ts",
   "tests/platform/ynab/mappers.test.ts",
   "tests/platform/ynab/schemas.test.ts",
   "tests/shared/**/*.test.ts",
@@ -11,23 +11,19 @@ const unitIncludes = [
 ];
 
 const workersIncludes = [
+  "src/app/dependencies.spec.ts",
+  "src/http/routes/oauth.spec.ts",
+  "src/index.oauth-provider.spec.ts",
+  "src/shared/env.oauth-provider.spec.ts",
   "tests/durable-objects/**/*.test.ts",
   "tests/http/routes/**/*.test.ts",
   "tests/integration/**/*.test.ts",
   "tests/mcp/**/*.test.ts",
   "tests/oauth/http/**/*.test.ts",
-  "tests/platform/ynab/client.test.ts",
   "tests/security/**/*.test.ts"
 ];
 
 export default defineConfig({
-  plugins: [
-    cloudflareTest({
-      wrangler: {
-        configPath: "./wrangler.jsonc"
-      }
-    })
-  ],
   test: {
     globals: true,
     projects: [
@@ -38,6 +34,13 @@ export default defineConfig({
         }
       }),
       defineProject({
+        plugins: [
+          cloudflareTest({
+            wrangler: {
+              configPath: "./wrangler.jsonc"
+            }
+          })
+        ],
         test: {
           include: workersIncludes,
           name: "workers"
