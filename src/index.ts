@@ -1,3 +1,4 @@
+import { McpSessionDO } from "./durable-objects/McpSessionDO.js";
 import { createApp } from "./app/create-app.js";
 import { createOAuthProvider } from "./oauth/http/provider.js";
 import { resolveAppEnv } from "./shared/env.js";
@@ -12,10 +13,12 @@ const oauthProvider = createOAuthProvider(appHandler);
 
 export default {
   fetch(request: Request, env: Env, executionContext: ExecutionContext) {
-    if (resolveAppEnv(env).oauthEnabled) {
+    if (resolveAppEnv(env, request).oauthEnabled) {
       return oauthProvider.fetch(request, env, executionContext);
     }
 
     return appHandler.fetch(request, env, executionContext);
   }
 } satisfies ExportedHandler<Env>;
+
+export { McpSessionDO };

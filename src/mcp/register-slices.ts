@@ -3,22 +3,29 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppDependencies } from "../app/dependencies.js";
 import { resolveYnabClient } from "../app/dependencies.js";
 import type { AppEnv } from "../shared/env.js";
-import { registerAccountsSlice } from "../slices/accounts/index.js";
-import { registerFinancialHealthSlice } from "../slices/financial-health/index.js";
-import { registerMetaSlice } from "../slices/meta/index.js";
-import { registerMoneyMovementsSlice } from "../slices/money-movements/index.js";
-import { registerPayeesSlice } from "../slices/payees/index.js";
-import { registerPlansSlice } from "../slices/plans/index.js";
-import { registerTransactionsSlice } from "../slices/transactions/index.js";
+import { getAccountToolDefinitions } from "../slices/accounts/index.js";
+import { getFinancialHealthToolDefinitions } from "../slices/financial-health/index.js";
+import { getMetaToolDefinitions } from "../slices/meta/index.js";
+import { getMoneyMovementToolDefinitions } from "../slices/money-movements/index.js";
+import { getPayeeToolDefinitions } from "../slices/payees/index.js";
+import { getPlanToolDefinitions } from "../slices/plans/index.js";
+import { getTransactionToolDefinitions } from "../slices/transactions/index.js";
+import { registerToolDefinitions } from "./tool-registry.js";
 
-export function registerSlices(server: McpServer, env: AppEnv, dependencies: AppDependencies) {
+export function getRegisteredToolDefinitions(env: AppEnv, dependencies: AppDependencies) {
   const ynabClient = resolveYnabClient(env, dependencies);
 
-  registerMetaSlice(server, env, ynabClient);
-  registerPlansSlice(server, ynabClient);
-  registerAccountsSlice(server, ynabClient);
-  registerTransactionsSlice(server, ynabClient);
-  registerPayeesSlice(server, ynabClient);
-  registerMoneyMovementsSlice(server, ynabClient);
-  registerFinancialHealthSlice(server, ynabClient);
+  return [
+    ...getMetaToolDefinitions(env, ynabClient),
+    ...getPlanToolDefinitions(ynabClient),
+    ...getAccountToolDefinitions(ynabClient),
+    ...getTransactionToolDefinitions(ynabClient),
+    ...getPayeeToolDefinitions(ynabClient),
+    ...getMoneyMovementToolDefinitions(ynabClient),
+    ...getFinancialHealthToolDefinitions(ynabClient)
+  ];
+}
+
+export function registerSlices(server: McpServer, env: AppEnv, dependencies: AppDependencies) {
+  registerToolDefinitions(server, getRegisteredToolDefinitions(env, dependencies));
 }

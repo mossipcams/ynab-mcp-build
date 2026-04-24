@@ -1,14 +1,13 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { YnabClient } from "../../platform/ynab/client.js";
-import { toErrorResult, toTextResult } from "../../shared/results.js";
+import type { SliceToolDefinition } from "../../shared/tool-definition.js";
 import { getAccount, listAccounts } from "./service.js";
 
-export function registerAccountTools(server: McpServer, ynabClient: YnabClient) {
-  server.registerTool(
-    "ynab_list_accounts",
+export function getAccountToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
+  return [
     {
+      name: "ynab_list_accounts",
       title: "List YNAB Accounts",
       description: "Lists YNAB accounts with optional pagination and compact field projection.",
       inputSchema: {
@@ -17,33 +16,18 @@ export function registerAccountTools(server: McpServer, ynabClient: YnabClient) 
         offset: z.number().int().min(0).optional(),
         fields: z.array(z.enum(["name", "type", "closed", "balance"])).optional(),
         includeIds: z.boolean().optional()
-      }
+      },
+      execute: async (input) => listAccounts(ynabClient, input)
     },
-    async (input) => {
-      try {
-        return toTextResult(await listAccounts(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    "ynab_get_account",
     {
+      name: "ynab_get_account",
       title: "Get YNAB Account",
       description: "Returns a compact summary for a single YNAB account.",
       inputSchema: {
         planId: z.string().optional(),
         accountId: z.string().min(1)
-      }
-    },
-    async (input) => {
-      try {
-        return toTextResult(await getAccount(ynabClient, input));
-      } catch (error) {
-        return toErrorResult(error);
-      }
+      },
+      execute: async (input) => getAccount(ynabClient, input)
     }
-  );
+  ];
 }

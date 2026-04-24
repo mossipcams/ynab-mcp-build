@@ -4,11 +4,18 @@ import type { AppDependencies } from "../../app/dependencies.js";
 import { resolveAppEnv } from "../../shared/env.js";
 import { createOAuthProviderApi } from "./provider.js";
 
+function sanitizeOAuthErrorDescription(errorDescription: string) {
+  return errorDescription
+    .split(/\r?\n/u)[0]
+    .replace(/\/Users\/[^\s"]+/gu, "[REDACTED_PATH]")
+    .replace(/[A-Za-z]:\\[^\s"]+/gu, "[REDACTED_PATH]");
+}
+
 function writeOAuthError(error: string, errorDescription: string, status = 400) {
   return Response.json(
     {
       error,
-      error_description: errorDescription
+      error_description: sanitizeOAuthErrorDescription(errorDescription)
     },
     {
       status
@@ -35,7 +42,7 @@ export function registerOAuthHttpRoutes(
   _dependencies: AppDependencies = {}
 ) {
   app.get("/authorize", async (context) => {
-    const env = resolveAppEnv(context.env);
+    const env = resolveAppEnv(context.env, context.req.raw);
 
     if (!env.oauthEnabled) {
       return context.notFound();
