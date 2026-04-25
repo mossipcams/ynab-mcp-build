@@ -16,6 +16,10 @@ type PendingAccessAuthorization = {
   scope: string[];
 };
 
+type PendingAccessAuthorizationStore = KVNamespace & {
+  consume?<T = unknown>(key: string, options?: { type?: string }): Promise<T | null>;
+};
+
 function sanitizeOAuthErrorDescription(errorDescription: string) {
   return errorDescription
     .split(/\r?\n/u)[0]
@@ -78,7 +82,7 @@ function pendingAccessAuthorizationKey(state: string) {
 }
 
 async function storePendingAccessAuthorization(
-  kv: KVNamespace,
+  kv: PendingAccessAuthorizationStore,
   state: string,
   pending: PendingAccessAuthorization
 ) {
@@ -87,17 +91,19 @@ async function storePendingAccessAuthorization(
   });
 }
 
-async function consumePendingAccessAuthorization(kv: KVNamespace, state: string) {
+async function consumePendingAccessAuthorization(kv: PendingAccessAuthorizationStore, state: string) {
   const key = pendingAccessAuthorizationKey(state);
-  const pending = await kv.get<PendingAccessAuthorization>(key, {
-    type: "json"
-  });
+  const pending = kv.consume
+    ? await kv.consume<PendingAccessAuthorization>(key, { type: "json" })
+    : await kv.get<PendingAccessAuthorization>(key, { type: "json" });
 
   if (!pending) {
     throw new Error("Access OIDC authorization state is invalid or has expired.");
   }
 
-  await kv.delete(key);
+  if (!kv.consume) {
+    await kv.delete(key);
+  }
 
   return pending;
 }

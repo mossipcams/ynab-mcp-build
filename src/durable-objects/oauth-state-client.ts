@@ -11,6 +11,10 @@ type FetchLike = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
+export type AtomicOAuthKvNamespace = KVNamespace & {
+  consume<T = unknown>(key: string, options?: { type?: string }): Promise<T | null>;
+};
+
 async function expectOk(response: Response) {
   if (response.ok) {
     return response;
@@ -84,6 +88,26 @@ export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
 
 export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNamespace {
   return {
+    async consume(key: string, options?: { type?: string }) {
+      const response = await expectOk(
+        await fetcher.fetch("https://oauth-state/kv/consume", {
+          body: JSON.stringify({ key }),
+          method: "POST"
+        })
+      );
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      const value = await response.text();
+
+      if (options?.type === "json") {
+        return JSON.parse(value);
+      }
+
+      return value;
+    },
     async get(key: string, options?: { type?: string }) {
       const response = await expectOk(
         await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`)
@@ -133,5 +157,5 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
 
       return response.json();
     }
-  } as unknown as KVNamespace;
+  } as unknown as AtomicOAuthKvNamespace;
 }
