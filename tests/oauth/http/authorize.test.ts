@@ -18,12 +18,43 @@ describe("oauth http authorize", () => {
 
   function createAccessOidcEnv() {
     return createOAuthEnv({
-      ACCESS_AUTHORIZATION_URL: "https://access-team.example.com/cdn-cgi/access/sso/oidc/authorize",
       ACCESS_CLIENT_ID: "access-client-id",
       ACCESS_CLIENT_SECRET: "access-client-secret",
-      ACCESS_JWKS_URL: "https://access-team.example.com/cdn-cgi/access/certs",
-      ACCESS_TOKEN_URL: "https://access-team.example.com/cdn-cgi/access/sso/oidc/token"
+      ACCESS_TEAM_DOMAIN: "access-team.example.com"
     } as unknown as Partial<Env>);
+  }
+
+  function createAccessOidcEnvWithEndpointOverrides() {
+    return createOAuthEnv({
+      ACCESS_AUTHORIZATION_URL: "https://access.example.com/authorize",
+      ACCESS_CLIENT_ID: "access-client-id",
+      ACCESS_CLIENT_SECRET: "access-client-secret",
+      ACCESS_JWKS_URL: "https://access.example.com/certs",
+      ACCESS_TEAM_DOMAIN: "access-team.example.com",
+      ACCESS_TOKEN_URL: "https://access.example.com/token"
+    } as unknown as Partial<Env>);
+  }
+
+  function createAccessDiscoveryResponse() {
+    return {
+      authorization_endpoint: "https://access-team.example.com/cdn-cgi/access/sso/oidc/authorize",
+      jwks_uri: "https://access-team.example.com/cdn-cgi/access/certs",
+      token_endpoint: "https://access-team.example.com/cdn-cgi/access/sso/oidc/token"
+    };
+  }
+
+  function stubAccessDiscoveryFetch() {
+    const realFetch = fetch;
+
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+
+      if (request.url === "https://access-team.example.com/cdn-cgi/access/sso/oidc/access-client-id/.well-known/openid-configuration") {
+        return Response.json(createAccessDiscoveryResponse());
+      }
+
+      return realFetch(request);
+    }));
   }
 
   function toBase64Url(input: string | Uint8Array) {
@@ -105,6 +136,8 @@ describe("oauth http authorize", () => {
 
   it("redirects authorization requests through Cloudflare Access OIDC when configured", async () => {
     const env = createAccessOidcEnv();
+    stubAccessDiscoveryFetch();
+
     const { registration } = await registerClient(env);
     const response = await requestAuthorization(env, registration.client_id);
     const location = response.headers.get("location");
@@ -125,6 +158,28 @@ describe("oauth http authorize", () => {
     expect(redirect.searchParams.get("state")).not.toHaveLength(0);
   });
 
+  it("uses explicit Access OIDC endpoint overrides without discovery", async () => {
+    const env = createAccessOidcEnvWithEndpointOverrides();
+    const realFetch = fetch;
+
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+
+      if (request.url.endsWith("/.well-known/openid-configuration")) {
+        throw new Error("Discovery should not be requested when endpoint overrides are configured.");
+      }
+
+      return realFetch(request);
+    }));
+
+    const { registration } = await registerClient(env);
+    const response = await requestAuthorization(env, registration.client_id);
+    const redirect = new URL(response.headers.get("location")!);
+
+    expect(response.status).toBe(302);
+    expect(redirect.origin + redirect.pathname).toBe("https://access.example.com/authorize");
+  });
+
   it("exchanges an Access OIDC callback for a local MCP authorization code", async () => {
     const env = createAccessOidcEnv();
     const { token, jwks } = await createAccessIdToken({
@@ -135,6 +190,10 @@ describe("oauth http authorize", () => {
     const realFetch = fetch;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init);
+
+      if (request.url === "https://access-team.example.com/cdn-cgi/access/sso/oidc/access-client-id/.well-known/openid-configuration") {
+        return Response.json(createAccessDiscoveryResponse());
+      }
 
       if (request.url === "https://access-team.example.com/cdn-cgi/access/sso/oidc/token") {
         expect(request.method).toBe("POST");
@@ -206,6 +265,10 @@ describe("oauth http authorize", () => {
 
       requestedUrls.push(request.url);
 
+      if (request.url === "https://access-team.example.com/cdn-cgi/access/sso/oidc/access-client-id/.well-known/openid-configuration") {
+        return Response.json(createAccessDiscoveryResponse());
+      }
+
       if (request.url === "https://access-team.example.com/cdn-cgi/access/sso/oidc/token") {
         return Response.json({ error: "invalid_grant" }, { status: 400 });
       }
@@ -246,6 +309,10 @@ describe("oauth http authorize", () => {
 
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init);
+
+      if (request.url === "https://access-team.example.com/cdn-cgi/access/sso/oidc/access-client-id/.well-known/openid-configuration") {
+        return Response.json(createAccessDiscoveryResponse());
+      }
 
       if (request.url === "https://access-team.example.com/cdn-cgi/access/sso/oidc/token") {
         return Response.json({

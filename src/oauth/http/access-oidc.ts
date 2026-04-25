@@ -1,5 +1,14 @@
 import { verifyOidcIdToken } from "../core/oidc.js";
 
+export type AccessOidcConfig = {
+  authorizationUrl?: string;
+  clientId: string;
+  clientSecret: string;
+  discoveryUrl: string;
+  jwksUrl?: string;
+  tokenUrl?: string;
+};
+
 type AccessOidcClientOptions = {
   clientId: string;
   clientSecret: string;
@@ -17,6 +26,18 @@ type AccessJwks = {
   keys?: JsonWebKey[];
 };
 
+type AccessDiscoveryResponse = {
+  authorization_endpoint?: unknown;
+  jwks_uri?: unknown;
+  token_endpoint?: unknown;
+};
+
+export type AccessOidcEndpoints = {
+  authorizationUrl: string;
+  jwksUrl: string;
+  tokenUrl: string;
+};
+
 async function readJsonObject(response: Response) {
   const payload = await response.json();
 
@@ -25,6 +46,55 @@ async function readJsonObject(response: Response) {
   }
 
   return payload as Record<string, unknown>;
+}
+
+function getEndpointOverrides(config: AccessOidcConfig): AccessOidcEndpoints | undefined {
+  if (config.authorizationUrl && config.jwksUrl && config.tokenUrl) {
+    return {
+      authorizationUrl: config.authorizationUrl,
+      jwksUrl: config.jwksUrl,
+      tokenUrl: config.tokenUrl
+    };
+  }
+
+  return undefined;
+}
+
+export async function resolveAccessOidcEndpoints(options: {
+  config: AccessOidcConfig;
+  fetch: typeof fetch;
+}): Promise<AccessOidcEndpoints> {
+  const overrides = getEndpointOverrides(options.config);
+
+  if (overrides) {
+    return overrides;
+  }
+
+  const response = await options.fetch(options.config.discoveryUrl, {
+    headers: {
+      accept: "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error("Access OIDC discovery request failed.");
+  }
+
+  const payload = await readJsonObject(response) as AccessDiscoveryResponse;
+
+  if (
+    typeof payload.authorization_endpoint !== "string" ||
+    typeof payload.jwks_uri !== "string" ||
+    typeof payload.token_endpoint !== "string"
+  ) {
+    throw new Error("Access OIDC discovery response is missing required endpoints.");
+  }
+
+  return {
+    authorizationUrl: payload.authorization_endpoint,
+    jwksUrl: payload.jwks_uri,
+    tokenUrl: payload.token_endpoint
+  };
 }
 
 export function createAccessOidcClient(options: AccessOidcClientOptions) {
