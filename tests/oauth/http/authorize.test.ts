@@ -46,7 +46,11 @@ describe("oauth http authorize", () => {
   function stubAccessDiscoveryFetch() {
     const realFetch = fetch;
 
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    vi.stubGlobal("fetch", vi.fn(async function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+      if (this !== undefined) {
+        throw new TypeError("Illegal invocation: function called with incorrect `this` reference.");
+      }
+
       const request = input instanceof Request ? input : new Request(input, init);
 
       if (request.url === "https://mossipcams.cloudflareaccess.com/cdn-cgi/access/sso/oidc/access-client-id/.well-known/openid-configuration") {

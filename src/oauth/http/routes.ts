@@ -125,6 +125,8 @@ function getAccessOidcAuthorizationRedirect(options: {
   return url.href;
 }
 
+const accessOidcFetch: typeof fetch = (input, init) => fetch(input, init);
+
 export function registerOAuthHttpRoutes(
   app: Hono<{ Bindings: Env }>,
   _dependencies: AppDependencies = {}
@@ -148,7 +150,7 @@ export function registerOAuthHttpRoutes(
         const kv = env.oauthKvNamespace ?? (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
         const accessEndpoints = await resolveAccessOidcEndpoints({
           config: env.accessOidc,
-          fetch
+          fetch: accessOidcFetch
         });
 
         if (!kv) {
@@ -207,7 +209,7 @@ export function registerOAuthHttpRoutes(
       const kv = env.oauthKvNamespace ?? (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
       const accessEndpoints = await resolveAccessOidcEndpoints({
         config: env.accessOidc,
-        fetch
+        fetch: accessOidcFetch
       });
 
       if (!kv) {
@@ -218,7 +220,7 @@ export function registerOAuthHttpRoutes(
       const identity = await createAccessOidcClient({
         clientId: env.accessOidc.clientId,
         clientSecret: env.accessOidc.clientSecret,
-        fetch,
+        fetch: accessOidcFetch,
         jwksUrl: accessEndpoints.jwksUrl,
         redirectUri: getAccessOidcCallbackUrl(env.publicUrl!),
         tokenUrl: accessEndpoints.tokenUrl
