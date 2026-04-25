@@ -1,10 +1,12 @@
 export type AppEnv = {
   accessOidc?: {
-    authorizationUrl: string;
+    authorizationUrl?: string;
     clientId: string;
     clientSecret: string;
-    jwksUrl: string;
-    tokenUrl: string;
+    discoveryUrl: string;
+    jwksUrl?: string;
+    teamDomain: string;
+    tokenUrl?: string;
   };
   cfAccessAudience?: string;
   cfAccessTeamDomain?: string;
@@ -29,12 +31,21 @@ function getOptionalString(value: unknown) {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function normalizeAccessTeamDomain(value: string) {
+  return value.replace(/^https?:\/\//u, "").replace(/\/+$/u, "");
+}
+
+function getAccessOidcDiscoveryUrl(teamDomain: string, clientId: string) {
+  return `https://${teamDomain}/cdn-cgi/access/sso/oidc/${encodeURIComponent(clientId)}/.well-known/openid-configuration`;
+}
+
 export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request): AppEnv {
   const runtimeEnv = env as {
     ACCESS_AUTHORIZATION_URL?: string;
     ACCESS_CLIENT_ID?: string;
     ACCESS_CLIENT_SECRET?: string;
     ACCESS_JWKS_URL?: string;
+    ACCESS_TEAM_DOMAIN?: string;
     ACCESS_TOKEN_URL?: string;
     CF_ACCESS_AUD?: string;
     CF_ACCESS_TEAM_DOMAIN?: string;
@@ -53,21 +64,37 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     clientId: getOptionalString(runtimeEnv?.ACCESS_CLIENT_ID),
     clientSecret: getOptionalString(runtimeEnv?.ACCESS_CLIENT_SECRET),
     jwksUrl: getOptionalString(runtimeEnv?.ACCESS_JWKS_URL),
+    teamDomain: getOptionalString(runtimeEnv?.ACCESS_TEAM_DOMAIN),
     tokenUrl: getOptionalString(runtimeEnv?.ACCESS_TOKEN_URL)
   };
-  const accessOidcValueCount = Object.values(accessOidcValues).filter(Boolean).length;
+  const accessOidcRequiredValueCount = [
+    accessOidcValues.clientId,
+    accessOidcValues.clientSecret,
+    accessOidcValues.teamDomain
+  ].filter(Boolean).length;
+  const accessOidcOverrideValueCount = [
+    accessOidcValues.authorizationUrl,
+    accessOidcValues.jwksUrl,
+    accessOidcValues.tokenUrl
+  ].filter(Boolean).length;
+  const hasAccessOidcValues = accessOidcRequiredValueCount > 0 || accessOidcOverrideValueCount > 0;
+  const accessTeamDomain = accessOidcValues.teamDomain
+    ? normalizeAccessTeamDomain(accessOidcValues.teamDomain)
+    : undefined;
   const derivedPublicUrl = request
     ? `${new URL(request.url).origin}/mcp`
     : undefined;
   const resolvedEnv = {
-    ...(accessOidcValueCount === 5
+    ...(accessOidcRequiredValueCount === 3
       ? {
           accessOidc: {
-            authorizationUrl: accessOidcValues.authorizationUrl!,
             clientId: accessOidcValues.clientId!,
             clientSecret: accessOidcValues.clientSecret!,
-            jwksUrl: accessOidcValues.jwksUrl!,
-            tokenUrl: accessOidcValues.tokenUrl!
+            discoveryUrl: getAccessOidcDiscoveryUrl(accessTeamDomain!, accessOidcValues.clientId!),
+            teamDomain: accessTeamDomain!,
+            ...(accessOidcValues.authorizationUrl ? { authorizationUrl: accessOidcValues.authorizationUrl } : {}),
+            ...(accessOidcValues.jwksUrl ? { jwksUrl: accessOidcValues.jwksUrl } : {}),
+            ...(accessOidcValues.tokenUrl ? { tokenUrl: accessOidcValues.tokenUrl } : {})
           }
         }
       : {}),
@@ -95,8 +122,8 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     throw new Error("CF_ACCESS_AUD is required when CF_ACCESS_TEAM_DOMAIN is set.");
   }
 
-  if (accessOidcValueCount > 0 && accessOidcValueCount < 5) {
-    throw new Error("Access OIDC requires ACCESS_CLIENT_ID, ACCESS_CLIENT_SECRET, ACCESS_AUTHORIZATION_URL, ACCESS_TOKEN_URL, and ACCESS_JWKS_URL.");
+  if (hasAccessOidcValues && accessOidcRequiredValueCount < 3) {
+    throw new Error("Access OIDC requires ACCESS_TEAM_DOMAIN, ACCESS_CLIENT_ID, and ACCESS_CLIENT_SECRET.");
   }
 
   return resolvedEnv;

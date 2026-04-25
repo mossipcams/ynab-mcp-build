@@ -5,10 +5,8 @@
   "compatibility_date": "2026-04-21",
   "keep_vars": true,
   "vars": {
-    "ACCESS_AUTHORIZATION_URL": "",
     "ACCESS_CLIENT_ID": "",
-    "ACCESS_JWKS_URL": "",
-    "ACCESS_TOKEN_URL": "",
+    "ACCESS_TEAM_DOMAIN": "",
     "MCP_OAUTH_ENABLED": "true",
     "MCP_SERVER_NAME": "ynab-mcp-build",
     "MCP_SERVER_VERSION": "0.1.0",
