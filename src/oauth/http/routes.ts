@@ -3,7 +3,7 @@ import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 
 import type { AppDependencies } from "../../app/dependencies.js";
 import { resolveAppEnv } from "../../shared/env.js";
-import { createAccessOidcClient } from "./access-oidc.js";
+import { createAccessOidcClient, resolveAccessOidcEndpoints } from "./access-oidc.js";
 import { createOAuthProviderApi } from "./provider.js";
 
 const ACCESS_OIDC_CALLBACK_PATH = "/oidc/callback";
@@ -146,6 +146,10 @@ export function registerOAuthHttpRoutes(
       if (env.accessOidc) {
         const state = crypto.randomUUID();
         const kv = env.oauthKvNamespace ?? (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
+        const accessEndpoints = await resolveAccessOidcEndpoints({
+          config: env.accessOidc,
+          fetch
+        });
 
         if (!kv) {
           throw new Error("OAuth KV storage is required for Access OIDC authorization.");
@@ -158,7 +162,7 @@ export function registerOAuthHttpRoutes(
 
         return context.redirect(
           getAccessOidcAuthorizationRedirect({
-            authorizationUrl: env.accessOidc.authorizationUrl,
+            authorizationUrl: accessEndpoints.authorizationUrl,
             clientId: env.accessOidc.clientId,
             redirectUri: getAccessOidcCallbackUrl(env.publicUrl!),
             state
@@ -201,6 +205,10 @@ export function registerOAuthHttpRoutes(
 
     try {
       const kv = env.oauthKvNamespace ?? (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
+      const accessEndpoints = await resolveAccessOidcEndpoints({
+        config: env.accessOidc,
+        fetch
+      });
 
       if (!kv) {
         throw new Error("OAuth KV storage is required for Access OIDC authorization.");
@@ -211,9 +219,9 @@ export function registerOAuthHttpRoutes(
         clientId: env.accessOidc.clientId,
         clientSecret: env.accessOidc.clientSecret,
         fetch,
-        jwksUrl: env.accessOidc.jwksUrl,
+        jwksUrl: accessEndpoints.jwksUrl,
         redirectUri: getAccessOidcCallbackUrl(env.publicUrl!),
-        tokenUrl: env.accessOidc.tokenUrl
+        tokenUrl: accessEndpoints.tokenUrl
       }).authenticate(code);
       const userId = identity.email ?? identity.sub;
       const result = await createOAuthProviderApi(context.env).completeAuthorization({
