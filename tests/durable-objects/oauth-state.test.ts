@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createDurableObjectOAuthStore } from "../../src/durable-objects/oauth-state-client.js";
+import {
+  createDurableObjectOAuthKvNamespace,
+  createDurableObjectOAuthStore,
+  type AtomicOAuthKvNamespace
+} from "../../src/durable-objects/oauth-state-client.js";
 import {
   createMemoryOAuthStateStorage,
   handleOAuthStateRequest
@@ -16,6 +20,18 @@ function createStore() {
       return handleOAuthStateRequest(storage, request);
     }
   });
+}
+
+function createKvNamespace() {
+  const storage = createMemoryOAuthStateStorage();
+
+  return createDurableObjectOAuthKvNamespace({
+    async fetch(input, init) {
+      const request = input instanceof Request ? input : new Request(input, init);
+
+      return handleOAuthStateRequest(storage, request);
+    }
+  }) as AtomicOAuthKvNamespace;
 }
 
 describe("oauth state store contract", () => {
@@ -162,5 +178,22 @@ describe("oauth state store contract", () => {
 
     expect(rotated).toHaveLength(1);
     expect(replayDetected).toHaveLength(1);
+  });
+
+  it("atomically consumes KV records once under parallel access", async () => {
+    // DEFECT: Access OIDC pending auth state can be reused if consume is implemented as separate get and delete calls.
+    const kv = createKvNamespace();
+
+    await kv.put("pending-access-auth-1", JSON.stringify({ clientId: "client-1" }));
+
+    const results = await Promise.all([
+      kv.consume("pending-access-auth-1", { type: "json" }),
+      kv.consume("pending-access-auth-1", { type: "json" })
+    ]);
+    const winners = results.filter((entry) => entry !== null);
+    const losers = results.filter((entry) => entry === null);
+
+    expect(winners).toEqual([{ clientId: "client-1" }]);
+    expect(losers).toHaveLength(1);
   });
 });

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -23,8 +23,14 @@ function listSourceFiles() {
     "mcp/server.ts",
     "mcp/tool-registry.ts",
     "oauth/core/auth.ts",
+    "oauth/core/cf-access-jwt.ts",
+    "oauth/core/jwt.ts",
+    "oauth/core/oidc.ts",
     "oauth/core/pkce.ts",
     "oauth/core/store.ts",
+    "oauth/core/token-id.ts",
+    "oauth/http/access-oidc.ts",
+    "oauth/http/provider.ts",
     "oauth/http/routes.ts",
     "platform/ynab/client.ts",
     "shared/collections.ts",
@@ -57,6 +63,20 @@ function listSourceFiles() {
   ].map((path) => join(srcDir, path));
 }
 
+function discoverProductionSourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      return discoverProductionSourceFiles(entryPath);
+    }
+
+    return entry.isFile() && entry.name.endsWith(".ts") && !entry.name.endsWith(".spec.ts")
+      ? [entryPath]
+      : [];
+  });
+}
+
 function readSource(filePath: string) {
   return readFileSync(filePath, "utf8");
 }
@@ -81,6 +101,12 @@ const sharedFiles = sourceFiles.filter((filePath) => filePath.includes("/src/sha
 const httpFiles = sourceFiles.filter((filePath) => filePath.includes("/src/http/"));
 
 describe("architecture boundaries", () => {
+  it("covers every OAuth production source file", () => {
+    // DEFECT: new OAuth files can miss boundary assertions when the source list drifts.
+    expect(sourceFiles.filter((filePath) => filePath.includes("/src/oauth/")).map(rel).sort())
+      .toEqual(discoverProductionSourceFiles(join(srcDir, "oauth")).map(rel).sort());
+  });
+
   it("keeps slices free of MCP, Hono, DO, and Worker env imports", () => {
     // DEFECT: slice modules can accrete transport/protocol/runtime dependencies and become impossible to test as pure business logic.
     expectNoMatches(

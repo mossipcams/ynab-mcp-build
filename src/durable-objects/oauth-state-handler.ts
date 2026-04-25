@@ -136,6 +136,23 @@ export async function handleOAuthStateRequest(storage: StorageLike, request: Req
     });
   }
 
+  if (request.method === "POST" && url.pathname === "/kv/consume") {
+    return runStorageCriticalSection(storage, async () => {
+      const body = await readJson(request);
+      const key = String(body.key);
+      const storageKey = kvRecordKey(key);
+      const record = await getKvRecord(storage, key);
+
+      if (!record) {
+        return new Response(null, { status: 404 });
+      }
+
+      await storage.delete?.(storageKey);
+
+      return new Response(record.value);
+    });
+  }
+
   if (url.pathname.startsWith("/kv/")) {
     const key = decodeURIComponent(url.pathname.slice("/kv/".length));
 
