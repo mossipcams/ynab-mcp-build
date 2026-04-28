@@ -27,9 +27,13 @@ describe("registerMcpToolDefinitions", () => {
     expect(name).toBe("demo_tool");
     expect(config).toMatchObject({
       title: "Demo Tool",
-      description: "Does demo work."
+      description: "Does demo work.",
+      annotations: {
+        readOnlyHint: true
+      }
     });
     await expect(handler({ query: "hello" })).resolves.toEqual({
+      isError: false,
       content: [
         {
           type: "text",

@@ -5,6 +5,7 @@ import { toMcpErrorResult, toMcpTextResult } from "./results.js";
 describe("mcp result helpers", () => {
   it("serializes payloads as MCP text content", () => {
     expect(toMcpTextResult({ hello: "world" })).toEqual({
+      isError: false,
       content: [
         {
           type: "text",

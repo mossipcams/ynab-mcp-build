@@ -6,6 +6,7 @@ const unitIncludes = [
   "src/tooling/**/*.spec.ts",
   "src/shared/**/*.spec.ts",
   "src/platform/**/*.spec.ts",
+  "src/mcp/**/*.spec.ts",
   "src/oauth/**/*.spec.ts",
   "tests/platform/ynab/client.test.ts",
   "tests/platform/ynab/mappers.test.ts",
