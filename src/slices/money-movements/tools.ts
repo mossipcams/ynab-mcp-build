@@ -1,7 +1,6 @@
-import { z } from "zod";
-
 import type { YnabClient } from "../../platform/ynab/client.js";
 import type { SliceToolDefinition } from "../../shared/tool-definition.js";
+import { paginationSchema, planIdSchema, requiredMonthSchema } from "../../shared/tool-inputs.js";
 import {
   getMoneyMovementGroups,
   getMoneyMovementGroupsByMonth,
@@ -16,9 +15,8 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       title: "Get YNAB Money Movements",
       description: "Returns transfer-style money movements derived from YNAB transactions.",
       inputSchema: {
-        planId: z.string().optional(),
-        limit: z.number().int().min(1).max(500).optional(),
-        offset: z.number().int().min(0).optional()
+        ...planIdSchema,
+        ...paginationSchema
       },
       execute: async (input) => getMoneyMovements(ynabClient, input)
     },
@@ -27,10 +25,9 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       title: "Get YNAB Money Movements By Month",
       description: "Returns transfer-style money movements for a single plan month.",
       inputSchema: {
-        planId: z.string().optional(),
-        month: z.string().min(1),
-        limit: z.number().int().min(1).max(500).optional(),
-        offset: z.number().int().min(0).optional()
+        ...planIdSchema,
+        month: requiredMonthSchema,
+        ...paginationSchema
       },
       execute: async (input) => getMoneyMovementsByMonth(ynabClient, input)
     },
@@ -39,9 +36,8 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       title: "Get YNAB Money Movement Groups",
       description: "Groups transfer-style money movements by source and destination account.",
       inputSchema: {
-        planId: z.string().optional(),
-        limit: z.number().int().min(1).max(500).optional(),
-        offset: z.number().int().min(0).optional()
+        ...planIdSchema,
+        ...paginationSchema
       },
       execute: async (input) => getMoneyMovementGroups(ynabClient, input)
     },
@@ -50,10 +46,9 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       title: "Get YNAB Money Movement Groups By Month",
       description: "Groups transfer-style money movements by source and destination account for a single month.",
       inputSchema: {
-        planId: z.string().optional(),
-        month: z.string().min(1),
-        limit: z.number().int().min(1).max(500).optional(),
-        offset: z.number().int().min(0).optional()
+        ...planIdSchema,
+        month: requiredMonthSchema,
+        ...paginationSchema
       },
       execute: async (input) => getMoneyMovementGroupsByMonth(ynabClient, input)
     }
