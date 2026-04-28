@@ -10,7 +10,10 @@ describe("resolveYnabClient", () => {
         mcpServerVersion: "0.1.0",
         oauthEnabled: true,
         publicUrl: "https://example.com/mcp",
-        ynabApiBaseUrl: "https://api.ynab.com/v1"
+        ynabApiBaseUrl: "https://api.ynab.com/v1",
+        ynabReadSource: "live",
+        ynabStaleAfterMinutes: 360,
+        ynabSyncMaxRowsPerRun: 100
       },
       {}
     );

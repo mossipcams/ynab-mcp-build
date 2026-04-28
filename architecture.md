@@ -4,6 +4,8 @@
 
 The v1 product surface is streamable HTTP MCP. The codebase is organized to keep HTTP transport, MCP protocol wiring, YNAB access, and OAuth state management separate.
 
+The DB-backed read model is a rebuild/new feature path, not an in-place migration of the existing live YNAB slices. In DB-backed mode, normal MCP tools read from Cloudflare D1 only. YNAB API calls belong to sync/admin code, and tools must not silently fall back to live YNAB reads.
+
 ## Diagram
 
 ```mermaid
@@ -14,6 +16,7 @@ flowchart TD
     D[src/mcp/**]
     E[src/slices/**]
     F[src/platform/ynab/**]
+    K[src/platform/ynab/read-model/**]
     G[src/shared/**]
     H[src/oauth/http/**]
     I[src/oauth/core/**]
@@ -21,6 +24,7 @@ flowchart TD
 
     A --> B --> C
     C --> D --> E --> F
+    E --> K
     E --> G
     C --> H --> I
     I <--> J
@@ -33,7 +37,7 @@ flowchart TD
 3. `src/http/routes/**` owns HTTP request parsing, response writing, route composition, and the streamable HTTP transport adapter.
 4. `src/mcp/**` owns MCP server creation, discovery metadata, MCP result shaping, and tool registration wiring.
 5. `src/slices/**` owns slice-local business logic and tool definitions consumed by the MCP layer.
-6. `src/platform/ynab/**` owns YNAB HTTP access and response mapping.
+6. `src/platform/ynab/**` owns YNAB HTTP access, sync API access, response mapping, and D1 read-model adapters.
 7. `src/oauth/core/**` owns runtime-agnostic OAuth rules and state transitions.
 8. `src/oauth/http/**` adapts HTTP requests to OAuth core services.
 9. `src/durable-objects/**` owns strongly consistent OAuth state coordination.
@@ -48,6 +52,7 @@ flowchart TD
 - OAuth HTTP adapters: `src/oauth/http/**`
 - Durable state adapters: `src/durable-objects/**`
 - Platform adapters: `src/platform/**`
+- YNAB D1 read model: `src/platform/ynab/read-model/**`
 - Product slices: `src/slices/**`
 - Shared helpers: `src/shared/**`
 
@@ -77,6 +82,9 @@ Do not create placeholder files just to satisfy the pattern.
 - `src/slices/**` service modules may depend on `src/platform/ynab/**` and `src/shared/**` only.
 - `src/shared/**` is for runtime-agnostic helpers only. Protocol-specific result formatting does not belong there.
 - `src/platform/ynab/**` is the only layer allowed to call YNAB APIs.
+- `src/platform/ynab/read-model/**` is the only layer allowed to issue YNAB read-model D1 queries.
+- DB-backed slices in `src/slices/db-*/**` expose normal `ynab_*` tool names but must read from D1 through read-model repositories/services only.
+- In DB-backed mode, unrebuilt tools must return clear DB-mode errors rather than calling live YNAB as a fallback.
 - `src/oauth/core/**` must not import Hono, Durable Object classes, or slice modules.
 - `src/oauth/http/**` must remain thin adapters over `src/oauth/core/**`.
 - `src/durable-objects/**` must not import Hono routes or slice modules.
@@ -93,7 +101,7 @@ Do not create placeholder files just to satisfy the pattern.
 - Durable Objects are the canonical store for short-lived OAuth coordination.
 - If OAuth is enabled, the app must have either the Durable Object namespace binding or an explicitly injected OAuth store for tests.
 - Do not silently fall back to process-local in-memory OAuth state in deployed mode.
-- D1 remains optional future storage for long-lived metadata only; it is not a prerequisite for the current architecture.
+- D1 is the canonical durable read model when `YNAB_READ_SOURCE=d1`. OAuth state remains Durable Object-backed and separate from the YNAB read model.
 
 ## v1 Non-Goals
 

@@ -18,13 +18,21 @@ export type AppEnv = {
   publicUrl?: string;
   ynabApiBaseUrl: string;
   ynabAccessToken?: string;
+  ynabDatabase?: D1Database;
+  ynabDefaultPlanId?: string;
+  ynabReadSource: "live" | "d1";
+  ynabStaleAfterMinutes: number;
+  ynabSyncMaxRowsPerRun: number;
 };
 
 const DEFAULT_APP_ENV: AppEnv = {
   mcpServerName: "ynab-mcp-build",
   mcpServerVersion: "0.1.0",
   oauthEnabled: false,
-  ynabApiBaseUrl: "https://api.ynab.com/v1"
+  ynabApiBaseUrl: "https://api.ynab.com/v1",
+  ynabReadSource: "live",
+  ynabStaleAfterMinutes: 360,
+  ynabSyncMaxRowsPerRun: 100
 };
 
 function getOptionalString(value: unknown) {
@@ -33,6 +41,20 @@ function getOptionalString(value: unknown) {
 
 function normalizeAccessTeamDomain(value: string) {
   return value.replace(/^https?:\/\//u, "").replace(/\/+$/u, "");
+}
+
+function getOptionalPositiveInteger(value: unknown, fallback: number) {
+  if (typeof value !== "string" || value.length === 0) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function resolveYnabReadSource(value: unknown) {
+  return value === "d1" ? "d1" : DEFAULT_APP_ENV.ynabReadSource;
 }
 
 function getAccessOidcDiscoveryUrl(teamDomain: string, clientId: string) {
@@ -58,6 +80,11 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     YNAB_ACCESS_TOKEN?: string;
     YNAB_API_BASE_URL?: string;
     YNAB_API_TOKEN?: string;
+    YNAB_DB?: D1Database;
+    YNAB_DEFAULT_PLAN_ID?: string;
+    YNAB_READ_SOURCE?: string;
+    YNAB_STALE_AFTER_MINUTES?: string;
+    YNAB_SYNC_MAX_ROWS_PER_RUN?: string;
   } | undefined;
   const accessOidcValues = {
     authorizationUrl: getOptionalString(runtimeEnv?.ACCESS_AUTHORIZATION_URL),
@@ -107,7 +134,18 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     oauthStateNamespace: runtimeEnv?.OAUTH_STATE,
     publicUrl: runtimeEnv?.MCP_PUBLIC_URL ?? derivedPublicUrl,
     ynabApiBaseUrl: runtimeEnv?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
-    ynabAccessToken: runtimeEnv?.YNAB_ACCESS_TOKEN ?? runtimeEnv?.YNAB_API_TOKEN
+    ynabAccessToken: runtimeEnv?.YNAB_ACCESS_TOKEN ?? runtimeEnv?.YNAB_API_TOKEN,
+    ynabDatabase: runtimeEnv?.YNAB_DB,
+    ynabDefaultPlanId: getOptionalString(runtimeEnv?.YNAB_DEFAULT_PLAN_ID),
+    ynabReadSource: resolveYnabReadSource(runtimeEnv?.YNAB_READ_SOURCE),
+    ynabStaleAfterMinutes: getOptionalPositiveInteger(
+      runtimeEnv?.YNAB_STALE_AFTER_MINUTES,
+      DEFAULT_APP_ENV.ynabStaleAfterMinutes
+    ),
+    ynabSyncMaxRowsPerRun: getOptionalPositiveInteger(
+      runtimeEnv?.YNAB_SYNC_MAX_ROWS_PER_RUN,
+      DEFAULT_APP_ENV.ynabSyncMaxRowsPerRun
+    )
   };
 
   if (resolvedEnv.oauthEnabled && !resolvedEnv.publicUrl) {
