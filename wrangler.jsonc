@@ -34,7 +34,7 @@
     {
       "binding": "YNAB_DB",
       "database_name": "ynab-mcp-read-model",
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_id": "6bc7b73e-009d-483f-a493-0409ba310c88"
     }
   ],
   "observability": {
