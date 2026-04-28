@@ -1,11 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 
 import type { AppDependencies } from "../app/dependencies.js";
 import { resolveYnabClient } from "../app/dependencies.js";
 import { createYnabReadModelClient } from "../platform/ynab/read-model/client.js";
 import { createReadModelFreshness } from "../platform/ynab/read-model/freshness.js";
+import { createInitialPopulationRepository } from "../platform/ynab/read-model/initial-population-repository.js";
+import { createInitialPopulationService } from "../platform/ynab/read-model/initial-population-service.js";
 import { createMoneyMovementsRepository } from "../platform/ynab/read-model/money-movements-repository.js";
 import { createScheduledTransactionsRepository } from "../platform/ynab/read-model/scheduled-transactions-repository.js";
+import { createTransactionsRepository } from "../platform/ynab/read-model/transactions-repository.js";
 import type { AppEnv } from "../shared/env.js";
 import type { SliceToolDefinition } from "../shared/tool-definition.js";
 import { getAccountToolDefinitions } from "../slices/accounts/index.js";
@@ -47,6 +51,7 @@ function getDbBackedToolDefinitions(env: AppEnv, dependencies: AppDependencies) 
     now,
     staleAfterMinutes: env.ynabStaleAfterMinutes
   });
+  const transactionsRepository = createTransactionsRepository(env.ynabDatabase);
   const ynabClient = createYnabReadModelClient(env.ynabDatabase, {
     defaultPlanId: env.ynabDefaultPlanId
   });
@@ -77,6 +82,31 @@ function getDbBackedToolDefinitions(env: AppEnv, dependencies: AppDependencies) 
     ...getFinancialHealthToolDefinitions(ynabClient)
   ];
 
+  if (env.ynabTempPopulationToolEnabled && (env.ynabAccessToken || dependencies.ynabClient)) {
+    const populationService = dependencies.initialPopulationService ?? createInitialPopulationService({
+      defaultPlanId: env.ynabDefaultPlanId,
+      initialPopulationRepository: createInitialPopulationRepository(env.ynabDatabase),
+      maxRequests: env.ynabPopulateMaxRequestsPerRun,
+      now,
+      transactionsRepository,
+      ynabClient: resolveYnabClient(env, dependencies)
+    });
+
+    definitions.push({
+      name: "ynab_admin_populate_d1",
+      title: "Populate YNAB D1 Read Model",
+      description: "Temporary admin tool that populates the D1 YNAB read model from bounded YNAB API reads.",
+      inputSchema: {
+        confirm: z.boolean().optional(),
+        dryRun: z.boolean().optional(),
+        includeAllPlans: z.boolean().optional(),
+        maxRequests: z.number().int().min(1).max(200).optional(),
+        planId: z.string().optional()
+      },
+      execute: (input) => populationService.populate(input)
+    });
+  }
+
   return definitions.map((definition) => withReadModelFreshness(definition, {
     defaultPlanId: env.ynabDefaultPlanId,
     freshness
@@ -96,7 +126,12 @@ type FreshnessDependencies = {
 };
 
 function requiredEndpointsForTool(name: string) {
-  if (name === "ynab_get_mcp_version" || name === "ynab_get_user" || name === "ynab_list_plans") {
+  if (
+    name === "ynab_admin_populate_d1"
+    || name === "ynab_get_mcp_version"
+    || name === "ynab_get_user"
+    || name === "ynab_list_plans"
+  ) {
     return [];
   }
 

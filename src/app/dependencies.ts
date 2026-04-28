@@ -1,8 +1,12 @@
 import { createYnabClient, type YnabClient } from "../platform/ynab/client.js";
+import type { InitialPopulationInput, InitialPopulationResult } from "../platform/ynab/read-model/initial-population-service.js";
 import type { AppEnv } from "../shared/env.js";
 
 export type AppDependencies = {
   createId?: () => string;
+  initialPopulationService?: {
+    populate(input?: InitialPopulationInput): Promise<InitialPopulationResult>;
+  };
   now?: () => number;
   ynabClient?: YnabClient;
 };

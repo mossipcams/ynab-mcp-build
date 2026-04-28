@@ -14,17 +14,11 @@ In `YNAB_READ_SOURCE=d1` mode:
 - unrebuilt tools return clear DB-mode errors
 - every rebuilt read tool includes freshness metadata
 
-DB-backed mode now wires the public tool surface through the D1 read model. Tools use a D1-backed YNAB client adapter and return freshness metadata for plan-scoped reads instead of falling back to live YNAB API calls.
+Current rebuilt DB-backed tool:
 
-The money movement and scheduled transaction tool groups use DB-native slice
-services over the normalized read-model tables:
+- `ynab_search_transactions`
 
-- `ynab_get_money_movements`
-- `ynab_get_money_movements_by_month`
-- `ynab_get_money_movement_groups`
-- `ynab_get_money_movement_groups_by_month`
-- `ynab_list_scheduled_transactions`
-- `ynab_get_scheduled_transaction`
+The remaining public tool names are still registered in D1 mode, but they return a clear “not available yet in DB-backed read mode” error until their DB-backed slices are implemented.
 
 ## Architecture
 
@@ -113,6 +107,44 @@ npm run typecheck
 
 Apply the D1 schema with Wrangler once a real database is created and `database_id` is updated in `wrangler.jsonc`.
 
+## Temporary Initial D1 Population
+
+The temporary admin tool `ynab_admin_populate_d1` can bootstrap the D1 read model from YNAB API reads. It is intentionally gated and should be disabled or removed after the first population work is complete.
+
+Required setup:
+
+```text
+D1 database name: ynab-mcp-read-model
+Worker binding: YNAB_DB
+Migration: migrations/0001_ynab_read_model.sql
+YNAB_READ_SOURCE=d1
+YNAB_TEMP_POPULATION_TOOL_ENABLED=true
+YNAB_ACCESS_TOKEN=<token>
+YNAB_DEFAULT_PLAN_ID=<plan-id>
+```
+
+Optional request budget:
+
+```text
+YNAB_POPULATE_MAX_REQUESTS_PER_RUN=50
+```
+
+YNAB currently allows 200 requests per rolling hour per access token. The population tool avoids the expensive per-endpoint bootstrap path whenever possible by using YNAB's full plan export endpoint:
+
+- one known/default plan: `GET /plans/{plan_id}` only
+- no configured plan id: `GET /plans/default` first, so discovery is avoided when YNAB default-plan selection is enabled
+- all plans: `GET /plans` once, then one full export per returned plan
+
+Keep population runs bounded and prefer one plan per run unless you intentionally need every plan.
+
+Recommended flow:
+
+1. Run `ynab_admin_populate_d1` with `{ "dryRun": true }`.
+2. Confirm `requestsUsed` is comfortably below the configured budget.
+3. Run one confirmed population with `{ "confirm": true }`.
+4. If the run stops for request budget or rate limit, wait for the rolling hourly window to recover and rerun with the same plan.
+5. Disable `YNAB_TEMP_POPULATION_TOOL_ENABLED` or remove the temporary tool after bootstrap.
+
 ## Sync Flow
 
 The transaction sync service:
@@ -127,6 +159,6 @@ The transaction sync service:
 
 ## Known Limitations
 
-- DB-backed tool responses depend on the corresponding read-model endpoint having synced successfully.
+- Only `ynab_search_transactions` is rebuilt against D1 so far.
 - Scheduled Worker/admin refresh wiring still needs to be connected to deployment policy.
 - Initial bootstrap for large budgets should be handled carefully because Worker/D1 limits make unbounded imports unsafe.
