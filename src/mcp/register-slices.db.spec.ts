@@ -103,9 +103,11 @@ function createD1Env(database: D1Database): AppEnv {
     ynabApiBaseUrl: "https://api.ynab.com/v1",
     ynabDatabase: database,
     ynabDefaultPlanId: "plan-1",
+    ynabPopulateMaxRequestsPerRun: 50,
     ynabReadSource: "d1",
     ynabStaleAfterMinutes: 360,
-    ynabSyncMaxRowsPerRun: 100
+    ynabSyncMaxRowsPerRun: 100,
+    ynabTempPopulationToolEnabled: false
   };
 }
 
@@ -188,5 +190,88 @@ describe("DB-backed tool registration", () => {
     expect(unavailableMessages.filter(Boolean)).not.toContainEqual(
       expect.stringContaining("is not available yet in DB-backed read mode.")
     );
+  });
+
+  it("keeps the temporary D1 population tool absent unless explicitly enabled", () => {
+    const database = new FakeD1Database();
+    const disabledNames = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {})
+      .map((definition) => definition.name);
+    const liveNames = getRegisteredToolDefinitions({
+      ...createD1Env(database as unknown as D1Database),
+      ynabReadSource: "live",
+      ynabTempPopulationToolEnabled: true
+    }, {
+      ynabClient: {} as never
+    }).map((definition) => definition.name);
+
+    expect(disabledNames).not.toContain("ynab_admin_populate_d1");
+    expect(liveNames).not.toContain("ynab_admin_populate_d1");
+  });
+
+  it("registers the temporary D1 population tool only with DB mode, the temp flag, and YNAB access", async () => {
+    const database = new FakeD1Database();
+    const calls: unknown[] = [];
+    const definitions = getRegisteredToolDefinitions({
+      ...createD1Env(database as unknown as D1Database),
+      ynabAccessToken: "token",
+      ynabTempPopulationToolEnabled: true
+    }, {
+      initialPopulationService: {
+        async populate(input) {
+          calls.push(input);
+
+          return {
+            dryRun: true,
+            planIds: ["plan-1"],
+            requestsUsed: 10,
+            rows: {
+              accounts: 0,
+              categoryGroups: 0,
+              categories: 0,
+              moneyMovementGroups: 0,
+              moneyMovements: 0,
+              monthCategories: 0,
+              months: 0,
+              payeeLocations: 0,
+              payees: 0,
+              planSettings: 0,
+              plans: 0,
+              scheduledTransactions: 0,
+              transactions: 0,
+              transactionTombstones: 0,
+              users: 0
+            },
+            status: "ok"
+          };
+        }
+      }
+    });
+    const tool = definitions.find((definition) => definition.name === "ynab_admin_populate_d1");
+
+    await expect(tool?.execute({
+      dryRun: true,
+      maxRequests: 10,
+      planId: "plan-1"
+    })).resolves.toMatchObject({
+      requestsUsed: 10,
+      status: "ok"
+    });
+    expect(calls).toEqual([
+      {
+        dryRun: true,
+        maxRequests: 10,
+        planId: "plan-1"
+      }
+    ]);
+  });
+
+  it("does not register the temporary D1 population tool without YNAB access", () => {
+    const database = new FakeD1Database();
+    const names = getRegisteredToolDefinitions({
+      ...createD1Env(database as unknown as D1Database),
+      ynabTempPopulationToolEnabled: true
+    }, {}).map((definition) => definition.name);
+
+    expect(names).not.toContain("ynab_admin_populate_d1");
   });
 });

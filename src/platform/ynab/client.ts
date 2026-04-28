@@ -51,7 +51,28 @@ export type YnabCategorySummary = {
   name: string;
   hidden: boolean;
   deleted: boolean;
+  categoryGroupId?: string | null;
   categoryGroupName?: string;
+  originalCategoryGroupId?: string | null;
+  note?: string | null;
+  budgeted?: number;
+  activity?: number;
+  balance?: number;
+  goalType?: string | null;
+  goalTarget?: number | null;
+  goalTargetDate?: string | null;
+  goalTargetMonth?: string | null;
+  goalNeedsWholeAmount?: boolean | null;
+  goalDay?: number | null;
+  goalCadence?: number | null;
+  goalCadenceFrequency?: number | null;
+  goalCreationMonth?: string | null;
+  goalPercentageComplete?: number | null;
+  goalMonthsToBudget?: number | null;
+  goalUnderFunded?: number | null;
+  goalOverallFunded?: number | null;
+  goalOverallLeft?: number | null;
+  goalSnoozedAt?: string | null;
 };
 
 export type YnabCategoryGroupSummary = {
@@ -109,6 +130,7 @@ export type YnabPlanMonthDetail = YnabPlanMonthSummary & {
   categories?: Array<{
     id: string;
     name: string;
+    categoryGroupId?: string | null;
     budgeted?: number;
     activity?: number;
     balance: number;
@@ -116,6 +138,22 @@ export type YnabPlanMonthDetail = YnabPlanMonthSummary & {
     hidden?: boolean;
     goalUnderFunded?: number | null;
     categoryGroupName?: string;
+    originalCategoryGroupId?: string | null;
+    note?: string | null;
+    goalType?: string | null;
+    goalTarget?: number | null;
+    goalTargetDate?: string | null;
+    goalTargetMonth?: string | null;
+    goalNeedsWholeAmount?: boolean | null;
+    goalDay?: number | null;
+    goalCadence?: number | null;
+    goalCadenceFrequency?: number | null;
+    goalCreationMonth?: string | null;
+    goalPercentageComplete?: number | null;
+    goalMonthsToBudget?: number | null;
+    goalOverallFunded?: number | null;
+    goalOverallLeft?: number | null;
+    goalSnoozedAt?: string | null;
   }>;
 };
 
@@ -123,9 +161,17 @@ export type YnabAccountSummary = {
   id: string;
   name: string;
   type: string;
+  onBudget?: boolean;
   closed: boolean;
+  note?: string | null;
   deleted?: boolean;
   balance: number;
+  clearedBalance?: number;
+  unclearedBalance?: number;
+  transferPayeeId?: string | null;
+  directImportLinked?: boolean | null;
+  directImportInError?: boolean | null;
+  lastReconciledAt?: string | null;
 };
 
 export type YnabAccountDetail = {
@@ -141,6 +187,7 @@ export type YnabTransaction = {
   id: string;
   date: string;
   amount: number;
+  memo?: string | null;
   payeeId?: string | null;
   payeeName?: string | null;
   categoryId?: string | null;
@@ -149,19 +196,64 @@ export type YnabTransaction = {
   accountName?: string | null;
   approved?: boolean | null;
   cleared?: string | null;
+  flagColor?: string | null;
+  flagName?: string | null;
   deleted?: boolean;
   isTransfer?: boolean;
   transferAccountId?: string | null;
+  transferTransactionId?: string | null;
+  matchedTransactionId?: string | null;
+  importId?: string | null;
+  importPayeeName?: string | null;
+  importPayeeNameOriginal?: string | null;
+  debtTransactionType?: string | null;
+  subtransactions?: YnabSubtransaction[];
+};
+
+export type YnabSubtransaction = {
+  id: string;
+  transactionId?: string | null;
+  amount: number;
+  memo?: string | null;
+  payeeId?: string | null;
+  payeeName?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  transferAccountId?: string | null;
+  transferTransactionId?: string | null;
+  deleted?: boolean;
 };
 
 export type YnabScheduledTransaction = {
   id: string;
   dateFirst: string;
   dateNext?: string | null;
+  frequency?: string | null;
   amount: number;
+  memo?: string | null;
+  flagColor?: string | null;
+  flagName?: string | null;
+  accountId?: string | null;
   payeeName?: string | null;
+  payeeId?: string | null;
   categoryName?: string | null;
+  categoryId?: string | null;
   accountName?: string | null;
+  transferAccountId?: string | null;
+  deleted?: boolean;
+  subtransactions?: YnabScheduledSubtransaction[];
+};
+
+export type YnabScheduledSubtransaction = {
+  id: string;
+  scheduledTransactionId?: string | null;
+  amount: number;
+  memo?: string | null;
+  payeeId?: string | null;
+  payeeName?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  transferAccountId?: string | null;
   deleted?: boolean;
 };
 
@@ -175,15 +267,61 @@ export type YnabPayee = {
 export type YnabPayeeLocation = {
   id: string;
   payeeId?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   deleted?: boolean;
+};
+
+export type YnabMoneyMovement = {
+  id: string;
+  month?: string | null;
+  movedAt?: string | null;
+  note?: string | null;
+  moneyMovementGroupId?: string | null;
+  performedByUserId?: string | null;
+  fromCategoryId?: string | null;
+  toCategoryId?: string | null;
+  amount: number;
+  deleted?: boolean;
+};
+
+export type YnabMoneyMovementGroup = {
+  id: string;
+  groupCreatedAt: string;
+  month: string;
+  note?: string | null;
+  performedByUserId?: string | null;
+  deleted?: boolean;
+};
+
+export type YnabMoneyMovementsResult = {
+  moneyMovements: YnabMoneyMovement[];
+  serverKnowledge: number;
+};
+
+export type YnabMoneyMovementGroupsResult = {
+  moneyMovementGroups: YnabMoneyMovementGroup[];
+  serverKnowledge: number;
+};
+
+export type YnabPlanExport = {
+  serverKnowledge: number;
+  plan: YnabPlanDetail & {
+    accounts: YnabAccountSummary[];
+    categoryGroups: YnabCategoryGroupSummary[];
+    months: YnabPlanMonthDetail[];
+    payees: YnabPayee[];
+    payeeLocations: YnabPayeeLocation[];
+    scheduledTransactions: YnabScheduledTransaction[];
+    transactions: YnabTransaction[];
+  };
 };
 
 export interface YnabClient {
   getUser(): Promise<YnabUser>;
   listPlans(): Promise<YnabPlanList>;
   getPlan(planId: string): Promise<YnabPlanDetail>;
+  getPlanExport?(planId: string): Promise<YnabPlanExport>;
   listCategories(planId: string): Promise<YnabCategoryGroupSummary[]>;
   getCategory(planId: string, categoryId: string): Promise<YnabCategoryDetail>;
   getMonthCategory(planId: string, month: string, categoryId: string): Promise<YnabMonthCategoryDetail>;
@@ -204,6 +342,8 @@ export interface YnabClient {
   listPayeeLocations(planId: string): Promise<YnabPayeeLocation[]>;
   getPayeeLocation(planId: string, payeeLocationId: string): Promise<YnabPayeeLocation>;
   getPayeeLocationsByPayee(planId: string, payeeId: string): Promise<YnabPayeeLocation[]>;
+  listMoneyMovements?(planId: string): Promise<YnabMoneyMovementsResult>;
+  listMoneyMovementGroups?(planId: string): Promise<YnabMoneyMovementGroupsResult>;
 }
 
 type CreateYnabClientOptions = {
@@ -250,33 +390,103 @@ type YnabPlanResponse = {
   };
 };
 
-type YnabAccountsResponse = {
+type YnabPlanExportResponse = {
   data: {
-    accounts: Array<{
+    server_knowledge: number;
+    plan: {
       id: string;
       name: string;
-      type: string;
-      closed: boolean;
-      deleted?: boolean;
-      balance: number;
-    }>;
+      last_modified_on?: string;
+      first_month?: string;
+      last_month?: string;
+      accounts?: YnabAccountRecord[];
+      category_groups?: YnabCategoryGroupRecord[];
+      categories?: YnabCategoryRecord[];
+      months?: YnabPlanMonthRecord[];
+      payees?: YnabPayeeRecord[];
+      payee_locations?: YnabPayeeLocationRecord[];
+      scheduled_transactions?: YnabScheduledTransactionRecord[];
+      transactions?: YnabTransactionRecord[];
+    };
+  };
+};
+
+type YnabAccountRecord = {
+  id: string;
+  name: string;
+  type: string;
+  on_budget?: boolean | null;
+  closed: boolean;
+  note?: string | null;
+  balance: number;
+  cleared_balance?: number;
+  uncleared_balance?: number;
+  transfer_payee_id?: string | null;
+  direct_import_linked?: boolean | null;
+  direct_import_in_error?: boolean | null;
+  last_reconciled_at?: string | null;
+  deleted?: boolean;
+};
+
+type YnabCategoryRecord = {
+  id: string;
+  category_group_id?: string | null;
+  category_group_name?: string;
+  original_category_group_id?: string | null;
+  name: string;
+  note?: string | null;
+  hidden: boolean;
+  budgeted?: number;
+  activity?: number;
+  balance?: number;
+  goal_type?: string | null;
+  goal_target?: number | null;
+  goal_target_date?: string | null;
+  goal_target_month?: string | null;
+  goal_needs_whole_amount?: boolean | null;
+  goal_day?: number | null;
+  goal_cadence?: number | null;
+  goal_cadence_frequency?: number | null;
+  goal_creation_month?: string | null;
+  goal_percentage_complete?: number | null;
+  goal_months_to_budget?: number | null;
+  goal_under_funded?: number | null;
+  goal_overall_funded?: number | null;
+  goal_overall_left?: number | null;
+  goal_snoozed_at?: string | null;
+  deleted: boolean;
+};
+
+type YnabCategoryGroupRecord = {
+  id: string;
+  name: string;
+  hidden: boolean;
+  deleted: boolean;
+  categories?: YnabCategoryRecord[];
+};
+
+type YnabPlanMonthRecord = {
+  month: string;
+  note?: string | null;
+  income?: number;
+  budgeted?: number;
+  activity?: number;
+  to_be_budgeted?: number;
+  age_of_money?: number | null;
+  categories?: YnabCategoryRecord[];
+  deleted?: boolean;
+};
+
+type YnabAccountsResponse = {
+  data: {
+    accounts: YnabAccountRecord[];
   };
 };
 
 type YnabCategoriesResponse = {
   data: {
-    category_groups: Array<{
-      id: string;
-      name: string;
-      hidden: boolean;
-      deleted: boolean;
-      categories: Array<{
-        id: string;
-        name: string;
-        hidden: boolean;
-        deleted: boolean;
-        category_group_name?: string;
-      }>;
+    category_groups: Array<YnabCategoryGroupRecord & {
+      categories: YnabCategoryRecord[];
     }>;
   };
 };
@@ -372,6 +582,7 @@ type YnabTransactionRecord = {
   id: string;
   date: string;
   amount: number;
+  memo?: string | null;
   payee_id?: string | null;
   payee_name?: string | null;
   category_id?: string | null;
@@ -380,8 +591,17 @@ type YnabTransactionRecord = {
   account_name?: string | null;
   approved?: boolean | null;
   cleared?: string | null;
+  flag_color?: string | null;
+  flag_name?: string | null;
   deleted?: boolean;
   transfer_account_id?: string | null;
+  transfer_transaction_id?: string | null;
+  matched_transaction_id?: string | null;
+  import_id?: string | null;
+  import_payee_name?: string | null;
+  import_payee_name_original?: string | null;
+  debt_transaction_type?: string | null;
+  subtransactions?: YnabSubtransactionRecord[];
 };
 
 type YnabTransactionsResponse = {
@@ -400,11 +620,20 @@ type YnabScheduledTransactionRecord = {
   id: string;
   date_first: string;
   date_next?: string | null;
+  frequency?: string | null;
   amount: number;
+  memo?: string | null;
+  flag_color?: string | null;
+  flag_name?: string | null;
+  account_id?: string | null;
   payee_name?: string | null;
+  payee_id?: string | null;
   category_name?: string | null;
+  category_id?: string | null;
   account_name?: string | null;
+  transfer_account_id?: string | null;
   deleted?: boolean;
+  subtransactions?: YnabScheduledSubtransactionRecord[];
 };
 
 type YnabScheduledTransactionsResponse = {
@@ -441,8 +670,35 @@ type YnabPayeeResponse = {
 type YnabPayeeLocationRecord = {
   id: string;
   payee_id?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  deleted?: boolean;
+};
+
+type YnabSubtransactionRecord = {
+  id: string;
+  transaction_id?: string | null;
+  amount: number;
+  memo?: string | null;
+  payee_id?: string | null;
+  payee_name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  transfer_account_id?: string | null;
+  transfer_transaction_id?: string | null;
+  deleted?: boolean;
+};
+
+type YnabScheduledSubtransactionRecord = {
+  id: string;
+  scheduled_transaction_id?: string | null;
+  amount: number;
+  memo?: string | null;
+  payee_id?: string | null;
+  payee_name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  transfer_account_id?: string | null;
   deleted?: boolean;
 };
 
@@ -455,6 +711,42 @@ type YnabPayeeLocationsResponse = {
 type YnabPayeeLocationResponse = {
   data: {
     payee_location: YnabPayeeLocationRecord;
+  };
+};
+
+type YnabMoneyMovementRecord = {
+  id: string;
+  month?: string | null;
+  moved_at?: string | null;
+  note?: string | null;
+  money_movement_group_id?: string | null;
+  performed_by_user_id?: string | null;
+  from_category_id?: string | null;
+  to_category_id?: string | null;
+  amount: number;
+  deleted?: boolean;
+};
+
+type YnabMoneyMovementsResponse = {
+  data: {
+    money_movements: YnabMoneyMovementRecord[];
+    server_knowledge: number;
+  };
+};
+
+type YnabMoneyMovementGroupRecord = {
+  id: string;
+  group_created_at: string;
+  month: string;
+  note?: string | null;
+  performed_by_user_id?: string | null;
+  deleted?: boolean;
+};
+
+type YnabMoneyMovementGroupsResponse = {
+  data: {
+    money_movement_groups: YnabMoneyMovementGroupRecord[];
+    server_knowledge: number;
   };
 };
 
@@ -510,16 +802,132 @@ function toYnabTransaction(transaction: YnabTransactionRecord): YnabTransaction 
   return mapTransactionRecord(transaction);
 }
 
+function toYnabAccount(account: YnabAccountRecord): YnabAccountSummary {
+  return {
+    balance: account.balance,
+    clearedBalance: account.cleared_balance,
+    closed: account.closed,
+    deleted: account.deleted,
+    directImportInError: account.direct_import_in_error,
+    directImportLinked: account.direct_import_linked,
+    id: account.id,
+    lastReconciledAt: account.last_reconciled_at,
+    name: account.name,
+    note: account.note,
+    onBudget: account.on_budget ?? undefined,
+    transferPayeeId: account.transfer_payee_id,
+    type: account.type,
+    unclearedBalance: account.uncleared_balance
+  };
+}
+
+function toYnabCategory(category: YnabCategoryRecord): YnabCategorySummary {
+  return {
+    activity: category.activity,
+    balance: category.balance,
+    budgeted: category.budgeted,
+    categoryGroupId: category.category_group_id,
+    categoryGroupName: category.category_group_name,
+    deleted: category.deleted,
+    goalCadence: category.goal_cadence,
+    goalCadenceFrequency: category.goal_cadence_frequency,
+    goalCreationMonth: category.goal_creation_month,
+    goalDay: category.goal_day,
+    goalMonthsToBudget: category.goal_months_to_budget,
+    goalNeedsWholeAmount: category.goal_needs_whole_amount,
+    goalOverallFunded: category.goal_overall_funded,
+    goalOverallLeft: category.goal_overall_left,
+    goalPercentageComplete: category.goal_percentage_complete,
+    goalSnoozedAt: category.goal_snoozed_at,
+    goalTarget: category.goal_target,
+    goalTargetDate: category.goal_target_date,
+    goalTargetMonth: category.goal_target_month,
+    goalType: category.goal_type,
+    goalUnderFunded: category.goal_under_funded,
+    hidden: category.hidden,
+    id: category.id,
+    name: category.name,
+    note: category.note,
+    originalCategoryGroupId: category.original_category_group_id
+  };
+}
+
+function toYnabCategoryGroup(
+  group: YnabCategoryGroupRecord,
+  categoriesByGroupId: Map<string, YnabCategorySummary>[]
+): YnabCategoryGroupSummary {
+  const categories = categoriesByGroupId
+    .flatMap((categoryMap) => categoryMap.get(group.id) ? [categoryMap.get(group.id)!] : []);
+
+  return {
+    categories: group.categories?.map(toYnabCategory) ?? categories,
+    deleted: group.deleted,
+    hidden: group.hidden,
+    id: group.id,
+    name: group.name
+  };
+}
+
+function groupCategoriesByGroupId(categories: YnabCategorySummary[]) {
+  const maps: Array<Map<string, YnabCategorySummary>> = [];
+
+  for (const category of categories) {
+    if (category.categoryGroupId) {
+      const map = new Map<string, YnabCategorySummary>();
+      map.set(category.categoryGroupId, category);
+      maps.push(map);
+    }
+  }
+
+  return maps;
+}
+
+function toYnabMonth(month: YnabPlanMonthRecord): YnabPlanMonthDetail {
+  return {
+    activity: month.activity,
+    ageOfMoney: month.age_of_money ?? undefined,
+    budgeted: month.budgeted,
+    categories: month.categories?.map((category) => ({
+      ...toYnabCategory(category),
+      balance: category.balance ?? 0
+    })),
+    deleted: month.deleted,
+    income: month.income,
+    month: month.month,
+    toBeBudgeted: month.to_be_budgeted
+  };
+}
+
 function toYnabScheduledTransaction(transaction: YnabScheduledTransactionRecord): YnabScheduledTransaction {
   return {
     id: transaction.id,
     dateFirst: transaction.date_first,
     dateNext: transaction.date_next,
+    frequency: transaction.frequency,
     amount: transaction.amount,
+    memo: transaction.memo,
+    flagColor: transaction.flag_color,
+    flagName: transaction.flag_name,
+    accountId: transaction.account_id,
+    payeeId: transaction.payee_id,
     payeeName: transaction.payee_name,
+    categoryId: transaction.category_id,
     categoryName: transaction.category_name,
     accountName: transaction.account_name,
-    deleted: transaction.deleted
+    transferAccountId: transaction.transfer_account_id,
+    deleted: transaction.deleted,
+    subtransactions: transaction.subtransactions?.map((subtransaction) => ({
+      amount: subtransaction.amount,
+      categoryId: subtransaction.category_id,
+      categoryName: subtransaction.category_name,
+      deleted: subtransaction.deleted,
+      id: subtransaction.id,
+      memo: subtransaction.memo,
+      payeeId: subtransaction.payee_id,
+      payeeName: subtransaction.payee_name,
+      scheduledTransactionId: subtransaction.scheduled_transaction_id,
+      transferAccountId: subtransaction.transfer_account_id
+    }))
   };
 }
 
@@ -539,6 +947,32 @@ function toYnabPayeeLocation(location: YnabPayeeLocationRecord): YnabPayeeLocati
     latitude: location.latitude,
     longitude: location.longitude,
     deleted: location.deleted
+  };
+}
+
+function toYnabMoneyMovement(movement: YnabMoneyMovementRecord): YnabMoneyMovement {
+  return {
+    amount: movement.amount,
+    deleted: movement.deleted ?? false,
+    fromCategoryId: movement.from_category_id,
+    id: movement.id,
+    moneyMovementGroupId: movement.money_movement_group_id,
+    month: movement.month,
+    movedAt: movement.moved_at,
+    note: movement.note,
+    performedByUserId: movement.performed_by_user_id,
+    toCategoryId: movement.to_category_id
+  };
+}
+
+function toYnabMoneyMovementGroup(group: YnabMoneyMovementGroupRecord): YnabMoneyMovementGroup {
+  return {
+    deleted: group.deleted ?? false,
+    groupCreatedAt: group.group_created_at,
+    id: group.id,
+    month: group.month,
+    note: group.note,
+    performedByUserId: group.performed_by_user_id
   };
 }
 
@@ -607,6 +1041,31 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         payeeCount: Array.isArray(plan.payees) ? plan.payees.length : undefined
       };
     },
+    async getPlanExport(planId: string) {
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}`);
+      const payload = await getJson<YnabPlanExportResponse>(response);
+      const plan = payload.data.plan;
+      const categories = (plan.categories ?? []).map(toYnabCategory);
+      const categoriesByGroupId = groupCategoriesByGroupId(categories);
+
+      return {
+        plan: {
+          accounts: (plan.accounts ?? []).map(toYnabAccount),
+          categoryGroups: (plan.category_groups ?? []).map((group) => toYnabCategoryGroup(group, categoriesByGroupId)),
+          firstMonth: plan.first_month,
+          id: plan.id,
+          lastModifiedOn: plan.last_modified_on,
+          lastMonth: plan.last_month,
+          months: (plan.months ?? []).map(toYnabMonth),
+          name: plan.name,
+          payeeLocations: (plan.payee_locations ?? []).map(toYnabPayeeLocation),
+          payees: (plan.payees ?? []).map(toYnabPayee),
+          scheduledTransactions: (plan.scheduled_transactions ?? []).map(toYnabScheduledTransaction),
+          transactions: (plan.transactions ?? []).map(toYnabTransaction)
+        },
+        serverKnowledge: payload.data.server_knowledge
+      };
+    },
     async listCategories(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/categories`);
       const payload = await getJson<YnabCategoriesResponse>(response);
@@ -616,13 +1075,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         name: group.name,
         hidden: group.hidden,
         deleted: group.deleted,
-        categories: group.categories.map((category) => ({
-          id: category.id,
-          name: category.name,
-          hidden: category.hidden,
-          deleted: category.deleted,
-          categoryGroupName: category.category_group_name
-        }))
+        categories: group.categories.map(toYnabCategory)
       }));
     },
     async getCategory(planId: string, categoryId: string) {
@@ -732,14 +1185,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/accounts`);
       const payload = await getJson<YnabAccountsResponse>(response);
 
-      return payload.data.accounts.map((account) => ({
-        id: account.id,
-        name: account.name,
-        type: account.type,
-        closed: account.closed,
-        deleted: account.deleted,
-        balance: account.balance
-      }));
+      return payload.data.accounts.map(toYnabAccount);
     },
     async getAccount(planId: string, accountId: string) {
       const response = await authorizedFetch(
@@ -848,6 +1294,24 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const payload = await getJson<YnabPayeeLocationsResponse>(response);
 
       return payload.data.payee_locations.map(toYnabPayeeLocation);
+    },
+    async listMoneyMovements(planId: string) {
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/money_movements`);
+      const payload = await getJson<YnabMoneyMovementsResponse>(response);
+
+      return {
+        moneyMovements: payload.data.money_movements.map(toYnabMoneyMovement),
+        serverKnowledge: payload.data.server_knowledge
+      };
+    },
+    async listMoneyMovementGroups(planId: string) {
+      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/money_movement_groups`);
+      const payload = await getJson<YnabMoneyMovementGroupsResponse>(response);
+
+      return {
+        moneyMovementGroups: payload.data.money_movement_groups.map(toYnabMoneyMovementGroup),
+        serverKnowledge: payload.data.server_knowledge
+      };
     }
   };
 }
