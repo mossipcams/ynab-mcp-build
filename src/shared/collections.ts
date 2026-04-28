@@ -13,7 +13,7 @@ type PaginationOptions = {
 type CollectionOptions<FieldName extends string> = ProjectionOptions<FieldName> & PaginationOptions;
 type CollectionEntry = Record<string, unknown> & { id?: string };
 
-const DEFAULT_LIMIT = 50;
+export const DEFAULT_LIMIT = 65;
 
 function normalizeNumber(value: number | undefined, fallback: number, minimum: number) {
   if (value === undefined || !Number.isFinite(value)) {
@@ -68,4 +68,11 @@ export function paginateEntries<Entry>(entries: Entry[], options: PaginationOpti
       has_more: offset + pagedEntries.length < entries.length
     }
   };
+}
+
+export function shouldPaginateEntries<FieldName extends string, Entry>(
+  entries: Entry[],
+  options: CollectionOptions<FieldName>
+) {
+  return hasPaginationControls(options) || entries.length > DEFAULT_LIMIT;
 }

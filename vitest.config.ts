@@ -7,6 +7,7 @@ const unitIncludes = [
   "tests/platform/ynab/mappers.test.ts",
   "tests/platform/ynab/schemas.test.ts",
   "tests/shared/**/*.test.ts",
+  "src/slices/**/*.spec.ts",
   "tests/slices/**/{service,mappers,schemas,helpers}.test.ts"
 ];
 

@@ -30,7 +30,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
     {
       name: "ynab_list_transactions",
       title: "List YNAB Transactions",
-      description: "Lists YNAB transactions with optional pagination and compact field projection.",
+      description: "Lists YNAB transactions with optional pagination and compact field projection. Use only when the user explicitly asks for raw transaction browsing.",
       inputSchema: {
         planId: z.string().optional(),
         limit: z.number().int().min(1).max(500).optional(),
@@ -43,7 +43,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
     {
       name: "ynab_get_transaction",
       title: "Get YNAB Transaction",
-      description: "Returns a compact summary for a single YNAB transaction.",
+      description: "Returns a compact summary for a single individual transaction. Use for exact transaction inspection after a drilldown.",
       inputSchema: {
         planId: z.string().optional(),
         transactionId: z.string().min(1)
@@ -53,7 +53,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
     {
       name: "ynab_search_transactions",
       title: "Search YNAB Transactions",
-      description: "Searches YNAB transactions with compact filters, projections, pagination, and sorting.",
+      description: "Searches YNAB transactions with compact filters, rollups, projections, pagination, and sorting. Use for transaction detail or follow-up drilldowns.",
       inputSchema: {
         planId: z.string().optional(),
         fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -66,6 +66,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         minAmount: z.number().optional(),
         maxAmount: z.number().optional(),
         includeTransfers: z.boolean().optional(),
+        includeSummary: z.boolean().optional(),
         limit: z.number().int().min(1).max(500).optional(),
         offset: z.number().int().min(0).optional(),
         fields: z.array(z.enum(transactionFields)).optional(),
@@ -77,7 +78,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
     {
       name: "ynab_get_transactions_by_month",
       title: "Get YNAB Transactions By Month",
-      description: "Lists transactions for a single plan month.",
+      description: "Lists transactions for a single plan month. Use for month-specific transaction drilldowns after a summary.",
       inputSchema: {
         planId: z.string().optional(),
         month: z.string().min(1),
@@ -91,7 +92,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
     {
       name: "ynab_get_transactions_by_account",
       title: "Get YNAB Transactions By Account",
-      description: "Lists transactions for a single account.",
+      description: "Lists transactions for a single account. Use only when the user explicitly asks for account-specific raw records.",
       inputSchema: {
         planId: z.string().optional(),
         accountId: z.string().min(1),
@@ -105,7 +106,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
     {
       name: "ynab_get_transactions_by_category",
       title: "Get YNAB Transactions By Category",
-      description: "Lists transactions for a single category.",
+      description: "Lists transactions for a single category. Use only when the user explicitly asks for category-specific raw records.",
       inputSchema: {
         planId: z.string().optional(),
         categoryId: z.string().min(1),
@@ -119,7 +120,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
     {
       name: "ynab_get_transactions_by_payee",
       title: "Get YNAB Transactions By Payee",
-      description: "Lists transactions for a single payee.",
+      description: "Lists transactions for a single payee. Use only when the user explicitly asks for payee-specific raw records.",
       inputSchema: {
         planId: z.string().optional(),
         payeeId: z.string().min(1),
@@ -133,7 +134,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
     {
       name: "ynab_list_scheduled_transactions",
       title: "List YNAB Scheduled Transactions",
-      description: "Lists scheduled transactions with optional pagination and compact field projection.",
+      description: "Lists scheduled transactions with optional pagination and compact field projection. Use only when the user explicitly asks for raw scheduled records.",
       inputSchema: {
         planId: z.string().optional(),
         limit: z.number().int().min(1).max(500).optional(),
