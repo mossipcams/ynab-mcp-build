@@ -16,6 +16,16 @@ In `YNAB_READ_SOURCE=d1` mode:
 
 DB-backed mode now wires the public tool surface through the D1 read model. Tools use a D1-backed YNAB client adapter and return freshness metadata for plan-scoped reads instead of falling back to live YNAB API calls.
 
+The money movement and scheduled transaction tool groups use DB-native slice
+services over the normalized read-model tables:
+
+- `ynab_get_money_movements`
+- `ynab_get_money_movements_by_month`
+- `ynab_get_money_movement_groups`
+- `ynab_get_money_movement_groups_by_month`
+- `ynab_list_scheduled_transactions`
+- `ynab_get_scheduled_transaction`
+
 ## Architecture
 
 ```text

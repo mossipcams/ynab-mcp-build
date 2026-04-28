@@ -20,11 +20,49 @@ class FakeStatement {
 
     if (this.sql.includes("FROM ynab_sync_state")) {
       return Promise.resolve({
+        results: this.params.slice(1).map((endpoint) => ({
+          endpoint,
+          health_status: "ok",
+          last_successful_sync_at: "2026-04-28T12:00:00.000Z"
+        }))
+      } as D1Result<T>);
+    }
+
+    if (this.sql.includes("FROM ynab_money_movements")) {
+      return Promise.resolve({
         results: [
           {
-            endpoint: "transactions",
-            health_status: "ok",
-            last_successful_sync_at: "2026-04-28T12:00:00.000Z"
+            id: "move-1",
+            month: "2026-04-01",
+            moved_at: "2026-04-12T10:00:00.000Z",
+            note: "Cover groceries",
+            money_movement_group_id: "movement-group-1",
+            performed_by_user_id: "user-1",
+            from_category_id: "category-ready",
+            from_category_name: "Ready to Assign",
+            to_category_id: "category-grocery",
+            to_category_name: "Groceries",
+            amount_milliunits: 12000,
+            deleted: 0
+          }
+        ]
+      } as D1Result<T>);
+    }
+
+    if (this.sql.includes("FROM ynab_scheduled_transactions")) {
+      return Promise.resolve({
+        results: [
+          {
+            id: "scheduled-1",
+            date_first: "2026-04-01",
+            date_next: "2026-05-01",
+            amount_milliunits: -45000,
+            payee_name: "Rent",
+            category_name: "Housing",
+            account_name: "Checking",
+            flag_color: "blue",
+            flag_name: "review",
+            deleted: 0
           }
         ]
       } as D1Result<T>);
@@ -95,6 +133,46 @@ describe("DB-backed tool registration", () => {
         })
       ])
     );
+
+    const moneyMovements = definitions.find((definition) => definition.name === "ynab_get_money_movements");
+    await expect(moneyMovements?.execute({})).resolves.toMatchObject({
+      status: "ok",
+      data_freshness: {
+        required_endpoints: ["money_movements"]
+      },
+      data: {
+        money_movements: [
+          {
+            id: "move-1",
+            amount: "12.00",
+            from_category_name: "Ready to Assign",
+            to_category_name: "Groceries"
+          }
+        ]
+      }
+    });
+    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_money_movements"))).toBe(true);
+
+    const scheduledTransactions = definitions.find(
+      (definition) => definition.name === "ynab_list_scheduled_transactions"
+    );
+    await expect(scheduledTransactions?.execute({})).resolves.toMatchObject({
+      status: "ok",
+      data_freshness: {
+        required_endpoints: ["scheduled_transactions"]
+      },
+      data: {
+        scheduled_transactions: [
+          {
+            id: "scheduled-1",
+            amount: "-45.00",
+            payee_name: "Rent",
+            flag_color: "blue"
+          }
+        ]
+      }
+    });
+    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_scheduled_transactions"))).toBe(true);
 
     const unavailableMessages = await Promise.all(
       definitions.map(async (definition) => {

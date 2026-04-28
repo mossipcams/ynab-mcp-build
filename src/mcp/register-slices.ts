@@ -4,9 +4,13 @@ import type { AppDependencies } from "../app/dependencies.js";
 import { resolveYnabClient } from "../app/dependencies.js";
 import { createYnabReadModelClient } from "../platform/ynab/read-model/client.js";
 import { createReadModelFreshness } from "../platform/ynab/read-model/freshness.js";
+import { createMoneyMovementsRepository } from "../platform/ynab/read-model/money-movements-repository.js";
+import { createScheduledTransactionsRepository } from "../platform/ynab/read-model/scheduled-transactions-repository.js";
 import type { AppEnv } from "../shared/env.js";
 import type { SliceToolDefinition } from "../shared/tool-definition.js";
 import { getAccountToolDefinitions } from "../slices/accounts/index.js";
+import { getDbMoneyMovementToolDefinitions } from "../slices/db-money-movements/index.js";
+import { getDbScheduledTransactionToolDefinitions } from "../slices/db-scheduled-transactions/index.js";
 import { getFinancialHealthToolDefinitions } from "../slices/financial-health/index.js";
 import { getMetaToolDefinitions } from "../slices/meta/index.js";
 import { getMoneyMovementToolDefinitions } from "../slices/money-movements/index.js";
@@ -60,9 +64,16 @@ function getDbBackedToolDefinitions(env: AppEnv, dependencies: AppDependencies) 
     ...getMetaToolDefinitions(env, ynabClient).filter((definition) => definition.name !== "ynab_get_mcp_version"),
     ...getPlanToolDefinitions(ynabClient),
     ...getAccountToolDefinitions(ynabClient),
-    ...getTransactionToolDefinitions(ynabClient),
+    ...getTransactionToolDefinitions(ynabClient).filter((definition) => !definition.name.includes("scheduled")),
+    ...getDbScheduledTransactionToolDefinitions({
+      defaultPlanId: env.ynabDefaultPlanId,
+      scheduledTransactionsRepository: createScheduledTransactionsRepository(env.ynabDatabase)
+    }),
     ...getPayeeToolDefinitions(ynabClient),
-    ...getMoneyMovementToolDefinitions(ynabClient),
+    ...getDbMoneyMovementToolDefinitions({
+      defaultPlanId: env.ynabDefaultPlanId,
+      moneyMovementsRepository: createMoneyMovementsRepository(env.ynabDatabase)
+    }),
     ...getFinancialHealthToolDefinitions(ynabClient)
   ];
 
@@ -90,7 +101,7 @@ function requiredEndpointsForTool(name: string) {
   }
 
   if (name.includes("money_movement")) {
-    return ["transactions", "accounts"];
+    return ["money_movements"];
   }
 
   if (name.includes("scheduled") || name.includes("upcoming")) {
