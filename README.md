@@ -42,6 +42,10 @@ The initial schema lives in:
 migrations/0001_ynab_read_model.sql
 ```
 
+The table shapes are aligned to the official YNAB OpenAPI schema used by the
+official `ynab` JavaScript SDK. The current validation target is SDK `4.1.0`,
+generated from YNAB server specification `1.83.0`.
+
 It creates:
 
 - sync coordination tables: `ynab_sync_state`, `ynab_sync_runs`
@@ -49,6 +53,16 @@ It creates:
 - indexes for common MCP reads
 
 Money values are stored as integer milliunits.
+
+Money movements are modeled as category movements from the API:
+
+- `ynab_money_movements` stores `from_category_id`, `to_category_id`, `money_movement_group_id`, and `moved_at`
+- `ynab_money_movement_groups` stores `group_created_at`, `month`, `note`, and `performed_by_user_id`
+
+The official money movement SDK methods do not currently expose a
+`lastKnowledgeOfServer` argument, so those endpoints should be treated as
+bounded refreshes rather than normal delta cursor sync until confirmed against a
+live YNAB account.
 
 ## Configuration
 
@@ -110,4 +124,3 @@ The transaction sync service:
 - Only `ynab_search_transactions` is rebuilt against D1 so far.
 - Scheduled Worker/admin refresh wiring still needs to be connected to deployment policy.
 - Initial bootstrap for large budgets should be handled carefully because Worker/D1 limits make unbounded imports unsafe.
-- `wrangler.jsonc` uses a placeholder D1 `database_id`; replace it with the real database id before deploy.

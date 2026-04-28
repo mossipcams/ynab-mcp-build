@@ -27,6 +27,7 @@ export type TransactionSearchRow = {
   memo?: string | null;
   cleared?: string | null;
   approved?: number | null;
+  flag_color?: string | null;
   flag_name?: string | null;
   account_id?: string | null;
   account_name?: string | null;
@@ -35,6 +36,12 @@ export type TransactionSearchRow = {
   category_id?: string | null;
   category_name?: string | null;
   transfer_account_id?: string | null;
+  transfer_transaction_id?: string | null;
+  matched_transaction_id?: string | null;
+  import_id?: string | null;
+  import_payee_name?: string | null;
+  import_payee_name_original?: string | null;
+  debt_transaction_type?: string | null;
   deleted: number;
 };
 
@@ -53,8 +60,8 @@ function placeholders(count: number) {
 export function createTransactionsRepository(database: D1Database) {
   return {
     async upsertTransactions(input: UpsertTransactionsInput) {
-      const statements = input.transactions.map((transaction) =>
-        database
+      const statements = input.transactions.flatMap((transaction) => {
+        const transactionStatement = database
           .prepare(
             `INSERT INTO ynab_transactions (
                plan_id,
@@ -64,6 +71,7 @@ export function createTransactionsRepository(database: D1Database) {
                memo,
                cleared,
                approved,
+               flag_color,
                flag_name,
                account_id,
                account_name,
@@ -72,17 +80,24 @@ export function createTransactionsRepository(database: D1Database) {
                category_id,
                category_name,
                transfer_account_id,
+               transfer_transaction_id,
+               matched_transaction_id,
+               import_id,
+               import_payee_name,
+               import_payee_name_original,
+               debt_transaction_type,
                deleted,
                synced_at,
                updated_at
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(plan_id, id) DO UPDATE SET
                date = excluded.date,
                amount_milliunits = excluded.amount_milliunits,
                memo = excluded.memo,
                cleared = excluded.cleared,
                approved = excluded.approved,
+               flag_color = excluded.flag_color,
                flag_name = excluded.flag_name,
                account_id = excluded.account_id,
                account_name = excluded.account_name,
@@ -91,6 +106,12 @@ export function createTransactionsRepository(database: D1Database) {
                category_id = excluded.category_id,
                category_name = excluded.category_name,
                transfer_account_id = excluded.transfer_account_id,
+               transfer_transaction_id = excluded.transfer_transaction_id,
+               matched_transaction_id = excluded.matched_transaction_id,
+               import_id = excluded.import_id,
+               import_payee_name = excluded.import_payee_name,
+               import_payee_name_original = excluded.import_payee_name_original,
+               debt_transaction_type = excluded.debt_transaction_type,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
                updated_at = excluded.updated_at`
@@ -103,6 +124,7 @@ export function createTransactionsRepository(database: D1Database) {
             transaction.memo ?? null,
             transaction.cleared ?? null,
             toIntegerBoolean(transaction.approved),
+            transaction.flag_color ?? null,
             transaction.flag_name ?? null,
             transaction.account_id ?? null,
             transaction.account_name ?? null,
@@ -111,11 +133,70 @@ export function createTransactionsRepository(database: D1Database) {
             transaction.category_id ?? null,
             transaction.category_name ?? null,
             transaction.transfer_account_id ?? null,
+            transaction.transfer_transaction_id ?? null,
+            transaction.matched_transaction_id ?? null,
+            transaction.import_id ?? null,
+            transaction.import_payee_name ?? null,
+            transaction.import_payee_name_original ?? null,
+            transaction.debt_transaction_type ?? null,
             transaction.deleted ? 1 : 0,
             input.syncedAt,
             input.syncedAt
-          )
-      );
+          );
+
+        const subtransactionStatements = (transaction.subtransactions ?? []).map((subtransaction) =>
+          database
+            .prepare(
+              `INSERT INTO ynab_subtransactions (
+                 plan_id,
+                 transaction_id,
+                 id,
+                 amount_milliunits,
+                 memo,
+                 payee_id,
+                 payee_name,
+                 category_id,
+                 category_name,
+                 transfer_account_id,
+                 transfer_transaction_id,
+                 deleted,
+                 synced_at,
+                 updated_at
+               )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(plan_id, transaction_id, id) DO UPDATE SET
+                 amount_milliunits = excluded.amount_milliunits,
+                 memo = excluded.memo,
+                 payee_id = excluded.payee_id,
+                 payee_name = excluded.payee_name,
+                 category_id = excluded.category_id,
+                 category_name = excluded.category_name,
+                 transfer_account_id = excluded.transfer_account_id,
+                 transfer_transaction_id = excluded.transfer_transaction_id,
+                 deleted = excluded.deleted,
+                 synced_at = excluded.synced_at,
+                 updated_at = excluded.updated_at`
+            )
+            .bind(
+              input.planId,
+              subtransaction.transaction_id ?? transaction.id,
+              subtransaction.id,
+              subtransaction.amount,
+              subtransaction.memo ?? null,
+              subtransaction.payee_id ?? null,
+              subtransaction.payee_name ?? null,
+              subtransaction.category_id ?? null,
+              subtransaction.category_name ?? null,
+              subtransaction.transfer_account_id ?? null,
+              subtransaction.transfer_transaction_id ?? null,
+              subtransaction.deleted ? 1 : 0,
+              input.syncedAt,
+              input.syncedAt
+            )
+        );
+
+        return [transactionStatement, ...subtransactionStatements];
+      });
 
       if (statements.length > 0) {
         await database.batch(statements);
@@ -185,6 +266,7 @@ export function createTransactionsRepository(database: D1Database) {
                   memo,
                   cleared,
                   approved,
+                  flag_color,
                   flag_name,
                   account_id,
                   account_name,
@@ -193,6 +275,12 @@ export function createTransactionsRepository(database: D1Database) {
                   category_id,
                   category_name,
                   transfer_account_id,
+                  transfer_transaction_id,
+                  matched_transaction_id,
+                  import_id,
+                  import_payee_name,
+                  import_payee_name_original,
+                  debt_transaction_type,
                   deleted
            FROM ynab_transactions
            WHERE ${where.join(" AND ")}

@@ -79,6 +79,10 @@ function toDisplayTransaction(row: TransactionSearchRow) {
     amount: formatAmountMilliunits(row.amount_milliunits),
     amount_milliunits: row.amount_milliunits,
     memo: row.memo,
+    cleared: row.cleared,
+    approved: row.approved === undefined || row.approved === null ? undefined : Boolean(row.approved),
+    flag_color: row.flag_color,
+    flag_name: row.flag_name,
     account_id: row.account_id,
     account_name: row.account_name,
     payee_id: row.payee_id,
@@ -86,6 +90,12 @@ function toDisplayTransaction(row: TransactionSearchRow) {
     category_id: row.category_id,
     category_name: row.category_name,
     transfer_account_id: row.transfer_account_id,
+    transfer_transaction_id: row.transfer_transaction_id,
+    matched_transaction_id: row.matched_transaction_id,
+    import_id: row.import_id,
+    import_payee_name: row.import_payee_name,
+    import_payee_name_original: row.import_payee_name_original,
+    debt_transaction_type: row.debt_transaction_type,
     deleted: row.deleted ? true : undefined
   }).filter(([, value]) => value !== undefined));
 }

@@ -9,6 +9,26 @@ function readMigration() {
   return readFileSync(migrationPath, "utf8");
 }
 
+function tableSql(sql: string, tableName: string) {
+  const match = new RegExp(
+    `CREATE TABLE IF NOT EXISTS ${tableName} \\((?<body>[\\s\\S]*?)\\n\\);`,
+    "u"
+  ).exec(sql);
+
+  expect(match, `${tableName} table should exist`).not.toBeNull();
+  return match?.groups?.body ?? "";
+}
+
+function expectColumns(sql: string, tableName: string, columnNames: string[]) {
+  const body = tableSql(sql, tableName);
+
+  for (const columnName of columnNames) {
+    expect(body, `${tableName} should include ${columnName}`).toMatch(
+      new RegExp(`\\b${columnName}\\b`, "u")
+    );
+  }
+}
+
 describe("YNAB D1 read model schema", () => {
   it("creates sync coordination tables for endpoint cursors and bounded runs", () => {
     const sql = readMigration();
@@ -72,5 +92,92 @@ describe("YNAB D1 read model schema", () => {
     ]) {
       expect(sql).toMatch(new RegExp(`CREATE INDEX IF NOT EXISTS ${indexName}`, "u"));
     }
+  });
+
+  it("keeps API-backed account fields needed for DB-backed read tools", () => {
+    const sql = readMigration();
+
+    expectColumns(sql, "ynab_accounts", [
+      "note",
+      "cleared_balance_milliunits",
+      "uncleared_balance_milliunits",
+      "transfer_payee_id",
+      "direct_import_linked",
+      "direct_import_in_error",
+      "last_reconciled_at"
+    ]);
+  });
+
+  it("keeps API-backed category and month fields needed for DB-backed read tools", () => {
+    const sql = readMigration();
+
+    expectColumns(sql, "ynab_categories", [
+      "original_category_group_id",
+      "note",
+      "goal_day",
+      "goal_cadence",
+      "goal_cadence_frequency",
+      "goal_creation_month",
+      "goal_percentage_complete",
+      "goal_months_to_budget",
+      "goal_under_funded_milliunits",
+      "goal_overall_funded_milliunits",
+      "goal_overall_left_milliunits"
+    ]);
+    expectColumns(sql, "ynab_months", ["note"]);
+    expectColumns(sql, "ynab_month_categories", [
+      "original_category_group_id",
+      "note",
+      "goal_day",
+      "goal_cadence",
+      "goal_cadence_frequency",
+      "goal_creation_month",
+      "goal_percentage_complete",
+      "goal_months_to_budget",
+      "goal_overall_funded_milliunits",
+      "goal_overall_left_milliunits"
+    ]);
+  });
+
+  it("keeps API-backed transaction fields needed for DB-backed read tools", () => {
+    const sql = readMigration();
+
+    expectColumns(sql, "ynab_transactions", [
+      "flag_color",
+      "transfer_transaction_id",
+      "matched_transaction_id",
+      "import_id",
+      "import_payee_name",
+      "import_payee_name_original",
+      "debt_transaction_type"
+    ]);
+    expectColumns(sql, "ynab_subtransactions", ["transfer_transaction_id"]);
+  });
+
+  it("keeps API-backed scheduled transaction fields needed for DB-backed read tools", () => {
+    const sql = readMigration();
+
+    expectColumns(sql, "ynab_scheduled_transactions", ["flag_color", "flag_name"]);
+  });
+
+  it("models money movements as category movements from the YNAB API", () => {
+    const sql = readMigration();
+
+    expectColumns(sql, "ynab_money_movements", [
+      "month",
+      "moved_at",
+      "note",
+      "money_movement_group_id",
+      "performed_by_user_id",
+      "from_category_id",
+      "to_category_id",
+      "amount_milliunits"
+    ]);
+    expectColumns(sql, "ynab_money_movement_groups", [
+      "group_created_at",
+      "month",
+      "note",
+      "performed_by_user_id"
+    ]);
   });
 });

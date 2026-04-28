@@ -69,7 +69,14 @@ CREATE TABLE IF NOT EXISTS ynab_accounts (
   type TEXT NOT NULL,
   on_budget INTEGER,
   closed INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
   balance_milliunits INTEGER NOT NULL DEFAULT 0,
+  cleared_balance_milliunits INTEGER NOT NULL DEFAULT 0,
+  uncleared_balance_milliunits INTEGER NOT NULL DEFAULT 0,
+  transfer_payee_id TEXT,
+  direct_import_linked INTEGER,
+  direct_import_in_error INTEGER,
+  last_reconciled_at TEXT,
   deleted INTEGER NOT NULL DEFAULT 0,
   synced_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -92,7 +99,9 @@ CREATE TABLE IF NOT EXISTS ynab_categories (
   id TEXT NOT NULL,
   category_group_id TEXT,
   category_group_name TEXT,
+  original_category_group_id TEXT,
   name TEXT NOT NULL,
+  note TEXT,
   hidden INTEGER NOT NULL DEFAULT 0,
   budgeted_milliunits INTEGER,
   activity_milliunits INTEGER,
@@ -102,6 +111,15 @@ CREATE TABLE IF NOT EXISTS ynab_categories (
   goal_target_date TEXT,
   goal_target_month TEXT,
   goal_needs_whole_amount INTEGER,
+  goal_day INTEGER,
+  goal_cadence INTEGER,
+  goal_cadence_frequency INTEGER,
+  goal_creation_month TEXT,
+  goal_percentage_complete INTEGER,
+  goal_months_to_budget INTEGER,
+  goal_under_funded_milliunits INTEGER,
+  goal_overall_funded_milliunits INTEGER,
+  goal_overall_left_milliunits INTEGER,
   goal_snoozed_at TEXT,
   deleted INTEGER NOT NULL DEFAULT 0,
   synced_at TEXT NOT NULL,
@@ -112,6 +130,7 @@ CREATE TABLE IF NOT EXISTS ynab_categories (
 CREATE TABLE IF NOT EXISTS ynab_months (
   plan_id TEXT NOT NULL,
   month TEXT NOT NULL,
+  note TEXT,
   income_milliunits INTEGER,
   budgeted_milliunits INTEGER,
   activity_milliunits INTEGER,
@@ -129,11 +148,27 @@ CREATE TABLE IF NOT EXISTS ynab_month_categories (
   category_id TEXT NOT NULL,
   category_group_id TEXT,
   category_group_name TEXT,
+  original_category_group_id TEXT,
   name TEXT NOT NULL,
+  note TEXT,
   budgeted_milliunits INTEGER NOT NULL DEFAULT 0,
   activity_milliunits INTEGER NOT NULL DEFAULT 0,
   balance_milliunits INTEGER NOT NULL DEFAULT 0,
   goal_under_funded_milliunits INTEGER,
+  goal_type TEXT,
+  goal_target_milliunits INTEGER,
+  goal_target_date TEXT,
+  goal_target_month TEXT,
+  goal_needs_whole_amount INTEGER,
+  goal_day INTEGER,
+  goal_cadence INTEGER,
+  goal_cadence_frequency INTEGER,
+  goal_creation_month TEXT,
+  goal_percentage_complete INTEGER,
+  goal_months_to_budget INTEGER,
+  goal_overall_funded_milliunits INTEGER,
+  goal_overall_left_milliunits INTEGER,
+  goal_snoozed_at TEXT,
   hidden INTEGER NOT NULL DEFAULT 0,
   deleted INTEGER NOT NULL DEFAULT 0,
   synced_at TEXT NOT NULL,
@@ -172,6 +207,7 @@ CREATE TABLE IF NOT EXISTS ynab_transactions (
   memo TEXT,
   cleared TEXT,
   approved INTEGER,
+  flag_color TEXT,
   flag_name TEXT,
   account_id TEXT,
   account_name TEXT,
@@ -180,6 +216,12 @@ CREATE TABLE IF NOT EXISTS ynab_transactions (
   category_id TEXT,
   category_name TEXT,
   transfer_account_id TEXT,
+  transfer_transaction_id TEXT,
+  matched_transaction_id TEXT,
+  import_id TEXT,
+  import_payee_name TEXT,
+  import_payee_name_original TEXT,
+  debt_transaction_type TEXT,
   deleted INTEGER NOT NULL DEFAULT 0,
   synced_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -197,6 +239,7 @@ CREATE TABLE IF NOT EXISTS ynab_subtransactions (
   category_id TEXT,
   category_name TEXT,
   transfer_account_id TEXT,
+  transfer_transaction_id TEXT,
   deleted INTEGER NOT NULL DEFAULT 0,
   synced_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -211,6 +254,8 @@ CREATE TABLE IF NOT EXISTS ynab_scheduled_transactions (
   frequency TEXT,
   amount_milliunits INTEGER NOT NULL,
   memo TEXT,
+  flag_color TEXT,
+  flag_name TEXT,
   account_id TEXT,
   account_name TEXT,
   payee_id TEXT,
@@ -244,14 +289,14 @@ CREATE TABLE IF NOT EXISTS ynab_scheduled_subtransactions (
 CREATE TABLE IF NOT EXISTS ynab_money_movements (
   plan_id TEXT NOT NULL,
   id TEXT NOT NULL,
-  date TEXT NOT NULL,
+  month TEXT,
+  moved_at TEXT,
+  note TEXT,
+  money_movement_group_id TEXT,
+  performed_by_user_id TEXT,
+  from_category_id TEXT,
+  to_category_id TEXT,
   amount_milliunits INTEGER NOT NULL,
-  from_account_id TEXT,
-  from_account_name TEXT,
-  to_account_id TEXT,
-  to_account_name TEXT,
-  payee_id TEXT,
-  payee_name TEXT,
   deleted INTEGER NOT NULL DEFAULT 0,
   synced_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -261,13 +306,10 @@ CREATE TABLE IF NOT EXISTS ynab_money_movements (
 CREATE TABLE IF NOT EXISTS ynab_money_movement_groups (
   plan_id TEXT NOT NULL,
   id TEXT NOT NULL,
-  from_account_id TEXT,
-  from_account_name TEXT,
-  to_account_id TEXT,
-  to_account_name TEXT,
-  total_amount_milliunits INTEGER NOT NULL DEFAULT 0,
-  movement_count INTEGER NOT NULL DEFAULT 0,
-  latest_date TEXT,
+  group_created_at TEXT NOT NULL,
+  month TEXT NOT NULL,
+  note TEXT,
+  performed_by_user_id TEXT,
   deleted INTEGER NOT NULL DEFAULT 0,
   synced_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -308,10 +350,16 @@ CREATE INDEX IF NOT EXISTS idx_ynab_scheduled_transactions_next
   ON ynab_scheduled_transactions (plan_id, date_next);
 
 CREATE INDEX IF NOT EXISTS idx_ynab_money_movements_plan_date
-  ON ynab_money_movements (plan_id, date DESC, id);
+  ON ynab_money_movements (plan_id, moved_at DESC, id);
 
-CREATE INDEX IF NOT EXISTS idx_ynab_money_movements_from_account
-  ON ynab_money_movements (plan_id, from_account_id);
+CREATE INDEX IF NOT EXISTS idx_ynab_money_movements_month
+  ON ynab_money_movements (plan_id, month);
 
-CREATE INDEX IF NOT EXISTS idx_ynab_money_movements_to_account
-  ON ynab_money_movements (plan_id, to_account_id);
+CREATE INDEX IF NOT EXISTS idx_ynab_money_movements_from_category
+  ON ynab_money_movements (plan_id, from_category_id);
+
+CREATE INDEX IF NOT EXISTS idx_ynab_money_movements_to_category
+  ON ynab_money_movements (plan_id, to_category_id);
+
+CREATE INDEX IF NOT EXISTS idx_ynab_money_movement_groups_month
+  ON ynab_money_movement_groups (plan_id, month);
