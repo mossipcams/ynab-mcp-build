@@ -454,7 +454,7 @@ describe("initial population service", () => {
     ]);
   });
 
-  it("tries the YNAB default plan shortcut before spending a request on plan discovery", async () => {
+  it("discovers a real plan id before exporting when no plan id is configured", async () => {
     const { calls, client } = createFakeYnabClient({
       async getPlanExport(planId) {
         calls.push("getPlanExport" as CallName);
@@ -463,7 +463,7 @@ describe("initial population service", () => {
           plan: {
             accounts: [],
             categoryGroups: [],
-            id: planId === "default" ? "plan-1" : planId,
+            id: planId,
             months: [],
             name: "Budget",
             payeeLocations: [],
@@ -490,10 +490,10 @@ describe("initial population service", () => {
 
     expect(result).toMatchObject({
       planIds: ["plan-1"],
-      requestsUsed: 3,
+      requestsUsed: 4,
       status: "ok"
     });
-    expect(calls).toEqual(["getPlanExport", "listMoneyMovements", "listMoneyMovementGroups"]);
+    expect(calls).toEqual(["listPlans", "getPlanExport", "listMoneyMovements", "listMoneyMovementGroups"]);
   });
 
   it("dry-runs one plan with broad YNAB endpoints and no D1 writes", async () => {
