@@ -6,8 +6,12 @@
   "description": "TypeScript-first Cloudflare Workers rebuild of ynab-mcp-bridge",
   "scripts": {
     "cf-typegen": "wrangler types",
+    "ci": "node scripts/run-ci.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "prepare": "node scripts/install-hooks.mjs",
+    "pr": "node scripts/pre-pr.mjs",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:mutation": "stryker run",
