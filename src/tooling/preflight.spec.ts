@@ -26,9 +26,11 @@ describe("repository preflight tooling", () => {
 
   it("wires package scripts to the preflight entrypoints", () => {
     const packageJson = JSON.parse(readRootFile("package.json")) as {
+      devDependencies?: Record<string, string>;
       scripts?: Record<string, string>;
     };
 
+    expect(packageJson.devDependencies).toHaveProperty("@types/node");
     expect(packageJson.scripts).toMatchObject({
       ci: "node scripts/run-ci.mjs",
       "hooks:install": "node scripts/install-hooks.mjs",
