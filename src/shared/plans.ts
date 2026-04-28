@@ -1,6 +1,24 @@
 import type { YnabClient } from "../platform/ynab/client.js";
+import type { YnabDefaultPlan, YnabPlanList } from "../platform/ynab/client.js";
 
 const defaultPlanIdByClient = new WeakMap<YnabClient, Promise<string>>();
+
+export function getKnownDefaultPlan(plans: YnabPlanList): YnabDefaultPlan | null {
+  if (plans.defaultPlan?.id) {
+    return plans.defaultPlan;
+  }
+
+  if (plans.plans.length === 1) {
+    const onlyPlan = plans.plans[0];
+
+    return {
+      id: onlyPlan.id,
+      name: onlyPlan.name
+    };
+  }
+
+  return null;
+}
 
 function resolveDefaultPlanId(ynabClient: YnabClient) {
   const cachedPlanId = defaultPlanIdByClient.get(ynabClient);
@@ -11,17 +29,13 @@ function resolveDefaultPlanId(ynabClient: YnabClient) {
 
   const planId = ynabClient.listPlans()
     .then((plans) => {
-      if (plans.defaultPlan?.id) {
-        return plans.defaultPlan.id;
+      const defaultPlan = getKnownDefaultPlan(plans);
+
+      if (defaultPlan) {
+        return defaultPlan.id;
       }
 
-      const firstPlanId = plans.plans[0]?.id;
-
-      if (firstPlanId) {
-        return firstPlanId;
-      }
-
-      throw new Error("No YNAB plan is available.");
+      throw new Error("No default YNAB plan is available.");
     })
     .catch((error) => {
       defaultPlanIdByClient.delete(ynabClient);

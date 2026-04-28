@@ -34,4 +34,48 @@ describe("resolvePlanId", () => {
 
     expect(ynabClient.listPlans).not.toHaveBeenCalled();
   });
+
+  it("uses YNAB's default plan even when multiple plans exist", async () => {
+    const ynabClient = {
+      listPlans: vi.fn().mockResolvedValue({
+        defaultPlan: {
+          id: "plan-default",
+          name: "Default"
+        },
+        plans: [
+          { id: "plan-first", name: "First" },
+          { id: "plan-default", name: "Default" }
+        ]
+      })
+    };
+
+    await expect(resolvePlanId(ynabClient as never, undefined)).resolves.toBe("plan-default");
+  });
+
+  it("infers the default plan when YNAB returns exactly one plan without a default", async () => {
+    const ynabClient = {
+      listPlans: vi.fn().mockResolvedValue({
+        defaultPlan: null,
+        plans: [{ id: "plan-only", name: "Only plan" }]
+      })
+    };
+
+    await expect(resolvePlanId(ynabClient as never, undefined)).resolves.toBe("plan-only");
+  });
+
+  it("does not infer a default plan when YNAB returns multiple plans without a default", async () => {
+    const ynabClient = {
+      listPlans: vi.fn().mockResolvedValue({
+        defaultPlan: null,
+        plans: [
+          { id: "plan-1", name: "One" },
+          { id: "plan-2", name: "Two" }
+        ]
+      })
+    };
+
+    await expect(resolvePlanId(ynabClient as never, undefined)).rejects.toThrow(
+      "No default YNAB plan is available."
+    );
+  });
 });
