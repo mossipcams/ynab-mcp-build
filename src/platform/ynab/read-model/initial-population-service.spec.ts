@@ -206,6 +206,7 @@ function createFakeYnabClient(overrides: Partial<YnabClient> = {}) {
 
 function createFakeRepositories() {
   const writes: string[] = [];
+  const seededSyncEndpoints: string[] = [];
 
   return {
     initialPopulationRepository: {
@@ -281,6 +282,24 @@ function createFakeRepositories() {
         };
       }
     },
+    syncStateRepository: {
+      async acquireLease(input: { endpoint: string }) {
+        seededSyncEndpoints.push(`lease:${input.endpoint}`);
+
+        return {
+          acquired: true as const,
+          leaseExpiresAt: "2026-04-28T12:01:00.000Z"
+        };
+      },
+      async advanceCursor(input: { endpoint: string; serverKnowledge: number }) {
+        seededSyncEndpoints.push(`${input.endpoint}:${input.serverKnowledge}`);
+
+        return {
+          advanced: true as const
+        };
+      }
+    },
+    seededSyncEndpoints,
     writes
   };
 }
@@ -371,6 +390,7 @@ describe("initial population service", () => {
       initialPopulationRepository: repositories.initialPopulationRepository,
       maxRequests: 50,
       now: () => "2026-04-28T12:00:00.000Z",
+      syncStateRepository: repositories.syncStateRepository,
       transactionsRepository: repositories.transactionsRepository,
       ynabClient: client
     });
@@ -399,6 +419,28 @@ describe("initial population service", () => {
       users: 0
     });
     expect(calls).toEqual(["getPlanExport", "listMoneyMovements", "listMoneyMovementGroups"]);
+    expect(repositories.seededSyncEndpoints).toEqual([
+      "lease:plans",
+      "plans:123",
+      "lease:plan_settings",
+      "plan_settings:123",
+      "lease:accounts",
+      "accounts:123",
+      "lease:categories",
+      "categories:123",
+      "lease:months",
+      "months:123",
+      "lease:payees",
+      "payees:123",
+      "lease:payee_locations",
+      "payee_locations:123",
+      "lease:scheduled_transactions",
+      "scheduled_transactions:123",
+      "lease:transactions",
+      "transactions:123",
+      "lease:money_movements",
+      "money_movements:789"
+    ]);
   });
 
   it("uses one full export per plan when explicitly populating all plans", async () => {

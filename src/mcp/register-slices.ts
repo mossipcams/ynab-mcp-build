@@ -9,6 +9,7 @@ import { createInitialPopulationRepository } from "../platform/ynab/read-model/i
 import { createInitialPopulationService } from "../platform/ynab/read-model/initial-population-service.js";
 import { createMoneyMovementsRepository } from "../platform/ynab/read-model/money-movements-repository.js";
 import { createScheduledTransactionsRepository } from "../platform/ynab/read-model/scheduled-transactions-repository.js";
+import { createSyncStateRepository } from "../platform/ynab/read-model/sync-state-repository.js";
 import { createTransactionsRepository } from "../platform/ynab/read-model/transactions-repository.js";
 import type { AppEnv } from "../shared/env.js";
 import type { SliceToolDefinition } from "../shared/tool-definition.js";
@@ -88,6 +89,7 @@ function getDbBackedToolDefinitions(env: AppEnv, dependencies: AppDependencies) 
       initialPopulationRepository: createInitialPopulationRepository(env.ynabDatabase),
       maxRequests: env.ynabPopulateMaxRequestsPerRun,
       now,
+      syncStateRepository: createSyncStateRepository(env.ynabDatabase),
       transactionsRepository,
       ynabClient: resolveYnabClient(env, dependencies)
     });

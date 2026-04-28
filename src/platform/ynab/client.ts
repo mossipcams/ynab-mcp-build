@@ -411,7 +411,7 @@ type YnabPlanExportResponse = {
   };
 };
 
-type YnabAccountRecord = {
+export type YnabAccountRecord = {
   id: string;
   name: string;
   type: string;
@@ -428,7 +428,7 @@ type YnabAccountRecord = {
   deleted?: boolean;
 };
 
-type YnabCategoryRecord = {
+export type YnabCategoryRecord = {
   id: string;
   category_group_id?: string | null;
   category_group_name?: string;
@@ -457,7 +457,7 @@ type YnabCategoryRecord = {
   deleted: boolean;
 };
 
-type YnabCategoryGroupRecord = {
+export type YnabCategoryGroupRecord = {
   id: string;
   name: string;
   hidden: boolean;
@@ -465,7 +465,7 @@ type YnabCategoryGroupRecord = {
   categories?: YnabCategoryRecord[];
 };
 
-type YnabPlanMonthRecord = {
+export type YnabPlanMonthRecord = {
   month: string;
   note?: string | null;
   income?: number;
@@ -616,7 +616,7 @@ type YnabTransactionResponse = {
   };
 };
 
-type YnabScheduledTransactionRecord = {
+export type YnabScheduledTransactionRecord = {
   id: string;
   date_first: string;
   date_next?: string | null;
@@ -648,7 +648,7 @@ type YnabScheduledTransactionResponse = {
   };
 };
 
-type YnabPayeeRecord = {
+export type YnabPayeeRecord = {
   id: string;
   name: string;
   transfer_account_id?: string | null;
@@ -667,7 +667,7 @@ type YnabPayeeResponse = {
   };
 };
 
-type YnabPayeeLocationRecord = {
+export type YnabPayeeLocationRecord = {
   id: string;
   payee_id?: string | null;
   latitude?: number | string | null;
@@ -802,7 +802,7 @@ function toYnabTransaction(transaction: YnabTransactionRecord): YnabTransaction 
   return mapTransactionRecord(transaction);
 }
 
-function toYnabAccount(account: YnabAccountRecord): YnabAccountSummary {
+export function toYnabAccount(account: YnabAccountRecord): YnabAccountSummary {
   return {
     balance: account.balance,
     clearedBalance: account.cleared_balance,
@@ -821,7 +821,7 @@ function toYnabAccount(account: YnabAccountRecord): YnabAccountSummary {
   };
 }
 
-function toYnabCategory(category: YnabCategoryRecord): YnabCategorySummary {
+export function toYnabCategory(category: YnabCategoryRecord): YnabCategorySummary {
   return {
     activity: category.activity,
     balance: category.balance,
@@ -852,7 +852,7 @@ function toYnabCategory(category: YnabCategoryRecord): YnabCategorySummary {
   };
 }
 
-function toYnabCategoryGroup(
+export function toYnabCategoryGroup(
   group: YnabCategoryGroupRecord,
   categoriesByGroupId: Map<string, YnabCategorySummary>[]
 ): YnabCategoryGroupSummary {
@@ -868,7 +868,7 @@ function toYnabCategoryGroup(
   };
 }
 
-function groupCategoriesByGroupId(categories: YnabCategorySummary[]) {
+export function groupCategoriesByGroupId(categories: YnabCategorySummary[]) {
   const maps: Array<Map<string, YnabCategorySummary>> = [];
 
   for (const category of categories) {
@@ -882,7 +882,7 @@ function groupCategoriesByGroupId(categories: YnabCategorySummary[]) {
   return maps;
 }
 
-function toYnabMonth(month: YnabPlanMonthRecord): YnabPlanMonthDetail {
+export function toYnabMonth(month: YnabPlanMonthRecord): YnabPlanMonthDetail {
   return {
     activity: month.activity,
     ageOfMoney: month.age_of_money ?? undefined,
@@ -898,7 +898,7 @@ function toYnabMonth(month: YnabPlanMonthRecord): YnabPlanMonthDetail {
   };
 }
 
-function toYnabScheduledTransaction(transaction: YnabScheduledTransactionRecord): YnabScheduledTransaction {
+export function toYnabScheduledTransaction(transaction: YnabScheduledTransactionRecord): YnabScheduledTransaction {
   return {
     id: transaction.id,
     dateFirst: transaction.date_first,
@@ -931,7 +931,7 @@ function toYnabScheduledTransaction(transaction: YnabScheduledTransactionRecord)
   };
 }
 
-function toYnabPayee(payee: YnabPayeeRecord): YnabPayee {
+export function toYnabPayee(payee: YnabPayeeRecord): YnabPayee {
   return {
     id: payee.id,
     name: payee.name,
@@ -940,7 +940,7 @@ function toYnabPayee(payee: YnabPayeeRecord): YnabPayee {
   };
 }
 
-function toYnabPayeeLocation(location: YnabPayeeLocationRecord): YnabPayeeLocation {
+export function toYnabPayeeLocation(location: YnabPayeeLocationRecord): YnabPayeeLocation {
   return {
     id: location.id,
     payeeId: location.payee_id,

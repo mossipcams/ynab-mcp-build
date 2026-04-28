@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import worker from "./index.js";
 
@@ -46,6 +46,22 @@ function createOAuthProviderEnv(): Env {
 }
 
 describe("Worker OAuth provider", () => {
+  it("exposes a scheduled handler for Cloudflare cron refreshes", async () => {
+    const waitUntil = vi.fn();
+
+    worker.scheduled!(
+      { cron: "*/15 * * * *", scheduledTime: 1777406400000 } as ScheduledController,
+      { YNAB_READ_SOURCE: "live" } as unknown as Env,
+      { waitUntil } as unknown as ExecutionContext
+    );
+
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    await expect(waitUntil.mock.calls[0][0]).resolves.toEqual({
+      reason: "YNAB_READ_SOURCE is not d1.",
+      status: "skipped"
+    });
+  });
+
   it("protects MCP requests with the Cloudflare OAuth provider", async () => {
     const response = await worker.fetch(
       new Request("https://mcp.example.com/mcp", {

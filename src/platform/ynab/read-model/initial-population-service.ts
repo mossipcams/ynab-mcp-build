@@ -74,6 +74,32 @@ type TransactionsRepository = {
   }): Promise<{ rowsUpserted: number; rowsDeleted: number }>;
 };
 
+type SyncStateRepository = {
+  acquireLease(input: {
+    planId: string;
+    endpoint: string;
+    leaseOwner: string;
+    leaseSeconds: number;
+    now: string;
+  }): Promise<
+    | { acquired: true; leaseExpiresAt: string }
+    | { acquired: false; reason: "lease_active" | "contention" }
+  >;
+  advanceCursor(input: {
+    planId: string;
+    endpoint: string;
+    leaseOwner: string;
+    previousServerKnowledge: number | null;
+    serverKnowledge: number;
+    rowsUpserted: number;
+    rowsDeleted: number;
+    now: string;
+  }): Promise<
+    | { advanced: true }
+    | { advanced: false; reason: "contention" }
+  >;
+};
+
 export type InitialPopulationRows = {
   accounts: number;
   categoryGroups: number;
@@ -114,6 +140,7 @@ type InitialPopulationServiceOptions = {
   initialPopulationRepository: InitialPopulationRepository;
   maxRequests: number;
   now?: () => string;
+  syncStateRepository?: SyncStateRepository;
   transactionsRepository: TransactionsRepository;
   ynabClient: YnabClient;
 };
@@ -209,10 +236,12 @@ export function createInitialPopulationService(options: InitialPopulationService
         categoryGroups: YnabCategoryGroupSummary[];
         locations: YnabPayeeLocation[];
         moneyMovementGroups: YnabMoneyMovementGroup[];
+        moneyMovementServerKnowledge?: number;
         moneyMovements: YnabMoneyMovement[];
         months: YnabPlanMonthDetail[];
         payees: YnabPayee[];
         plan: YnabPlanDetail;
+        serverKnowledge?: number;
         scheduledTransactions: YnabScheduledTransaction[];
         settings: YnabPlanSettings;
         transactions: YnabTransaction[];
@@ -315,7 +344,80 @@ export function createInitialPopulationService(options: InitialPopulationService
             transactions: transactionsResult.rowsUpserted,
             transactionTombstones: transactionsResult.rowsDeleted
           });
+
+          if (payload.serverKnowledge !== undefined) {
+            const endpointRows = {
+              plans: plansResult.rowsUpserted,
+              plan_settings: settingsResult.rowsUpserted,
+              accounts: accountsResult.rowsUpserted,
+              categories: categoriesResult.categoryGroupsUpserted + categoriesResult.categoriesUpserted,
+              months: monthsResult.monthsUpserted + monthsResult.monthCategoriesUpserted,
+              payees: payeesResult.rowsUpserted,
+              payee_locations: locationsResult.rowsUpserted,
+              scheduled_transactions: scheduledTransactionsResult.rowsUpserted,
+              transactions: transactionsResult.rowsUpserted
+            };
+
+            for (const [endpoint, rowsUpserted] of Object.entries(endpointRows)) {
+              await seedSyncCursor({
+                endpoint,
+                planId: payload.plan.id,
+                rowsDeleted: endpoint === "transactions" ? transactionsResult.rowsDeleted : 0,
+                rowsUpserted,
+                serverKnowledge: payload.serverKnowledge,
+                syncedAt: input.syncedAt
+              });
+            }
+          }
+
+          if (payload.moneyMovementServerKnowledge !== undefined) {
+            await seedSyncCursor({
+              endpoint: "money_movements",
+              planId: payload.plan.id,
+              rowsDeleted: 0,
+              rowsUpserted: moneyMovementsResult.rowsUpserted + moneyMovementGroupsResult.rowsUpserted,
+              serverKnowledge: payload.moneyMovementServerKnowledge,
+              syncedAt: input.syncedAt
+            });
+          }
         }
+      }
+
+      async function seedSyncCursor(input: {
+        endpoint: string;
+        planId: string;
+        rowsDeleted: number;
+        rowsUpserted: number;
+        serverKnowledge: number;
+        syncedAt: string;
+      }) {
+        if (!options.syncStateRepository) {
+          return;
+        }
+
+        const leaseOwner = `initial-population:${input.syncedAt}`;
+        const lease = await options.syncStateRepository.acquireLease({
+          endpoint: input.endpoint,
+          leaseOwner,
+          leaseSeconds: 60,
+          now: input.syncedAt,
+          planId: input.planId
+        });
+
+        if (!lease.acquired) {
+          return;
+        }
+
+        await options.syncStateRepository.advanceCursor({
+          endpoint: input.endpoint,
+          leaseOwner,
+          now: input.syncedAt,
+          planId: input.planId,
+          previousServerKnowledge: null,
+          rowsDeleted: input.rowsDeleted,
+          rowsUpserted: input.rowsUpserted,
+          serverKnowledge: input.serverKnowledge
+        });
       }
 
       try {
@@ -343,29 +445,36 @@ export function createInitialPopulationService(options: InitialPopulationService
 
           for (const planId of selectedPlanIds) {
             const planExport = await callYnab(() => options.ynabClient.getPlanExport!(planId));
-            const moneyMovements = options.ynabClient.listMoneyMovements
-              ? (await callYnab(() => options.ynabClient.listMoneyMovements!(planExport.plan.id))).moneyMovements
-              : [];
-            const moneyMovementGroups = options.ynabClient.listMoneyMovementGroups
-              ? (await callYnab(() => options.ynabClient.listMoneyMovementGroups!(planExport.plan.id))).moneyMovementGroups
-              : [];
+            const moneyMovementsResult = options.ynabClient.listMoneyMovements
+              ? await callYnab(() => options.ynabClient.listMoneyMovements!(planExport.plan.id))
+              : { moneyMovements: [], serverKnowledge: undefined };
+            const moneyMovementGroupsResult = options.ynabClient.listMoneyMovementGroups
+              ? await callYnab(() => options.ynabClient.listMoneyMovementGroups!(planExport.plan.id))
+              : { moneyMovementGroups: [], serverKnowledge: undefined };
 
             exports.push({
-              moneyMovementGroups,
-              moneyMovements,
+              moneyMovementGroups: moneyMovementGroupsResult.moneyMovementGroups,
+              moneyMovementServerKnowledge: [
+                moneyMovementsResult.serverKnowledge,
+                moneyMovementGroupsResult.serverKnowledge
+              ].filter((serverKnowledge): serverKnowledge is number => typeof serverKnowledge === "number")
+                .sort((left, right) => right - left)[0],
+              moneyMovements: moneyMovementsResult.moneyMovements,
               planExport
             });
           }
 
-          const perPlanPayloads = exports.map(({ moneyMovementGroups, moneyMovements, planExport }) => ({
+          const perPlanPayloads = exports.map(({ moneyMovementGroups, moneyMovementServerKnowledge, moneyMovements, planExport }) => ({
             accounts: planExport.plan.accounts,
             categoryGroups: planExport.plan.categoryGroups,
             locations: planExport.plan.payeeLocations,
             moneyMovementGroups,
+            moneyMovementServerKnowledge,
             moneyMovements,
             months: planExport.plan.months,
             payees: planExport.plan.payees,
             plan: planExport.plan,
+            serverKnowledge: planExport.serverKnowledge,
             scheduledTransactions: planExport.plan.scheduledTransactions,
             settings: {},
             transactions: planExport.plan.transactions
