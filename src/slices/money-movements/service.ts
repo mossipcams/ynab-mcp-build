@@ -1,10 +1,12 @@
 import type { YnabAccountSummary, YnabClient, YnabTransaction } from "../../platform/ynab/client.js";
-import { formatAmountMilliunits } from "../../shared/collections.js";
+import { formatAmountMilliunits, paginateEntries, shouldPaginateEntries } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 import { resolvePlanId } from "../../shared/plans.js";
 
 export type GetMoneyMovementsInput = {
   planId?: string;
+  limit?: number;
+  offset?: number;
 };
 
 export type GetMoneyMovementsByMonthInput = {
@@ -146,44 +148,59 @@ function groupMoneyMovements(movements: DisplayMoneyMovement[]) {
     .sort(compareMoneyMovementGroups);
 }
 
+function buildMovementCollectionResult<TEntry>(
+  entries: TEntry[],
+  input: GetMoneyMovementsInput,
+  entryKey: "money_movements" | "money_movement_groups",
+  countKey: "movement_count" | "group_count",
+  extra: Record<string, unknown> = {}
+) {
+  if (!shouldPaginateEntries(entries, input)) {
+    return {
+      [entryKey]: entries,
+      [countKey]: entries.length,
+      ...extra
+    };
+  }
+
+  const pagedEntries = paginateEntries(entries, input);
+
+  return {
+    [entryKey]: pagedEntries.entries,
+    [countKey]: entries.length,
+    ...pagedEntries.metadata,
+    ...extra
+  };
+}
+
 export async function getMoneyMovements(ynabClient: YnabClient, input: GetMoneyMovementsInput) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const movements = await getDisplayMoneyMovements(ynabClient, planId);
 
-  return {
-    money_movements: movements,
-    movement_count: movements.length
-  };
+  return buildMovementCollectionResult(movements, input, "money_movements", "movement_count");
 }
 
 export async function getMoneyMovementsByMonth(ynabClient: YnabClient, input: GetMoneyMovementsByMonthInput) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const movements = await getDisplayMoneyMovements(ynabClient, planId, input.month);
 
-  return {
-    month: input.month,
-    money_movements: movements,
-    movement_count: movements.length
-  };
+  return buildMovementCollectionResult(movements, input, "money_movements", "movement_count", {
+    month: input.month
+  });
 }
 
 export async function getMoneyMovementGroups(ynabClient: YnabClient, input: GetMoneyMovementsInput) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const movementGroups = groupMoneyMovements(await getDisplayMoneyMovements(ynabClient, planId));
 
-  return {
-    money_movement_groups: movementGroups,
-    group_count: movementGroups.length
-  };
+  return buildMovementCollectionResult(movementGroups, input, "money_movement_groups", "group_count");
 }
 
 export async function getMoneyMovementGroupsByMonth(ynabClient: YnabClient, input: GetMoneyMovementsByMonthInput) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const movementGroups = groupMoneyMovements(await getDisplayMoneyMovements(ynabClient, planId, input.month));
 
-  return {
-    month: input.month,
-    money_movement_groups: movementGroups,
-    group_count: movementGroups.length
-  };
+  return buildMovementCollectionResult(movementGroups, input, "money_movement_groups", "group_count", {
+    month: input.month
+  });
 }

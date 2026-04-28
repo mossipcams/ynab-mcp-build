@@ -4,7 +4,8 @@ import {
   hasPaginationControls,
   hasProjectionControls,
   paginateEntries,
-  projectRecord
+  projectRecord,
+  shouldPaginateEntries
 } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 import { resolvePlanId } from "../../shared/plans.js";
@@ -46,6 +47,7 @@ export type SearchTransactionsInput = ListTransactionsInput & {
   minAmount?: number;
   maxAmount?: number;
   includeTransfers?: boolean;
+  includeSummary?: boolean;
   sort?: TransactionSort;
 };
 
@@ -126,8 +128,9 @@ function buildTransactionCollectionResult(
   extra: Record<string, unknown> = {}
 ) {
   const displayTransactions = transactions.map(toDisplayTransaction);
+  const shouldPaginate = shouldPaginateEntries(displayTransactions, input);
 
-  if (!hasPaginationControls(input) && !hasProjectionControls(input)) {
+  if (!shouldPaginate && !hasProjectionControls(input)) {
     return {
       transactions: displayTransactions,
       [totalKey]: transactions.length,
@@ -135,7 +138,7 @@ function buildTransactionCollectionResult(
     };
   }
 
-  if (!hasPaginationControls(input)) {
+  if (!shouldPaginate) {
     return {
       transactions: displayTransactions.map((transaction) => projectRecord(transaction, transactionFields, input)),
       [totalKey]: transactions.length,
@@ -167,6 +170,75 @@ function matchesTransactionFilters(transaction: YnabTransaction, input: SearchTr
     input.minAmount === undefined || transaction.amount >= input.minAmount,
     input.maxAmount === undefined || transaction.amount <= input.maxAmount
   ].every(Boolean);
+}
+
+function buildTransactionSummary(transactions: YnabTransaction[], topN = 5) {
+  const categoryRollups = new Map<string, { id?: string; name: string; amountMilliunits: number; transactionCount: number }>();
+  const payeeRollups = new Map<string, { id?: string; name: string; amountMilliunits: number; transactionCount: number }>();
+  let inflowMilliunits = 0;
+  let outflowMilliunits = 0;
+
+  for (const transaction of transactions) {
+    if (transaction.amount >= 0) {
+      inflowMilliunits += transaction.amount;
+    } else {
+      const amountMilliunits = Math.abs(transaction.amount);
+      outflowMilliunits += amountMilliunits;
+
+      const categoryKey = transaction.categoryId ?? transaction.categoryName ?? "uncategorized";
+      const existingCategory = categoryRollups.get(categoryKey);
+      if (existingCategory) {
+        existingCategory.amountMilliunits += amountMilliunits;
+        existingCategory.transactionCount += 1;
+      } else {
+        categoryRollups.set(categoryKey, {
+          id: transaction.categoryId ?? undefined,
+          name: transaction.categoryName ?? "Uncategorized",
+          amountMilliunits,
+          transactionCount: 1
+        });
+      }
+
+      const payeeKey = transaction.payeeId ?? transaction.payeeName ?? "unknown";
+      const existingPayee = payeeRollups.get(payeeKey);
+      if (existingPayee) {
+        existingPayee.amountMilliunits += amountMilliunits;
+        existingPayee.transactionCount += 1;
+      } else {
+        payeeRollups.set(payeeKey, {
+          id: transaction.payeeId ?? undefined,
+          name: transaction.payeeName ?? "Unknown Payee",
+          amountMilliunits,
+          transactionCount: 1
+        });
+      }
+    }
+  }
+
+  const toTopRollups = (
+    entries: Array<{ id?: string; name: string; amountMilliunits: number; transactionCount: number }>
+  ) =>
+    entries
+      .sort((left, right) => right.amountMilliunits - left.amountMilliunits || left.name.localeCompare(right.name))
+      .slice(0, topN)
+      .map((entry) =>
+        compactObject({
+          id: entry.id,
+          name: entry.name,
+          amount: formatAmountMilliunits(entry.amountMilliunits),
+          transaction_count: entry.transactionCount
+        })
+      );
+
+  return {
+    totals: {
+      total_inflow: formatAmountMilliunits(inflowMilliunits),
+      total_outflow: formatAmountMilliunits(outflowMilliunits),
+      net: formatAmountMilliunits(inflowMilliunits - outflowMilliunits)
+    },
+    top_categories: toTopRollups(Array.from(categoryRollups.values())),
+    top_payees: toTopRollups(Array.from(payeeRollups.values()))
+  };
 }
 
 export async function listTransactions(ynabClient: YnabClient, input: ListTransactionsInput) {
@@ -203,8 +275,10 @@ export async function searchTransactions(ynabClient: YnabClient, input: SearchTr
     .filter((transaction) => !transaction.deleted)
     .filter((transaction) => matchesTransactionFilters(transaction, input))
     .sort((left, right) => compareTransactions(left, right, sort));
+  const includeSummary = input.includeSummary === true || (!hasPaginationControls(input) && shouldPaginateEntries(transactions, input));
 
   return buildTransactionCollectionResult(transactions, input, "match_count", {
+    ...(includeSummary ? buildTransactionSummary(transactions) : {}),
     filters: compactObject({
       from_date: input.fromDate,
       to_date: input.toDate,
@@ -216,6 +290,7 @@ export async function searchTransactions(ynabClient: YnabClient, input: SearchTr
       min_amount: input.minAmount == null ? undefined : formatAmountMilliunits(input.minAmount),
       max_amount: input.maxAmount == null ? undefined : formatAmountMilliunits(input.maxAmount),
       include_transfers: input.includeTransfers ?? false,
+      include_summary: input.includeSummary,
       sort
     })
   });
@@ -281,14 +356,16 @@ export async function listScheduledTransactions(ynabClient: YnabClient, input: L
       account_name: transaction.accountName
     }));
 
-  if (!hasPaginationControls(input) && !hasProjectionControls(input)) {
+  const shouldPaginate = shouldPaginateEntries(scheduledTransactions, input);
+
+  if (!shouldPaginate && !hasProjectionControls(input)) {
     return {
       scheduled_transactions: scheduledTransactions,
       scheduled_transaction_count: scheduledTransactions.length
     };
   }
 
-  if (!hasPaginationControls(input)) {
+  if (!shouldPaginate) {
     return {
       scheduled_transactions: scheduledTransactions.map((transaction) =>
         projectRecord(transaction, scheduledTransactionFields, input)

@@ -13,6 +13,7 @@ export type FinancialHealthInput = {
   planId?: string;
   month?: string;
   topN?: number;
+  detailLevel?: DetailLevel;
 };
 
 export type FinancialHealthRangeInput = {
@@ -20,6 +21,7 @@ export type FinancialHealthRangeInput = {
   fromMonth?: string;
   toMonth?: string;
   topN?: number;
+  detailLevel?: DetailLevel;
 };
 
 export type SpendingAnomaliesInput = {
@@ -29,6 +31,7 @@ export type SpendingAnomaliesInput = {
   topN?: number;
   thresholdMultiplier?: number;
   minimumDifference?: number;
+  detailLevel?: DetailLevel;
 };
 
 export type CategoryTrendSummaryInput = {
@@ -55,6 +58,24 @@ type RangeMonthSummary = {
   activity: number;
   toBeBudgeted: number;
 };
+
+type DetailLevel = "brief" | "normal" | "detailed";
+
+function resolveTopN(input: { topN?: number; detailLevel?: DetailLevel }) {
+  if (input.topN !== undefined) {
+    return input.topN;
+  }
+
+  switch (input.detailLevel) {
+    case "brief":
+      return 3;
+    case "detailed":
+      return 10;
+    case "normal":
+    default:
+      return 5;
+  }
+}
 
 function isExplicitMonth(month: string | undefined): month is string {
   return Boolean(month && month !== "current");
@@ -379,8 +400,26 @@ function toMonthSpendingRollups(transactions: YnabTransaction[], topN: number) {
     );
 }
 
+function toExampleTransactions(transactions: YnabTransaction[], topN: number) {
+  return transactions
+    .slice()
+    .sort((left, right) => Math.abs(right.amount) - Math.abs(left.amount) || right.date.localeCompare(left.date))
+    .slice(0, topN)
+    .map((transaction) =>
+      compactObject({
+        id: transaction.id,
+        date: transaction.date,
+        amount: formatMilliunits(Math.abs(transaction.amount)),
+        payee_name: transaction.payeeName,
+        category_name: transaction.categoryName,
+        account_name: transaction.accountName,
+        type: transaction.amount >= 0 ? "inflow" : "outflow"
+      })
+    );
+}
+
 export async function getFinancialSnapshot(ynabClient: YnabClient, input: FinancialHealthInput) {
-  const topN = input.topN ?? 3;
+  const topN = resolveTopN(input);
   const { monthDetail, accounts } = await getMonthContext(ynabClient, input);
   const snapshot = buildAccountSnapshotSummary(accounts as YnabAccountSummary[]);
 
@@ -416,7 +455,7 @@ export async function getFinancialSnapshot(ynabClient: YnabClient, input: Financ
 }
 
 export async function getBudgetHealthSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const { monthDetail } = await getMonthContext(ynabClient, input);
 
   return summarizeBudgetHealthMonth(monthDetail, topN);
@@ -425,7 +464,7 @@ export async function getBudgetHealthSummary(ynabClient: YnabClient, input: Fina
 export const getPlanHealthSummary = getBudgetHealthSummary;
 
 export async function getFinancialHealthCheck(ynabClient: YnabClient, input: FinancialHealthInput) {
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const { monthDetail, accounts, transactions } = await getMonthContext(ynabClient, input);
   const budgetHealth = summarizeBudgetHealthMonth(monthDetail, topN);
   const snapshot = buildAccountSnapshotSummary(accounts as YnabAccountSummary[]);
@@ -461,7 +500,7 @@ export async function getFinancialHealthCheck(ynabClient: YnabClient, input: Fin
 }
 
 export async function getMonthlyReview(ynabClient: YnabClient, input: FinancialHealthInput) {
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const { monthDetail, transactions } = await getMonthContext(ynabClient, input);
   const budgetHealth = summarizeBudgetHealthMonth(monthDetail, topN);
   const monthTransactions = transactions.filter((transaction) => isNonTransferMonthTransaction(transaction, monthDetail.month));
@@ -485,7 +524,15 @@ export async function getMonthlyReview(ynabClient: YnabClient, input: FinancialH
     assigned: budgetHealth.assigned,
     spent: budgetHealth.spent,
     assigned_vs_spent: budgetHealth.assigned_vs_spent,
-    top_spending_categories: toMonthSpendingRollups(monthTransactions, topN)
+    top_spending_categories: toMonthSpendingRollups(monthTransactions, topN),
+    ...(input.detailLevel
+      ? {
+          example_transactions: toExampleTransactions(
+            monthTransactions.filter((transaction) => transaction.amount < 0),
+            topN
+          )
+        }
+      : {})
   };
 }
 
@@ -539,7 +586,7 @@ export async function getCashFlowSummary(ynabClient: YnabClient, input: Financia
 }
 
 export async function getSpendingSummary(ynabClient: YnabClient, input: FinancialHealthRangeInput) {
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const { planId, fromMonth, toMonth, months, transactions } = await getRangeContext(ynabClient, input);
   const categoryGroups = await ynabClient.listCategories(planId);
   const categoryGroupLookup = new Map(
@@ -640,14 +687,15 @@ export async function getSpendingSummary(ynabClient: YnabClient, input: Financia
         name: entry.name,
         amount: formatMilliunits(entry.amountMilliunits),
         transaction_count: entry.transactionCount
-      }))
+      })),
+    ...(input.detailLevel ? { example_transactions: toExampleTransactions(spendingTransactions, topN) } : {})
   };
 }
 
 export async function getSpendingAnomalies(ynabClient: YnabClient, input: SpendingAnomaliesInput) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const baselineMonths = input.baselineMonths ?? 3;
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const thresholdMultiplier = input.thresholdMultiplier ?? 1.5;
   const minimumDifference = input.minimumDifference ?? 50000;
   const baselineMonthIds = previousMonths(input.latestMonth, baselineMonths);
@@ -764,11 +812,11 @@ export async function getCashRunway(ynabClient: YnabClient, input: { planId?: st
 
 export async function getUpcomingObligations(
   ynabClient: YnabClient,
-  input: { planId?: string; asOfDate?: string; topN?: number }
+  input: { planId?: string; asOfDate?: string; topN?: number; detailLevel?: DetailLevel }
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const asOfDate = input.asOfDate ?? new Date().toISOString().slice(0, 10);
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const scheduledTransactions = (await ynabClient.listScheduledTransactions(planId))
     .filter((transaction) => !transaction.deleted && transaction.dateNext)
     .map((transaction) => ({
@@ -824,7 +872,7 @@ export async function getUpcomingObligations(
 }
 
 export async function getIncomeSummary(ynabClient: YnabClient, input: FinancialHealthRangeInput) {
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const { fromMonth, toMonth, transactions } = await getRangeContext(ynabClient, input);
   const incomeTransactions = transactions.filter(
     (transaction) => isNonTransferRangeTransaction(transaction, fromMonth, toMonth) && transaction.amount > 0
@@ -913,7 +961,7 @@ export async function getRecurringExpenseSummary(
   input: { planId?: string; fromDate: string; toDate: string; topN?: number }
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const transactions = await ynabClient.listTransactions(planId, input.fromDate);
   const candidates = new Map<string, { payeeId?: string | null; payeeName: string; dates: string[]; amounts: number[] }>();
 
@@ -1024,7 +1072,7 @@ export async function getEmergencyFundCoverage(
 }
 
 export async function getGoalProgressSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const { monthDetail } = await getMonthContext(ynabClient, input);
   const goalCategories = (monthDetail.categories ?? [])
     .filter((category) => !category.deleted && !category.hidden && category.goalUnderFunded !== undefined);
@@ -1048,7 +1096,7 @@ export async function getGoalProgressSummary(ynabClient: YnabClient, input: Fina
 
 export async function getDebtSummary(ynabClient: YnabClient, input: { planId?: string; topN?: number }) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const accounts = (await ynabClient.listAccounts(planId)).filter((account) => !account.deleted && !account.closed);
   const debtAccounts = accounts.filter((account) => account.balance < 0).sort((left, right) => left.balance - right.balance);
   const snapshot = buildAccountSnapshotSummary(accounts);
@@ -1073,7 +1121,7 @@ export async function getDebtSummary(ynabClient: YnabClient, input: { planId?: s
 }
 
 export async function getCleanupSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
-  const topN = input.topN ?? 5;
+  const topN = resolveTopN(input);
   const { monthDetail, transactions } = await getMonthContext(ynabClient, input);
   const monthTransactions = transactions.filter(
     (transaction) => !transaction.deleted && !transaction.transferAccountId && toMonthKey(transaction.date) === monthDetail.month

@@ -4,7 +4,8 @@ import {
   hasPaginationControls,
   hasProjectionControls,
   paginateEntries,
-  projectRecord
+  projectRecord,
+  shouldPaginateEntries
 } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 import { resolvePlanId } from "../../shared/plans.js";
@@ -36,14 +37,14 @@ export async function listAccounts(ynabClient: YnabClient, input: ListAccountsIn
       balance: formatAmountMilliunits(account.balance)
     }));
 
-  if (!hasPaginationControls(input) && !hasProjectionControls(input)) {
+  if (!shouldPaginateEntries(accounts, input) && !hasProjectionControls(input)) {
     return {
       accounts,
       account_count: accounts.length
     };
   }
 
-  if (!hasPaginationControls(input)) {
+  if (!shouldPaginateEntries(accounts, input)) {
     return {
       accounts: accounts.map((account) => projectRecord(account, accountFields, input)),
       account_count: accounts.length

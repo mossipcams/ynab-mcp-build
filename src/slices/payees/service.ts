@@ -3,7 +3,8 @@ import {
   hasPaginationControls,
   hasProjectionControls,
   paginateEntries,
-  projectRecord
+  projectRecord,
+  shouldPaginateEntries
 } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 import { resolvePlanId } from "../../shared/plans.js";
@@ -47,14 +48,14 @@ export async function listPayees(ynabClient: YnabClient, input: ListPayeesInput)
       transfer_account_id: payee.transferAccountId
     }));
 
-  if (!hasPaginationControls(input) && !hasProjectionControls(input)) {
+  if (!shouldPaginateEntries(payees, input) && !hasProjectionControls(input)) {
     return {
       payees,
       payee_count: payees.length
     };
   }
 
-  if (!hasPaginationControls(input)) {
+  if (!shouldPaginateEntries(payees, input)) {
     return {
       payees: payees.map((payee) => projectRecord(payee, payeeFields, input)),
       payee_count: payees.length

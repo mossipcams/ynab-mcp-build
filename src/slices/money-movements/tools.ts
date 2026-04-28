@@ -16,7 +16,9 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       title: "Get YNAB Money Movements",
       description: "Returns transfer-style money movements derived from YNAB transactions.",
       inputSchema: {
-        planId: z.string().optional()
+        planId: z.string().optional(),
+        limit: z.number().int().min(1).max(500).optional(),
+        offset: z.number().int().min(0).optional()
       },
       execute: async (input) => getMoneyMovements(ynabClient, input)
     },
@@ -26,7 +28,9 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       description: "Returns transfer-style money movements for a single plan month.",
       inputSchema: {
         planId: z.string().optional(),
-        month: z.string().min(1)
+        month: z.string().min(1),
+        limit: z.number().int().min(1).max(500).optional(),
+        offset: z.number().int().min(0).optional()
       },
       execute: async (input) => getMoneyMovementsByMonth(ynabClient, input)
     },
@@ -35,7 +39,9 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       title: "Get YNAB Money Movement Groups",
       description: "Groups transfer-style money movements by source and destination account.",
       inputSchema: {
-        planId: z.string().optional()
+        planId: z.string().optional(),
+        limit: z.number().int().min(1).max(500).optional(),
+        offset: z.number().int().min(0).optional()
       },
       execute: async (input) => getMoneyMovementGroups(ynabClient, input)
     },
@@ -45,7 +51,9 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       description: "Groups transfer-style money movements by source and destination account for a single month.",
       inputSchema: {
         planId: z.string().optional(),
-        month: z.string().min(1)
+        month: z.string().min(1),
+        limit: z.number().int().min(1).max(500).optional(),
+        offset: z.number().int().min(0).optional()
       },
       execute: async (input) => getMoneyMovementGroupsByMonth(ynabClient, input)
     }
