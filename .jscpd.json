@@ -1,0 +1,9 @@
+{
+  "format": ["typescript"],
+  "ignore": ["**/*.spec.ts"],
+  "minLines": 5,
+  "minTokens": 50,
+  "path": ["src"],
+  "reporters": ["console"],
+  "threshold": 6
+}
