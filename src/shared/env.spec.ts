@@ -65,36 +65,4 @@ describe("resolveAppEnv", () => {
     expect(env.ynabSyncMaxRowsPerRun).toBe(50);
     expect(env.ynabAccessToken).toBeUndefined();
   });
-
-  it("disables the temporary D1 population tool by default", () => {
-    const env = resolveAppEnv({});
-
-    expect(env.ynabTempPopulationToolEnabled).toBe(false);
-  });
-
-  it("enables the temporary D1 population tool only with an explicit true flag", () => {
-    const enabledEnv = resolveAppEnv({
-      YNAB_TEMP_POPULATION_TOOL_ENABLED: "true"
-    } as Partial<Env> & { YNAB_TEMP_POPULATION_TOOL_ENABLED: string });
-    const disabledEnv = resolveAppEnv({
-      YNAB_TEMP_POPULATION_TOOL_ENABLED: "yes"
-    } as Partial<Env> & { YNAB_TEMP_POPULATION_TOOL_ENABLED: string });
-
-    expect(enabledEnv.ynabTempPopulationToolEnabled).toBe(true);
-    expect(disabledEnv.ynabTempPopulationToolEnabled).toBe(false);
-  });
-
-  it("resolves a conservative temporary D1 population request budget", () => {
-    expect(resolveAppEnv({}).ynabPopulateMaxRequestsPerRun).toBe(50);
-
-    const configuredEnv = resolveAppEnv({
-      YNAB_POPULATE_MAX_REQUESTS_PER_RUN: "25"
-    } as Partial<Env> & { YNAB_POPULATE_MAX_REQUESTS_PER_RUN: string });
-    const invalidEnv = resolveAppEnv({
-      YNAB_POPULATE_MAX_REQUESTS_PER_RUN: "0"
-    } as Partial<Env> & { YNAB_POPULATE_MAX_REQUESTS_PER_RUN: string });
-
-    expect(configuredEnv.ynabPopulateMaxRequestsPerRun).toBe(25);
-    expect(invalidEnv.ynabPopulateMaxRequestsPerRun).toBe(50);
-  });
 });

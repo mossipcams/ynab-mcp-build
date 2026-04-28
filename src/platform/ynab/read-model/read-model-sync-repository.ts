@@ -1,15 +1,12 @@
 import type {
   YnabAccountSummary,
   YnabCategoryGroupSummary,
-  YnabPayee,
-  YnabPayeeLocation,
-  YnabPlanDetail,
-  YnabPlanMonthDetail,
-  YnabPlanSettings,
-  YnabScheduledTransaction,
   YnabMoneyMovement,
   YnabMoneyMovementGroup,
-  YnabUser
+  YnabPayee,
+  YnabPayeeLocation,
+  YnabPlanMonthDetail,
+  YnabScheduledTransaction
 } from "../client.js";
 
 type UpsertResult = {
@@ -40,137 +37,8 @@ async function runBatch(database: D1Database, statements: D1PreparedStatement[])
   }
 }
 
-export function createInitialPopulationRepository(database: D1Database) {
+export function createReadModelSyncRepository(database: D1Database) {
   return {
-    async upsertUser(input: {
-      user: YnabUser;
-      syncedAt: string;
-    }): Promise<UpsertResult> {
-      await runBatch(database, [
-        database
-          .prepare(
-            `INSERT INTO ynab_users (
-               id,
-               name,
-               synced_at,
-               updated_at
-             )
-             VALUES (?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-               name = excluded.name,
-               synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
-          )
-          .bind(
-            input.user.id,
-            input.user.name,
-            input.syncedAt,
-            input.syncedAt
-          )
-      ]);
-
-      return { rowsUpserted: 1 };
-    },
-
-    async upsertPlans(input: {
-      plans: YnabPlanDetail[];
-      syncedAt: string;
-    }): Promise<UpsertResult> {
-      const statements = input.plans.map((plan) =>
-        database
-          .prepare(
-            `INSERT INTO ynab_plans (
-               id,
-               name,
-               last_modified_on,
-               first_month,
-               last_month,
-               deleted,
-               synced_at,
-               updated_at
-             )
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-               name = excluded.name,
-               last_modified_on = excluded.last_modified_on,
-               first_month = excluded.first_month,
-               last_month = excluded.last_month,
-               deleted = excluded.deleted,
-               synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
-          )
-          .bind(
-            plan.id,
-            plan.name,
-            plan.lastModifiedOn ?? null,
-            plan.firstMonth ?? null,
-            plan.lastMonth ?? null,
-            input.syncedAt,
-            input.syncedAt
-          )
-      );
-
-      await runBatch(database, statements);
-
-      return { rowsUpserted: input.plans.length };
-    },
-
-    async upsertPlanSettings(input: {
-      planId: string;
-      settings: YnabPlanSettings;
-      syncedAt: string;
-    }): Promise<UpsertResult> {
-      const currency = input.settings.currencyFormat;
-      await runBatch(database, [
-        database
-          .prepare(
-            `INSERT INTO ynab_plan_settings (
-               plan_id,
-               date_format,
-               currency_iso_code,
-               currency_example_format,
-               currency_decimal_digits,
-               currency_decimal_separator,
-               currency_symbol_first,
-               currency_group_separator,
-               currency_symbol,
-               currency_display_symbol,
-               synced_at,
-               updated_at
-             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(plan_id) DO UPDATE SET
-               date_format = excluded.date_format,
-               currency_iso_code = excluded.currency_iso_code,
-               currency_example_format = excluded.currency_example_format,
-               currency_decimal_digits = excluded.currency_decimal_digits,
-               currency_decimal_separator = excluded.currency_decimal_separator,
-               currency_symbol_first = excluded.currency_symbol_first,
-               currency_group_separator = excluded.currency_group_separator,
-               currency_symbol = excluded.currency_symbol,
-               currency_display_symbol = excluded.currency_display_symbol,
-               synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
-          )
-          .bind(
-            input.planId,
-            input.settings.dateFormat?.format ?? null,
-            currency?.isoCode ?? null,
-            currency?.exampleFormat ?? null,
-            currency?.decimalDigits ?? null,
-            currency?.decimalSeparator ?? null,
-            toIntegerBoolean(currency?.symbolFirst),
-            currency?.groupSeparator ?? null,
-            currency?.currencySymbol ?? null,
-            toIntegerBoolean(currency?.displaySymbol),
-            input.syncedAt,
-            input.syncedAt
-          )
-      ]);
-
-      return { rowsUpserted: 1 };
-    },
-
     async upsertAccounts(input: {
       planId: string;
       accounts: YnabAccountSummary[];
@@ -418,9 +286,9 @@ export function createInitialPopulationRepository(database: D1Database) {
                updated_at = excluded.updated_at`
           )
           .bind(
-              input.planId,
-              month.month,
-              month.income ?? null,
+            input.planId,
+            month.month,
+            month.income ?? null,
             month.budgeted ?? null,
             month.activity ?? null,
             month.toBeBudgeted ?? null,

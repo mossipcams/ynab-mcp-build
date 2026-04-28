@@ -1,6 +1,6 @@
 import { createYnabClient, type YnabClient } from "../platform/ynab/client.js";
 import { createYnabDeltaClient } from "../platform/ynab/delta-client.js";
-import { createInitialPopulationRepository } from "../platform/ynab/read-model/initial-population-repository.js";
+import { createReadModelSyncRepository } from "../platform/ynab/read-model/read-model-sync-repository.js";
 import { createReadModelSyncService, type SyncReadModelInput } from "../platform/ynab/read-model/read-model-sync-service.js";
 import { createSyncStateRepository } from "../platform/ynab/read-model/sync-state-repository.js";
 import { createTransactionsRepository } from "../platform/ynab/read-model/transactions-repository.js";
@@ -30,10 +30,10 @@ function createMoneyMovementClient(accessToken: string, baseUrl: string) {
 
   return {
     listMoneyMovementGroups(planId: string) {
-      return client.listMoneyMovementGroups!(planId);
+      return client.listMoneyMovementGroups(planId);
     },
     listMoneyMovements(planId: string) {
-      return client.listMoneyMovements!(planId);
+      return client.listMoneyMovements(planId);
     }
   };
 }
@@ -95,7 +95,7 @@ function createProductionReadModelSyncService(env: ReturnType<typeof resolveSche
       deltaClient,
       maxRowsPerRun: env.ynabSyncMaxRowsPerRun,
       moneyMovementClient,
-      readModelRepository: createInitialPopulationRepository(database),
+      readModelRepository: createReadModelSyncRepository(database),
       syncStateRepository: createSyncStateRepository(database),
       transactionsRepository: createTransactionsRepository(database)
     })
@@ -152,7 +152,7 @@ export async function runScheduledReadModelSync(
       }),
       maxRowsPerRun: appEnv.ynabSyncMaxRowsPerRun,
       moneyMovementClient: createMoneyMovementClient(appEnv.ynabAccessToken, appEnv.ynabApiBaseUrl),
-      readModelRepository: createInitialPopulationRepository(appEnv.ynabDatabase),
+      readModelRepository: createReadModelSyncRepository(appEnv.ynabDatabase),
       syncStateRepository: createSyncStateRepository(appEnv.ynabDatabase),
       transactionsRepository: createTransactionsRepository(appEnv.ynabDatabase)
     })

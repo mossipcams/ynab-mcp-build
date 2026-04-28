@@ -1,12 +1,8 @@
 import { createYnabClient, type YnabClient } from "../platform/ynab/client.js";
-import type { InitialPopulationInput, InitialPopulationResult } from "../platform/ynab/read-model/initial-population-service.js";
 import type { AppEnv } from "../shared/env.js";
 
 export type AppDependencies = {
   createId?: () => string;
-  initialPopulationService?: {
-    populate(input?: InitialPopulationInput): Promise<InitialPopulationResult>;
-  };
   now?: () => number;
   ynabClient?: YnabClient;
 };
@@ -87,6 +83,12 @@ export function resolveYnabClient(env: AppEnv, dependencies: AppDependencies): Y
         throw new Error("YNAB access token is not configured.");
       },
       async getPayeeLocationsByPayee() {
+        throw new Error("YNAB access token is not configured.");
+      },
+      async listMoneyMovements() {
+        throw new Error("YNAB access token is not configured.");
+      },
+      async listMoneyMovementGroups() {
         throw new Error("YNAB access token is not configured.");
       }
     };
