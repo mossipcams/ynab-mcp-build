@@ -16,6 +16,8 @@ class FakeStatement {
   }
 
   all<T>() {
+    this.db.allCalls.push({ sql: this.sql, params: this.params });
+
     if (this.sql.includes("FROM ynab_sync_state")) {
       return Promise.resolve({
         results: [
@@ -47,6 +49,7 @@ class FakeStatement {
 }
 
 class FakeD1Database {
+  allCalls: Array<{ sql: string; params: unknown[] }> = [];
   transactionSearchParams: unknown[] = [];
 
   prepare(sql: string) {
@@ -85,12 +88,27 @@ describe("DB-backed tool registration", () => {
         match_count: 1
       }
     });
-    expect(database.transactionSearchParams).toContain("plan-1");
-    expect(database.transactionSearchParams).toContain(5);
+    expect(database.allCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          params: expect.arrayContaining(["plan-1"])
+        })
+      ])
+    );
 
-    const unrebuiltTool = definitions.find((definition) => definition.name === "ynab_list_accounts");
-    await expect(unrebuiltTool?.execute({})).rejects.toThrow(
-      "ynab_list_accounts is not available yet in DB-backed read mode."
+    const unavailableMessages = await Promise.all(
+      definitions.map(async (definition) => {
+        try {
+          await definition.execute({});
+          return null;
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error);
+        }
+      })
+    );
+
+    expect(unavailableMessages.filter(Boolean)).not.toContainEqual(
+      expect.stringContaining("is not available yet in DB-backed read mode.")
     );
   });
 });

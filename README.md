@@ -14,11 +14,7 @@ In `YNAB_READ_SOURCE=d1` mode:
 - unrebuilt tools return clear DB-mode errors
 - every rebuilt read tool includes freshness metadata
 
-Current rebuilt DB-backed tool:
-
-- `ynab_search_transactions`
-
-The remaining public tool names are still registered in D1 mode, but they return a clear “not available yet in DB-backed read mode” error until their DB-backed slices are implemented.
+DB-backed mode now wires the public tool surface through the D1 read model. Tools use a D1-backed YNAB client adapter and return freshness metadata for plan-scoped reads instead of falling back to live YNAB API calls.
 
 ## Architecture
 
@@ -121,6 +117,6 @@ The transaction sync service:
 
 ## Known Limitations
 
-- Only `ynab_search_transactions` is rebuilt against D1 so far.
+- DB-backed tool responses depend on the corresponding read-model endpoint having synced successfully.
 - Scheduled Worker/admin refresh wiring still needs to be connected to deployment policy.
 - Initial bootstrap for large budgets should be handled carefully because Worker/D1 limits make unbounded imports unsafe.
