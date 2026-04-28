@@ -323,9 +323,22 @@ export function createInitialPopulationService(options: InitialPopulationService
         const directPlanId = input.planId ?? options.defaultPlanId;
 
         if (options.ynabClient.getPlanExport) {
-          const selectedPlanIds = input.includeAllPlans
-            ? (await callYnab(() => options.ynabClient.listPlans())).plans.map((plan) => plan.id)
-            : [directPlanId ?? "default"];
+          let selectedPlanIds: string[];
+
+          if (input.includeAllPlans) {
+            selectedPlanIds = (await callYnab(() => options.ynabClient.listPlans())).plans.map((plan) => plan.id);
+          } else if (directPlanId) {
+            selectedPlanIds = [directPlanId];
+          } else {
+            const planList = await callYnab(() => options.ynabClient.listPlans());
+            const discoveredPlanId = planList.defaultPlan?.id ?? planList.plans[0]?.id;
+
+            if (!discoveredPlanId) {
+              throw new Error("No YNAB plans were available for initial population.");
+            }
+
+            selectedPlanIds = [discoveredPlanId];
+          }
           const exports = [];
 
           for (const planId of selectedPlanIds) {
