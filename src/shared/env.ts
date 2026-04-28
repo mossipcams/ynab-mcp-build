@@ -20,11 +20,9 @@ export type AppEnv = {
   ynabAccessToken?: string;
   ynabDatabase?: D1Database;
   ynabDefaultPlanId?: string;
-  ynabPopulateMaxRequestsPerRun: number;
   ynabReadSource: "live" | "d1";
   ynabStaleAfterMinutes: number;
   ynabSyncMaxRowsPerRun: number;
-  ynabTempPopulationToolEnabled: boolean;
 };
 
 const DEFAULT_APP_ENV: AppEnv = {
@@ -32,11 +30,9 @@ const DEFAULT_APP_ENV: AppEnv = {
   mcpServerVersion: "0.1.0",
   oauthEnabled: false,
   ynabApiBaseUrl: "https://api.ynab.com/v1",
-  ynabPopulateMaxRequestsPerRun: 50,
   ynabReadSource: "live",
   ynabStaleAfterMinutes: 360,
-  ynabSyncMaxRowsPerRun: 100,
-  ynabTempPopulationToolEnabled: false
+  ynabSyncMaxRowsPerRun: 100
 };
 
 function getOptionalString(value: unknown) {
@@ -86,11 +82,9 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     YNAB_API_TOKEN?: string;
     YNAB_DB?: D1Database;
     YNAB_DEFAULT_PLAN_ID?: string;
-    YNAB_POPULATE_MAX_REQUESTS_PER_RUN?: string;
     YNAB_READ_SOURCE?: string;
     YNAB_STALE_AFTER_MINUTES?: string;
     YNAB_SYNC_MAX_ROWS_PER_RUN?: string;
-    YNAB_TEMP_POPULATION_TOOL_ENABLED?: string;
   } | undefined;
   const accessOidcValues = {
     authorizationUrl: getOptionalString(runtimeEnv?.ACCESS_AUTHORIZATION_URL),
@@ -143,10 +137,6 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     ynabAccessToken: runtimeEnv?.YNAB_ACCESS_TOKEN ?? runtimeEnv?.YNAB_API_TOKEN,
     ynabDatabase: runtimeEnv?.YNAB_DB,
     ynabDefaultPlanId: getOptionalString(runtimeEnv?.YNAB_DEFAULT_PLAN_ID),
-    ynabPopulateMaxRequestsPerRun: getOptionalPositiveInteger(
-      runtimeEnv?.YNAB_POPULATE_MAX_REQUESTS_PER_RUN,
-      DEFAULT_APP_ENV.ynabPopulateMaxRequestsPerRun
-    ),
     ynabReadSource: resolveYnabReadSource(runtimeEnv?.YNAB_READ_SOURCE),
     ynabStaleAfterMinutes: getOptionalPositiveInteger(
       runtimeEnv?.YNAB_STALE_AFTER_MINUTES,
@@ -155,8 +145,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     ynabSyncMaxRowsPerRun: getOptionalPositiveInteger(
       runtimeEnv?.YNAB_SYNC_MAX_ROWS_PER_RUN,
       DEFAULT_APP_ENV.ynabSyncMaxRowsPerRun
-    ),
-    ynabTempPopulationToolEnabled: runtimeEnv?.YNAB_TEMP_POPULATION_TOOL_ENABLED === "true"
+    )
   };
 
   if (resolvedEnv.oauthEnabled && !resolvedEnv.publicUrl) {

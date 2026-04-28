@@ -11,11 +11,9 @@ describe("resolveYnabClient", () => {
         oauthEnabled: true,
         publicUrl: "https://example.com/mcp",
         ynabApiBaseUrl: "https://api.ynab.com/v1",
-        ynabPopulateMaxRequestsPerRun: 50,
         ynabReadSource: "live",
         ynabStaleAfterMinutes: 360,
-        ynabSyncMaxRowsPerRun: 100,
-        ynabTempPopulationToolEnabled: false
+        ynabSyncMaxRowsPerRun: 100
       },
       {}
     );
