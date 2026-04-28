@@ -1,7 +1,6 @@
-import { z } from "zod";
-
 import type { YnabClient } from "../../platform/ynab/client.js";
 import type { SliceToolDefinition } from "../../shared/tool-definition.js";
+import { paginatedProjectionSchema, planIdSchema, requiredIdSchema } from "../../shared/tool-inputs.js";
 import {
   getPayee,
   getPayeeLocation,
@@ -18,13 +17,7 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): SliceToolDefini
       name: "ynab_list_payees",
       title: "List YNAB Payees",
       description: "Lists YNAB payees with optional pagination and compact field projection.",
-      inputSchema: {
-        planId: z.string().optional(),
-        limit: z.number().int().min(1).max(500).optional(),
-        offset: z.number().int().min(0).optional(),
-        fields: z.array(z.enum(payeeFields)).optional(),
-        includeIds: z.boolean().optional()
-      },
+      inputSchema: paginatedProjectionSchema(payeeFields),
       execute: async (input) => listPayees(ynabClient, input)
     },
     {
@@ -32,8 +25,8 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): SliceToolDefini
       title: "Get YNAB Payee",
       description: "Returns a compact summary for a single YNAB payee.",
       inputSchema: {
-        planId: z.string().optional(),
-        payeeId: z.string().min(1)
+        ...planIdSchema,
+        payeeId: requiredIdSchema
       },
       execute: async (input) => getPayee(ynabClient, input)
     },
@@ -41,9 +34,7 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): SliceToolDefini
       name: "ynab_list_payee_locations",
       title: "List YNAB Payee Locations",
       description: "Lists payee locations for the current YNAB plan.",
-      inputSchema: {
-        planId: z.string().optional()
-      },
+      inputSchema: planIdSchema,
       execute: async (input) => listPayeeLocations(ynabClient, input)
     },
     {
@@ -51,8 +42,8 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): SliceToolDefini
       title: "Get YNAB Payee Location",
       description: "Returns a single YNAB payee location.",
       inputSchema: {
-        planId: z.string().optional(),
-        payeeLocationId: z.string().min(1)
+        ...planIdSchema,
+        payeeLocationId: requiredIdSchema
       },
       execute: async (input) => getPayeeLocation(ynabClient, input)
     },
@@ -61,8 +52,8 @@ export function getPayeeToolDefinitions(ynabClient: YnabClient): SliceToolDefini
       title: "Get YNAB Payee Locations By Payee",
       description: "Lists payee locations for a single YNAB payee.",
       inputSchema: {
-        planId: z.string().optional(),
-        payeeId: z.string().min(1)
+        ...planIdSchema,
+        payeeId: requiredIdSchema
       },
       execute: async (input) => getPayeeLocationsByPayee(ynabClient, input)
     }
