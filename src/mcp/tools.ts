@@ -20,7 +20,10 @@ export function registerMcpToolDefinitions(
       {
         title: definition.title,
         description: definition.description,
-        inputSchema: definition.inputSchema
+        inputSchema: definition.inputSchema,
+        annotations: {
+          readOnlyHint: true
+        }
       },
       async (input: any) => {
         try {
