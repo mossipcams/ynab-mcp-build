@@ -3,6 +3,7 @@ import { defineConfig, defineProject } from "vitest/config";
 
 const unitIncludes = [
   "tests/architecture/**/*.test.ts",
+  "src/tooling/**/*.spec.ts",
   "tests/platform/ynab/client.test.ts",
   "tests/platform/ynab/mappers.test.ts",
   "tests/platform/ynab/schemas.test.ts",

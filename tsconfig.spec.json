@@ -3,6 +3,7 @@
   "compilerOptions": {
     "types": [
       "@cloudflare/vitest-pool-workers",
+      "node",
       "vitest/globals"
     ]
   },
