@@ -4,6 +4,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-04-21",
   "keep_vars": true,
+  "workers_dev": false,
+  "preview_urls": false,
   "vars": {
     "MCP_OAUTH_ENABLED": "true",
     "MCP_SERVER_NAME": "ynab-mcp-build",
@@ -38,7 +40,7 @@
     }
   ],
   "triggers": {
-    "crons": ["*/15 * * * *"]
+    "crons": ["0 * * * *"]
   },
   "observability": {
     "enabled": true

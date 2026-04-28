@@ -58,6 +58,16 @@ describe("repository preflight tooling", () => {
       };
     };
 
-    expect(wranglerConfig.triggers?.crons).toEqual(["*/15 * * * *"]);
+    expect(wranglerConfig.triggers?.crons).toEqual(["0 * * * *"]);
+  });
+
+  it("disables non-custom Worker URLs", () => {
+    const wranglerConfig = JSON.parse(readRootFile("wrangler.jsonc")) as {
+      preview_urls?: boolean;
+      workers_dev?: boolean;
+    };
+
+    expect(wranglerConfig.workers_dev).toBe(false);
+    expect(wranglerConfig.preview_urls).toBe(false);
   });
 });
