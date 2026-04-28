@@ -272,56 +272,10 @@ export type YnabPayeeLocation = {
   deleted?: boolean;
 };
 
-export type YnabMoneyMovement = {
-  id: string;
-  month?: string | null;
-  movedAt?: string | null;
-  note?: string | null;
-  moneyMovementGroupId?: string | null;
-  performedByUserId?: string | null;
-  fromCategoryId?: string | null;
-  toCategoryId?: string | null;
-  amount: number;
-  deleted?: boolean;
-};
-
-export type YnabMoneyMovementGroup = {
-  id: string;
-  groupCreatedAt: string;
-  month: string;
-  note?: string | null;
-  performedByUserId?: string | null;
-  deleted?: boolean;
-};
-
-export type YnabMoneyMovementsResult = {
-  moneyMovements: YnabMoneyMovement[];
-  serverKnowledge: number;
-};
-
-export type YnabMoneyMovementGroupsResult = {
-  moneyMovementGroups: YnabMoneyMovementGroup[];
-  serverKnowledge: number;
-};
-
-export type YnabPlanExport = {
-  serverKnowledge: number;
-  plan: YnabPlanDetail & {
-    accounts: YnabAccountSummary[];
-    categoryGroups: YnabCategoryGroupSummary[];
-    months: YnabPlanMonthDetail[];
-    payees: YnabPayee[];
-    payeeLocations: YnabPayeeLocation[];
-    scheduledTransactions: YnabScheduledTransaction[];
-    transactions: YnabTransaction[];
-  };
-};
-
 export interface YnabClient {
   getUser(): Promise<YnabUser>;
   listPlans(): Promise<YnabPlanList>;
   getPlan(planId: string): Promise<YnabPlanDetail>;
-  getPlanExport?(planId: string): Promise<YnabPlanExport>;
   listCategories(planId: string): Promise<YnabCategoryGroupSummary[]>;
   getCategory(planId: string, categoryId: string): Promise<YnabCategoryDetail>;
   getMonthCategory(planId: string, month: string, categoryId: string): Promise<YnabMonthCategoryDetail>;
@@ -342,8 +296,6 @@ export interface YnabClient {
   listPayeeLocations(planId: string): Promise<YnabPayeeLocation[]>;
   getPayeeLocation(planId: string, payeeLocationId: string): Promise<YnabPayeeLocation>;
   getPayeeLocationsByPayee(planId: string, payeeId: string): Promise<YnabPayeeLocation[]>;
-  listMoneyMovements?(planId: string): Promise<YnabMoneyMovementsResult>;
-  listMoneyMovementGroups?(planId: string): Promise<YnabMoneyMovementGroupsResult>;
 }
 
 type CreateYnabClientOptions = {
@@ -386,27 +338,6 @@ type YnabPlanResponse = {
       accounts?: unknown[];
       category_groups?: unknown[];
       payees?: unknown[];
-    };
-  };
-};
-
-type YnabPlanExportResponse = {
-  data: {
-    server_knowledge: number;
-    plan: {
-      id: string;
-      name: string;
-      last_modified_on?: string;
-      first_month?: string;
-      last_month?: string;
-      accounts?: YnabAccountRecord[];
-      category_groups?: YnabCategoryGroupRecord[];
-      categories?: YnabCategoryRecord[];
-      months?: YnabPlanMonthRecord[];
-      payees?: YnabPayeeRecord[];
-      payee_locations?: YnabPayeeLocationRecord[];
-      scheduled_transactions?: YnabScheduledTransactionRecord[];
-      transactions?: YnabTransactionRecord[];
     };
   };
 };
@@ -463,18 +394,6 @@ type YnabCategoryGroupRecord = {
   hidden: boolean;
   deleted: boolean;
   categories?: YnabCategoryRecord[];
-};
-
-type YnabPlanMonthRecord = {
-  month: string;
-  note?: string | null;
-  income?: number;
-  budgeted?: number;
-  activity?: number;
-  to_be_budgeted?: number;
-  age_of_money?: number | null;
-  categories?: YnabCategoryRecord[];
-  deleted?: boolean;
 };
 
 type YnabAccountsResponse = {
@@ -714,42 +633,6 @@ type YnabPayeeLocationResponse = {
   };
 };
 
-type YnabMoneyMovementRecord = {
-  id: string;
-  month?: string | null;
-  moved_at?: string | null;
-  note?: string | null;
-  money_movement_group_id?: string | null;
-  performed_by_user_id?: string | null;
-  from_category_id?: string | null;
-  to_category_id?: string | null;
-  amount: number;
-  deleted?: boolean;
-};
-
-type YnabMoneyMovementsResponse = {
-  data: {
-    money_movements: YnabMoneyMovementRecord[];
-    server_knowledge: number;
-  };
-};
-
-type YnabMoneyMovementGroupRecord = {
-  id: string;
-  group_created_at: string;
-  month: string;
-  note?: string | null;
-  performed_by_user_id?: string | null;
-  deleted?: boolean;
-};
-
-type YnabMoneyMovementGroupsResponse = {
-  data: {
-    money_movement_groups: YnabMoneyMovementGroupRecord[];
-    server_knowledge: number;
-  };
-};
-
 async function getJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let detail = response.statusText;
@@ -852,52 +735,6 @@ function toYnabCategory(category: YnabCategoryRecord): YnabCategorySummary {
   };
 }
 
-function toYnabCategoryGroup(
-  group: YnabCategoryGroupRecord,
-  categoriesByGroupId: Map<string, YnabCategorySummary>[]
-): YnabCategoryGroupSummary {
-  const categories = categoriesByGroupId
-    .flatMap((categoryMap) => categoryMap.get(group.id) ? [categoryMap.get(group.id)!] : []);
-
-  return {
-    categories: group.categories?.map(toYnabCategory) ?? categories,
-    deleted: group.deleted,
-    hidden: group.hidden,
-    id: group.id,
-    name: group.name
-  };
-}
-
-function groupCategoriesByGroupId(categories: YnabCategorySummary[]) {
-  const maps: Array<Map<string, YnabCategorySummary>> = [];
-
-  for (const category of categories) {
-    if (category.categoryGroupId) {
-      const map = new Map<string, YnabCategorySummary>();
-      map.set(category.categoryGroupId, category);
-      maps.push(map);
-    }
-  }
-
-  return maps;
-}
-
-function toYnabMonth(month: YnabPlanMonthRecord): YnabPlanMonthDetail {
-  return {
-    activity: month.activity,
-    ageOfMoney: month.age_of_money ?? undefined,
-    budgeted: month.budgeted,
-    categories: month.categories?.map((category) => ({
-      ...toYnabCategory(category),
-      balance: category.balance ?? 0
-    })),
-    deleted: month.deleted,
-    income: month.income,
-    month: month.month,
-    toBeBudgeted: month.to_be_budgeted
-  };
-}
-
 function toYnabScheduledTransaction(transaction: YnabScheduledTransactionRecord): YnabScheduledTransaction {
   return {
     id: transaction.id,
@@ -947,32 +784,6 @@ function toYnabPayeeLocation(location: YnabPayeeLocationRecord): YnabPayeeLocati
     latitude: location.latitude,
     longitude: location.longitude,
     deleted: location.deleted
-  };
-}
-
-function toYnabMoneyMovement(movement: YnabMoneyMovementRecord): YnabMoneyMovement {
-  return {
-    amount: movement.amount,
-    deleted: movement.deleted ?? false,
-    fromCategoryId: movement.from_category_id,
-    id: movement.id,
-    moneyMovementGroupId: movement.money_movement_group_id,
-    month: movement.month,
-    movedAt: movement.moved_at,
-    note: movement.note,
-    performedByUserId: movement.performed_by_user_id,
-    toCategoryId: movement.to_category_id
-  };
-}
-
-function toYnabMoneyMovementGroup(group: YnabMoneyMovementGroupRecord): YnabMoneyMovementGroup {
-  return {
-    deleted: group.deleted ?? false,
-    groupCreatedAt: group.group_created_at,
-    id: group.id,
-    month: group.month,
-    note: group.note,
-    performedByUserId: group.performed_by_user_id
   };
 }
 
@@ -1039,31 +850,6 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         accountCount: Array.isArray(plan.accounts) ? plan.accounts.length : undefined,
         categoryGroupCount: Array.isArray(plan.category_groups) ? plan.category_groups.length : undefined,
         payeeCount: Array.isArray(plan.payees) ? plan.payees.length : undefined
-      };
-    },
-    async getPlanExport(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}`);
-      const payload = await getJson<YnabPlanExportResponse>(response);
-      const plan = payload.data.plan;
-      const categories = (plan.categories ?? []).map(toYnabCategory);
-      const categoriesByGroupId = groupCategoriesByGroupId(categories);
-
-      return {
-        plan: {
-          accounts: (plan.accounts ?? []).map(toYnabAccount),
-          categoryGroups: (plan.category_groups ?? []).map((group) => toYnabCategoryGroup(group, categoriesByGroupId)),
-          firstMonth: plan.first_month,
-          id: plan.id,
-          lastModifiedOn: plan.last_modified_on,
-          lastMonth: plan.last_month,
-          months: (plan.months ?? []).map(toYnabMonth),
-          name: plan.name,
-          payeeLocations: (plan.payee_locations ?? []).map(toYnabPayeeLocation),
-          payees: (plan.payees ?? []).map(toYnabPayee),
-          scheduledTransactions: (plan.scheduled_transactions ?? []).map(toYnabScheduledTransaction),
-          transactions: (plan.transactions ?? []).map(toYnabTransaction)
-        },
-        serverKnowledge: payload.data.server_knowledge
       };
     },
     async listCategories(planId: string) {
@@ -1294,24 +1080,6 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const payload = await getJson<YnabPayeeLocationsResponse>(response);
 
       return payload.data.payee_locations.map(toYnabPayeeLocation);
-    },
-    async listMoneyMovements(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/money_movements`);
-      const payload = await getJson<YnabMoneyMovementsResponse>(response);
-
-      return {
-        moneyMovements: payload.data.money_movements.map(toYnabMoneyMovement),
-        serverKnowledge: payload.data.server_knowledge
-      };
-    },
-    async listMoneyMovementGroups(planId: string) {
-      const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/money_movement_groups`);
-      const payload = await getJson<YnabMoneyMovementGroupsResponse>(response);
-
-      return {
-        moneyMovementGroups: payload.data.money_movement_groups.map(toYnabMoneyMovementGroup),
-        serverKnowledge: payload.data.server_knowledge
-      };
     }
   };
 }
