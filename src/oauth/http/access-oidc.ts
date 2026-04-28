@@ -38,6 +38,41 @@ export type AccessOidcEndpoints = {
   tokenUrl: string;
 };
 
+type CacheEntry<T> = {
+  expiresAt: number;
+  value: Promise<T>;
+};
+
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const discoveryEndpointCache = new Map<string, CacheEntry<AccessOidcEndpoints>>();
+const jwksCache = new Map<string, CacheEntry<AccessJwks>>();
+
+function readCached<T>(cache: Map<string, CacheEntry<T>>, key: string) {
+  const entry = cache.get(key);
+
+  if (!entry || entry.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return undefined;
+  }
+
+  return entry.value;
+}
+
+function writeCached<T>(cache: Map<string, CacheEntry<T>>, key: string, value: Promise<T>) {
+  cache.set(key, {
+    expiresAt: Date.now() + CACHE_TTL_MS,
+    value
+  });
+
+  value.catch(() => {
+    if (cache.get(key)?.value === value) {
+      cache.delete(key);
+    }
+  });
+
+  return value;
+}
+
 async function readJsonObject(response: Response) {
   const payload = await response.json();
 
@@ -70,31 +105,39 @@ export async function resolveAccessOidcEndpoints(options: {
     return overrides;
   }
 
-  const response = await options.fetch(options.config.discoveryUrl, {
-    headers: {
-      accept: "application/json"
+  const cachedEndpoints = readCached(discoveryEndpointCache, options.config.discoveryUrl);
+
+  if (cachedEndpoints) {
+    return cachedEndpoints;
+  }
+
+  return writeCached(discoveryEndpointCache, options.config.discoveryUrl, (async () => {
+    const response = await options.fetch(options.config.discoveryUrl, {
+      headers: {
+        accept: "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Access OIDC discovery request failed.");
     }
-  });
 
-  if (!response.ok) {
-    throw new Error("Access OIDC discovery request failed.");
-  }
+    const payload = await readJsonObject(response) as AccessDiscoveryResponse;
 
-  const payload = await readJsonObject(response) as AccessDiscoveryResponse;
+    if (
+      typeof payload.authorization_endpoint !== "string" ||
+      typeof payload.jwks_uri !== "string" ||
+      typeof payload.token_endpoint !== "string"
+    ) {
+      throw new Error("Access OIDC discovery response is missing required endpoints.");
+    }
 
-  if (
-    typeof payload.authorization_endpoint !== "string" ||
-    typeof payload.jwks_uri !== "string" ||
-    typeof payload.token_endpoint !== "string"
-  ) {
-    throw new Error("Access OIDC discovery response is missing required endpoints.");
-  }
-
-  return {
-    authorizationUrl: payload.authorization_endpoint,
-    jwksUrl: payload.jwks_uri,
-    tokenUrl: payload.token_endpoint
-  };
+    return {
+      authorizationUrl: payload.authorization_endpoint,
+      jwksUrl: payload.jwks_uri,
+      tokenUrl: payload.token_endpoint
+    };
+  })());
 }
 
 export function createAccessOidcClient(options: AccessOidcClientOptions) {
@@ -128,17 +171,25 @@ export function createAccessOidcClient(options: AccessOidcClientOptions) {
   }
 
   async function fetchJwks() {
-    const response = await options.fetch(options.jwksUrl, {
-      headers: {
-        accept: "application/json"
-      }
-    });
+    const cachedJwks = readCached(jwksCache, options.jwksUrl);
 
-    if (!response.ok) {
-      throw new Error("Access OIDC JWKS request failed.");
+    if (cachedJwks) {
+      return cachedJwks;
     }
 
-    return readJsonObject(response) as Promise<AccessJwks>;
+    return writeCached(jwksCache, options.jwksUrl, (async () => {
+      const response = await options.fetch(options.jwksUrl, {
+        headers: {
+          accept: "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Access OIDC JWKS request failed.");
+      }
+
+      return readJsonObject(response) as Promise<AccessJwks>;
+    })());
   }
 
   return {

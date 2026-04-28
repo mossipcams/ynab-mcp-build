@@ -4,6 +4,9 @@ import { defineConfig, defineProject } from "vitest/config";
 const unitIncludes = [
   "tests/architecture/**/*.test.ts",
   "src/tooling/**/*.spec.ts",
+  "src/shared/**/*.spec.ts",
+  "src/platform/**/*.spec.ts",
+  "src/oauth/**/*.spec.ts",
   "tests/platform/ynab/client.test.ts",
   "tests/platform/ynab/mappers.test.ts",
   "tests/platform/ynab/schemas.test.ts",
@@ -14,6 +17,7 @@ const unitIncludes = [
 
 const workersIncludes = [
   "src/app/dependencies.spec.ts",
+  "src/http/routes/mcp.spec.ts",
   "src/http/routes/oauth.spec.ts",
   "src/index.oauth-provider.spec.ts",
   "src/shared/env.oauth-provider.spec.ts",

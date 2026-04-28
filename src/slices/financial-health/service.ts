@@ -165,6 +165,36 @@ async function resolveMonthRange(
   };
 }
 
+async function getMonthDetailContext(ynabClient: YnabClient, input: FinancialHealthInput) {
+  const planId = await resolvePlanId(ynabClient, input.planId);
+  const month = await resolveMonth(ynabClient, planId, input.month);
+  const monthDetail = await ynabClient.getPlanMonth(planId, month);
+
+  return { planId, month, monthDetail };
+}
+
+async function getMonthAccountContext(ynabClient: YnabClient, input: FinancialHealthInput) {
+  const planId = await resolvePlanId(ynabClient, input.planId);
+  const month = await resolveMonth(ynabClient, planId, input.month);
+  const [monthDetail, accounts] = await Promise.all([
+    ynabClient.getPlanMonth(planId, month),
+    ynabClient.listAccounts(planId)
+  ]);
+
+  return { planId, month, monthDetail, accounts };
+}
+
+async function getMonthTransactionContext(ynabClient: YnabClient, input: FinancialHealthInput) {
+  const planId = await resolvePlanId(ynabClient, input.planId);
+  const month = await resolveMonth(ynabClient, planId, input.month);
+  const [monthDetail, transactions] = await Promise.all([
+    ynabClient.getPlanMonth(planId, month),
+    ynabClient.listTransactions(planId, month)
+  ]);
+
+  return { planId, month, monthDetail, transactions };
+}
+
 async function getMonthContext(ynabClient: YnabClient, input: FinancialHealthInput) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const month = await resolveMonth(ynabClient, planId, input.month);
@@ -420,7 +450,7 @@ function toExampleTransactions(transactions: YnabTransaction[], topN: number) {
 
 export async function getFinancialSnapshot(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = resolveTopN(input);
-  const { monthDetail, accounts } = await getMonthContext(ynabClient, input);
+  const { monthDetail, accounts } = await getMonthAccountContext(ynabClient, input);
   const snapshot = buildAccountSnapshotSummary(accounts as YnabAccountSummary[]);
 
   return {
@@ -456,7 +486,7 @@ export async function getFinancialSnapshot(ynabClient: YnabClient, input: Financ
 
 export async function getBudgetHealthSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = resolveTopN(input);
-  const { monthDetail } = await getMonthContext(ynabClient, input);
+  const { monthDetail } = await getMonthDetailContext(ynabClient, input);
 
   return summarizeBudgetHealthMonth(monthDetail, topN);
 }
@@ -501,7 +531,7 @@ export async function getFinancialHealthCheck(ynabClient: YnabClient, input: Fin
 
 export async function getMonthlyReview(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = resolveTopN(input);
-  const { monthDetail, transactions } = await getMonthContext(ynabClient, input);
+  const { monthDetail, transactions } = await getMonthTransactionContext(ynabClient, input);
   const budgetHealth = summarizeBudgetHealthMonth(monthDetail, topN);
   const monthTransactions = transactions.filter((transaction) => isNonTransferMonthTransaction(transaction, monthDetail.month));
   const inflowMilliunits = monthTransactions
@@ -1073,7 +1103,7 @@ export async function getEmergencyFundCoverage(
 
 export async function getGoalProgressSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = resolveTopN(input);
-  const { monthDetail } = await getMonthContext(ynabClient, input);
+  const { monthDetail } = await getMonthDetailContext(ynabClient, input);
   const goalCategories = (monthDetail.categories ?? [])
     .filter((category) => !category.deleted && !category.hidden && category.goalUnderFunded !== undefined);
   const underfundedGoals = goalCategories
@@ -1122,7 +1152,7 @@ export async function getDebtSummary(ynabClient: YnabClient, input: { planId?: s
 
 export async function getCleanupSummary(ynabClient: YnabClient, input: FinancialHealthInput) {
   const topN = resolveTopN(input);
-  const { monthDetail, transactions } = await getMonthContext(ynabClient, input);
+  const { monthDetail, transactions } = await getMonthTransactionContext(ynabClient, input);
   const monthTransactions = transactions.filter(
     (transaction) => !transaction.deleted && !transaction.transferAccountId && toMonthKey(transaction.date) === monthDetail.month
   );
@@ -1178,30 +1208,33 @@ function reconstructHistoricalBalances(
   transactions: YnabTransaction[],
   months: string[]
 ) {
-  const currentBalances = new Map(accounts.map((account) => [account.id, account.balance]));
-  const sortedTransactions = transactions
+  const balances = new Map(accounts.map((account) => [account.id, account.balance]));
+  const transactionsByMonthDesc = transactions
     .filter((transaction) => !transaction.deleted && transaction.accountId)
-    .slice()
-    .sort((left, right) => right.date.localeCompare(left.date) || left.id.localeCompare(right.id));
+    .map((transaction) => ({
+      accountId: transaction.accountId!,
+      amount: transaction.amount,
+      id: transaction.id,
+      month: toMonthKey(transaction.date)
+    }))
+    .sort((left, right) => right.month.localeCompare(left.month) || left.id.localeCompare(right.id));
+  const balancesByMonth = new Map<string, Map<string, number>>();
+  let transactionIndex = 0;
 
-  return new Map(
-    months.map((month) => {
-      const balances = new Map(currentBalances);
+  for (const month of months.slice().sort((left, right) => right.localeCompare(left))) {
+    while (
+      transactionIndex < transactionsByMonthDesc.length
+      && transactionsByMonthDesc[transactionIndex]!.month > month
+    ) {
+      const transaction = transactionsByMonthDesc[transactionIndex]!;
+      balances.set(transaction.accountId, (balances.get(transaction.accountId) ?? 0) - transaction.amount);
+      transactionIndex += 1;
+    }
 
-      for (const transaction of sortedTransactions) {
-        if (toMonthKey(transaction.date) <= month || !transaction.accountId) {
-          continue;
-        }
+    balancesByMonth.set(month, new Map(balances));
+  }
 
-        balances.set(
-          transaction.accountId,
-          (balances.get(transaction.accountId) ?? 0) - transaction.amount
-        );
-      }
-
-      return [month, balances] as const;
-    })
-  );
+  return balancesByMonth;
 }
 
 function summarizeBalances(month: string, balances: Map<string, number>, accounts: YnabAccountSummary[]) {

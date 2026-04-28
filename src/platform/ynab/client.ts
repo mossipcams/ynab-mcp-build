@@ -193,6 +193,9 @@ export interface YnabClient {
   listAccounts(planId: string): Promise<YnabAccountSummary[]>;
   getAccount(planId: string, accountId: string): Promise<YnabAccountDetail>;
   listTransactions(planId: string, fromDate?: string): Promise<YnabTransaction[]>;
+  listTransactionsByAccount(planId: string, accountId: string): Promise<YnabTransaction[]>;
+  listTransactionsByCategory(planId: string, categoryId: string): Promise<YnabTransaction[]>;
+  listTransactionsByPayee(planId: string, payeeId: string): Promise<YnabTransaction[]>;
   getTransaction(planId: string, transactionId: string): Promise<YnabTransaction>;
   listScheduledTransactions(planId: string): Promise<YnabScheduledTransaction[]>;
   getScheduledTransaction(planId: string, scheduledTransactionId: string): Promise<YnabScheduledTransaction>;
@@ -762,6 +765,30 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       }
 
       const response = await authorizedFetch(url.toString());
+      const payload = await getJson<YnabTransactionsResponse>(response);
+
+      return payload.data.transactions.map(toYnabTransaction);
+    },
+    async listTransactionsByAccount(planId: string, accountId: string) {
+      const response = await authorizedFetch(
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}/transactions`
+      );
+      const payload = await getJson<YnabTransactionsResponse>(response);
+
+      return payload.data.transactions.map(toYnabTransaction);
+    },
+    async listTransactionsByCategory(planId: string, categoryId: string) {
+      const response = await authorizedFetch(
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}/transactions`
+      );
+      const payload = await getJson<YnabTransactionsResponse>(response);
+
+      return payload.data.transactions.map(toYnabTransaction);
+    },
+    async listTransactionsByPayee(planId: string, payeeId: string) {
+      const response = await authorizedFetch(
+        `${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/transactions`
+      );
       const payload = await getJson<YnabTransactionsResponse>(response);
 
       return payload.data.transactions.map(toYnabTransaction);

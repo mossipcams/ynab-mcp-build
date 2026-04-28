@@ -64,6 +64,15 @@ export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: Ap
             `Invalid arguments for tool ${request.params.name}: ${parseResult.error.message}`
           );
         }
+
+        const transport = new WebStandardStreamableHTTPServerTransport();
+        const server = createMcpServer(env, dependencies, registeredToolDefinitions);
+
+        await server.connect(transport);
+
+        return transport.handleRequest(context.req.raw, {
+          ...(parsedBody !== undefined ? { parsedBody } : {})
+        });
       }
     }
 
