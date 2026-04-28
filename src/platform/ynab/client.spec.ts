@@ -51,6 +51,322 @@ describe("ynab scoped transaction client methods", () => {
   });
 });
 
+describe("ynab client endpoint contracts", () => {
+  it("uses encoded /plans endpoints for the plan-scoped client surface", async () => {
+    const requests: Array<{ input: string | URL | Request; init?: RequestInit }> = [];
+    const client = createYnabClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1/",
+      fetchFn: async (input, init) => {
+        requests.push({ input, init });
+        const url = String(input);
+
+        if (url.endsWith("/plans/plan%201")) {
+          return Response.json({
+            data: {
+              plan: {
+                id: "plan-1",
+                name: "Plan",
+                accounts: [{ id: "account-1" }],
+                category_groups: [{ id: "group-1" }],
+                payees: [{ id: "payee-1" }]
+              }
+            }
+          });
+        }
+
+        if (url.endsWith("/categories")) {
+          return Response.json({
+            data: {
+              category_groups: [
+                {
+                  categories: [
+                    {
+                      deleted: false,
+                      hidden: false,
+                      id: "category-1",
+                      name: "Groceries"
+                    }
+                  ],
+                  deleted: false,
+                  hidden: false,
+                  id: "group-1",
+                  name: "Everyday"
+                }
+              ]
+            }
+          });
+        }
+
+        if (url.includes("/categories/category%201")) {
+          return Response.json({
+            data: {
+              category: {
+                balance: 12000,
+                hidden: false,
+                id: "category-1",
+                name: "Groceries"
+              }
+            }
+          });
+        }
+
+        if (url.endsWith("/settings")) {
+          return Response.json({
+            data: {
+              settings: {
+                currency_format: {
+                  iso_code: "USD",
+                  decimal_digits: 2
+                },
+                date_format: {
+                  format: "MM/DD/YYYY"
+                }
+              }
+            }
+          });
+        }
+
+        if (url.endsWith("/months")) {
+          return Response.json({
+            data: {
+              months: [
+                {
+                  activity: -12000,
+                  budgeted: 50000,
+                  income: 100000,
+                  month: "2026-04-01"
+                }
+              ]
+            }
+          });
+        }
+
+        if (url.includes("/months/2026-04-01")) {
+          return Response.json({
+            data: {
+              month: {
+                age_of_money: 12,
+                categories: [
+                  {
+                    balance: 12000,
+                    hidden: false,
+                    id: "category-1",
+                    name: "Groceries"
+                  }
+                ],
+                month: "2026-04-01"
+              }
+            }
+          });
+        }
+
+        if (url.includes("/accounts/account%201")) {
+          return Response.json({
+            data: {
+              account: {
+                balance: 12000,
+                closed: false,
+                id: "account-1",
+                name: "Checking",
+                type: "checking"
+              }
+            }
+          });
+        }
+
+        if (url.endsWith("/transactions?since_date=2026-04-01")) {
+          return Response.json(transactionResponse());
+        }
+
+        if (url.includes("/transactions/txn%201")) {
+          return Response.json({
+            data: {
+              transaction: transactionResponse().data.transactions[0]
+            }
+          });
+        }
+
+        if (url.includes("/scheduled_transactions/scheduled%201")) {
+          return Response.json({
+            data: {
+              scheduled_transaction: {
+                amount: -45000,
+                date_first: "2026-04-01",
+                id: "scheduled-1"
+              }
+            }
+          });
+        }
+
+        if (url.endsWith("/scheduled_transactions")) {
+          return Response.json({
+            data: {
+              scheduled_transactions: [
+                {
+                  amount: -45000,
+                  date_first: "2026-04-01",
+                  id: "scheduled-1"
+                }
+              ]
+            }
+          });
+        }
+
+        if (url.includes("/payees/payee%201/payee_locations")) {
+          return Response.json({
+            data: {
+              payee_locations: [
+                {
+                  id: "location-1",
+                  payee_id: "payee-1"
+                }
+              ]
+            }
+          });
+        }
+
+        if (url.includes("/payees/payee%201")) {
+          return Response.json({
+            data: {
+              payee: {
+                id: "payee-1",
+                name: "Market"
+              }
+            }
+          });
+        }
+
+        if (url.endsWith("/payees")) {
+          return Response.json({
+            data: {
+              payees: [
+                {
+                  id: "payee-1",
+                  name: "Market"
+                }
+              ]
+            }
+          });
+        }
+
+        if (url.includes("/payee_locations/location%201")) {
+          return Response.json({
+            data: {
+              payee_location: {
+                id: "location-1",
+                payee_id: "payee-1"
+              }
+            }
+          });
+        }
+
+        if (url.endsWith("/payee_locations")) {
+          return Response.json({
+            data: {
+              payee_locations: [
+                {
+                  id: "location-1",
+                  payee_id: "payee-1"
+                }
+              ]
+            }
+          });
+        }
+
+        throw new Error(`Unexpected URL ${url}`);
+      }
+    });
+
+    await expect(client.getPlan("plan 1")).resolves.toMatchObject({
+      accountCount: 1,
+      categoryGroupCount: 1,
+      payeeCount: 1
+    });
+    await expect(client.listCategories("plan 1")).resolves.toHaveLength(1);
+    await expect(client.getCategory("plan 1", "category 1")).resolves.toMatchObject({
+      balance: 12000
+    });
+    await expect(client.getMonthCategory("plan 1", "2026-04-01", "category 1")).resolves.toMatchObject({
+      balance: 12000
+    });
+    await expect(client.getPlanSettings("plan 1")).resolves.toMatchObject({
+      currencyFormat: {
+        isoCode: "USD"
+      },
+      dateFormat: {
+        format: "MM/DD/YYYY"
+      }
+    });
+    await expect(client.listPlanMonths("plan 1")).resolves.toMatchObject([
+      {
+        month: "2026-04-01"
+      }
+    ]);
+    await expect(client.getPlanMonth("plan 1", "2026-04-01")).resolves.toMatchObject({
+      ageOfMoney: 12,
+      categoryCount: 1
+    });
+    await expect(client.getAccount("plan 1", "account 1")).resolves.toMatchObject({
+      balance: 12000
+    });
+    await expect(client.listTransactions("plan 1", "2026-04-01")).resolves.toHaveLength(1);
+    await expect(client.getTransaction("plan 1", "txn 1")).resolves.toMatchObject({
+      id: "txn-1"
+    });
+    await expect(client.listScheduledTransactions("plan 1")).resolves.toHaveLength(1);
+    await expect(client.getScheduledTransaction("plan 1", "scheduled 1")).resolves.toMatchObject({
+      id: "scheduled-1"
+    });
+    await expect(client.listPayees("plan 1")).resolves.toHaveLength(1);
+    await expect(client.getPayee("plan 1", "payee 1")).resolves.toMatchObject({
+      id: "payee-1"
+    });
+    await expect(client.listPayeeLocations("plan 1")).resolves.toHaveLength(1);
+    await expect(client.getPayeeLocation("plan 1", "location 1")).resolves.toMatchObject({
+      id: "location-1"
+    });
+    await expect(client.getPayeeLocationsByPayee("plan 1", "payee 1")).resolves.toHaveLength(1);
+
+    expect(requests.map(({ input }) => String(input))).toEqual([
+      "https://api.ynab.com/v1/plans/plan%201",
+      "https://api.ynab.com/v1/plans/plan%201/categories",
+      "https://api.ynab.com/v1/plans/plan%201/categories/category%201",
+      "https://api.ynab.com/v1/plans/plan%201/months/2026-04-01/categories/category%201",
+      "https://api.ynab.com/v1/plans/plan%201/settings",
+      "https://api.ynab.com/v1/plans/plan%201/months",
+      "https://api.ynab.com/v1/plans/plan%201/months/2026-04-01",
+      "https://api.ynab.com/v1/plans/plan%201/accounts/account%201",
+      "https://api.ynab.com/v1/plans/plan%201/transactions?since_date=2026-04-01",
+      "https://api.ynab.com/v1/plans/plan%201/transactions/txn%201",
+      "https://api.ynab.com/v1/plans/plan%201/scheduled_transactions",
+      "https://api.ynab.com/v1/plans/plan%201/scheduled_transactions/scheduled%201",
+      "https://api.ynab.com/v1/plans/plan%201/payees",
+      "https://api.ynab.com/v1/plans/plan%201/payees/payee%201",
+      "https://api.ynab.com/v1/plans/plan%201/payee_locations",
+      "https://api.ynab.com/v1/plans/plan%201/payee_locations/location%201",
+      "https://api.ynab.com/v1/plans/plan%201/payees/payee%201/payee_locations"
+    ]);
+    expect(requests.every(({ init }) => (init?.headers as Record<string, string>).Authorization === "Bearer pat-secret"))
+      .toBe(true);
+  });
+
+  it("maps fetch failures into retryable upstream errors", async () => {
+    const client = createYnabClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async () => {
+        throw new Error("network down");
+      }
+    });
+
+    await expect(client.getUser()).rejects.toMatchObject({
+      category: "upstream",
+      retryable: true
+    });
+  });
+});
+
 describe("ynab money movement client methods", () => {
   it("uses money movement endpoints and maps server knowledge", async () => {
     const requests: Array<string | URL | Request> = [];
