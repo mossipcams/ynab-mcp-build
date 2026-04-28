@@ -310,27 +310,38 @@ export async function getTransactionsByMonth(ynabClient: YnabClient, input: GetT
 async function getTransactionsBySelector(
   ynabClient: YnabClient,
   input: ListTransactionsInput & { planId?: string },
-  predicate: (transaction: YnabTransaction) => boolean
+  loadTransactions: (planId: string) => Promise<YnabTransaction[]>
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const transactions = (await ynabClient.listTransactions(planId, undefined))
+  const transactions = (await loadTransactions(planId))
     .filter((transaction) => !transaction.deleted)
-    .filter(predicate)
     .sort((left, right) => compareTransactions(left, right, "date_desc"));
 
   return buildTransactionCollectionResult(transactions, input, "transaction_count");
 }
 
 export async function getTransactionsByAccount(ynabClient: YnabClient, input: GetTransactionsByAccountInput) {
-  return getTransactionsBySelector(ynabClient, input, (transaction) => transaction.accountId === input.accountId);
+  return getTransactionsBySelector(
+    ynabClient,
+    input,
+    (planId) => ynabClient.listTransactionsByAccount(planId, input.accountId)
+  );
 }
 
 export async function getTransactionsByCategory(ynabClient: YnabClient, input: GetTransactionsByCategoryInput) {
-  return getTransactionsBySelector(ynabClient, input, (transaction) => transaction.categoryId === input.categoryId);
+  return getTransactionsBySelector(
+    ynabClient,
+    input,
+    (planId) => ynabClient.listTransactionsByCategory(planId, input.categoryId)
+  );
 }
 
 export async function getTransactionsByPayee(ynabClient: YnabClient, input: GetTransactionsByPayeeInput) {
-  return getTransactionsBySelector(ynabClient, input, (transaction) => transaction.payeeId === input.payeeId);
+  return getTransactionsBySelector(
+    ynabClient,
+    input,
+    (planId) => ynabClient.listTransactionsByPayee(planId, input.payeeId)
+  );
 }
 
 const scheduledTransactionFields = [

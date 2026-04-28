@@ -8,8 +8,10 @@ export type AppDependencies = {
 };
 
 export function resolveYnabClient(env: AppEnv, dependencies: AppDependencies): YnabClient {
-  if (dependencies.ynabClient) {
-    return dependencies.ynabClient;
+  const injectedYnabClient = dependencies.ynabClient;
+
+  if (injectedYnabClient) {
+    return injectedYnabClient;
   }
 
   if (!env.ynabAccessToken) {
@@ -48,6 +50,15 @@ export function resolveYnabClient(env: AppEnv, dependencies: AppDependencies): Y
         throw new Error("YNAB access token is not configured.");
       },
       async listTransactions() {
+        throw new Error("YNAB access token is not configured.");
+      },
+      async listTransactionsByAccount() {
+        throw new Error("YNAB access token is not configured.");
+      },
+      async listTransactionsByCategory() {
+        throw new Error("YNAB access token is not configured.");
+      },
+      async listTransactionsByPayee() {
         throw new Error("YNAB access token is not configured.");
       },
       async getTransaction() {
