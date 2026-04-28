@@ -1,8 +1,9 @@
-import { resolvePlanId } from "../../shared/plans.js";
+import { getKnownDefaultPlan, resolvePlanId } from "../../shared/plans.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
 
 export async function listPlans(ynabClient: YnabClient) {
   const result = await ynabClient.listPlans();
+  const defaultPlan = getKnownDefaultPlan(result);
 
   return {
     plans: result.plans.map((plan) => ({
@@ -10,10 +11,10 @@ export async function listPlans(ynabClient: YnabClient) {
       name: plan.name,
       last_modified_on: plan.lastModifiedOn
     })),
-    default_plan: result.defaultPlan
+    default_plan: defaultPlan
       ? {
-          id: result.defaultPlan.id,
-          name: result.defaultPlan.name
+          id: defaultPlan.id,
+          name: defaultPlan.name
         }
       : null
   };
