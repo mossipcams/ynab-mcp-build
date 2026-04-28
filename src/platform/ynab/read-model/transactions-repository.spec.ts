@@ -66,12 +66,38 @@ describe("transactions repository", () => {
           date: "2026-04-12",
           amount: -12000,
           memo: "weekly run",
+          cleared: "cleared",
+          approved: true,
+          flag_color: "blue",
+          flag_name: "follow up",
           account_id: "account-1",
           account_name: "Checking",
           payee_id: "payee-1",
           payee_name: "Market",
           category_id: "category-1",
           category_name: "Groceries",
+          transfer_account_id: "account-2",
+          transfer_transaction_id: "transfer-txn-1",
+          matched_transaction_id: "matched-txn-1",
+          import_id: "YNAB:-12000:2026-04-12:1",
+          import_payee_name: "MKT",
+          import_payee_name_original: "Market Original",
+          debt_transaction_type: "payment",
+          subtransactions: [
+            {
+              id: "subtxn-1",
+              transaction_id: "txn-1",
+              amount: -12000,
+              memo: "split line",
+              payee_id: "payee-1",
+              payee_name: "Market",
+              category_id: "category-1",
+              category_name: "Groceries",
+              transfer_account_id: "account-2",
+              transfer_transaction_id: "transfer-subtxn-1",
+              deleted: false
+            }
+          ],
           deleted: false
         },
         {
@@ -87,12 +113,20 @@ describe("transactions repository", () => {
       rowsDeleted: 1,
       rowsUpserted: 2
     });
-    expect(db.batchStatements).toHaveLength(2);
+    expect(db.batchStatements).toHaveLength(3);
     expect(db.batchStatements[0].sql).toContain("ON CONFLICT(plan_id, id) DO UPDATE");
     expect(db.batchStatements[0].params).toContain("plan-1");
     expect(db.batchStatements[0].params).toContain("txn-1");
     expect(db.batchStatements[0].params).toContain(-12000);
-    expect(db.batchStatements[1].params).toContain(1);
+    expect(db.batchStatements[0].params).toContain("blue");
+    expect(db.batchStatements[0].params).toContain("transfer-txn-1");
+    expect(db.batchStatements[0].params).toContain("matched-txn-1");
+    expect(db.batchStatements[0].params).toContain("YNAB:-12000:2026-04-12:1");
+    expect(db.batchStatements[0].params).toContain("payment");
+    expect(db.batchStatements[1].sql).toContain("INSERT INTO ynab_subtransactions");
+    expect(db.batchStatements[1].params).toContain("subtxn-1");
+    expect(db.batchStatements[1].params).toContain("transfer-subtxn-1");
+    expect(db.batchStatements[2].params).toContain(1);
   });
 
   it("searches with parameterized filters and excludes deleted transactions by default", async () => {

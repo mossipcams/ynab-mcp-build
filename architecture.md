@@ -6,6 +6,10 @@ The v1 product surface is streamable HTTP MCP. The codebase is organized to keep
 
 The DB-backed read model is a rebuild/new feature path, not an in-place migration of the existing live YNAB slices. In DB-backed mode, normal MCP tools read from Cloudflare D1 only. YNAB API calls belong to sync/admin code, and tools must not silently fall back to live YNAB reads.
 
+The D1 schema is a normalized read model based on official YNAB API response
+shapes, not a lossy cache of the old slice outputs. Store API money values as
+integer milliunits and keep endpoint cursors in D1 sync state.
+
 ## Diagram
 
 ```mermaid

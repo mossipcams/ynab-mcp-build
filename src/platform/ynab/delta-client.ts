@@ -12,6 +12,7 @@ export type YnabDeltaTransactionRecord = {
   memo?: string | null;
   cleared?: string | null;
   approved?: boolean | null;
+  flag_color?: string | null;
   flag_name?: string | null;
   account_id?: string | null;
   account_name?: string | null;
@@ -20,6 +21,27 @@ export type YnabDeltaTransactionRecord = {
   category_id?: string | null;
   category_name?: string | null;
   transfer_account_id?: string | null;
+  transfer_transaction_id?: string | null;
+  matched_transaction_id?: string | null;
+  import_id?: string | null;
+  import_payee_name?: string | null;
+  import_payee_name_original?: string | null;
+  debt_transaction_type?: string | null;
+  subtransactions?: YnabDeltaSubtransactionRecord[];
+  deleted?: boolean;
+};
+
+export type YnabDeltaSubtransactionRecord = {
+  id: string;
+  transaction_id?: string | null;
+  amount: number;
+  memo?: string | null;
+  payee_id?: string | null;
+  payee_name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  transfer_account_id?: string | null;
+  transfer_transaction_id?: string | null;
   deleted?: boolean;
 };
 

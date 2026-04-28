@@ -11,6 +11,10 @@ describe("DB-backed transaction service", () => {
           date: "2026-04-12",
           amount_milliunits: -12000,
           memo: "weekly run",
+          cleared: "cleared",
+          approved: 1,
+          flag_color: "blue",
+          flag_name: "follow up",
           account_id: "account-1",
           account_name: "Checking",
           payee_id: "payee-1",
@@ -18,6 +22,12 @@ describe("DB-backed transaction service", () => {
           category_id: "category-1",
           category_name: "Groceries",
           transfer_account_id: null,
+          transfer_transaction_id: "transfer-txn-1",
+          matched_transaction_id: "matched-txn-1",
+          import_id: "YNAB:-12000:2026-04-12:1",
+          import_payee_name: "MKT",
+          import_payee_name_original: "Market Original",
+          debt_transaction_type: "payment",
           deleted: 0
         }
       ])
@@ -72,14 +82,24 @@ describe("DB-backed transaction service", () => {
             account_name: "Checking",
             amount: "-12.00",
             amount_milliunits: -12000,
+            approved: true,
             category_id: "category-1",
             category_name: "Groceries",
+            cleared: "cleared",
             date: "2026-04-12",
+            debt_transaction_type: "payment",
+            flag_color: "blue",
+            flag_name: "follow up",
             id: "txn-1",
+            import_id: "YNAB:-12000:2026-04-12:1",
+            import_payee_name: "MKT",
+            import_payee_name_original: "Market Original",
+            matched_transaction_id: "matched-txn-1",
             memo: "weekly run",
             payee_id: "payee-1",
             payee_name: "Market",
-            transfer_account_id: null
+            transfer_account_id: null,
+            transfer_transaction_id: "transfer-txn-1"
           }
         ]
       }
