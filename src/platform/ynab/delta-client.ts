@@ -1,4 +1,27 @@
-import { YnabClientError } from "./client.js";
+import {
+  groupCategoriesByGroupId,
+  toYnabAccount,
+  toYnabCategory,
+  toYnabCategoryGroup,
+  toYnabMonth,
+  toYnabPayee,
+  toYnabPayeeLocation,
+  toYnabScheduledTransaction,
+  YnabClientError,
+  type YnabAccountRecord,
+  type YnabAccountSummary,
+  type YnabCategoryGroupRecord,
+  type YnabCategoryGroupSummary,
+  type YnabCategoryRecord,
+  type YnabPayee,
+  type YnabPayeeLocation,
+  type YnabPayeeLocationRecord,
+  type YnabPayeeRecord,
+  type YnabPlanMonthDetail,
+  type YnabPlanMonthRecord,
+  type YnabScheduledTransaction,
+  type YnabScheduledTransactionRecord
+} from "./client.js";
 
 export type YnabDeltaResponse<TRecord> = {
   serverKnowledge: number;
@@ -46,6 +69,30 @@ export type YnabDeltaSubtransactionRecord = {
 };
 
 export interface YnabDeltaClient {
+  listAccountsDelta(
+    planId: string,
+    serverKnowledge?: number
+  ): Promise<YnabDeltaResponse<YnabAccountSummary>>;
+  listCategoriesDelta(
+    planId: string,
+    serverKnowledge?: number
+  ): Promise<YnabDeltaResponse<YnabCategoryGroupSummary>>;
+  listMonthsDelta(
+    planId: string,
+    serverKnowledge?: number
+  ): Promise<YnabDeltaResponse<YnabPlanMonthDetail>>;
+  listPayeesDelta(
+    planId: string,
+    serverKnowledge?: number
+  ): Promise<YnabDeltaResponse<YnabPayee>>;
+  listPayeeLocationsDelta(
+    planId: string,
+    serverKnowledge?: number
+  ): Promise<YnabDeltaResponse<YnabPayeeLocation>>;
+  listScheduledTransactionsDelta(
+    planId: string,
+    serverKnowledge?: number
+  ): Promise<YnabDeltaResponse<YnabScheduledTransaction>>;
   listTransactionsDelta(
     planId: string,
     serverKnowledge?: number
@@ -62,6 +109,14 @@ type YnabDeltaEnvelope<TDataKey extends string, TRecord> = {
   data: {
     server_knowledge: number;
   } & Record<TDataKey, TRecord[]>;
+};
+
+type YnabCategoriesDeltaEnvelope = {
+  data: {
+    server_knowledge: number;
+    category_groups: YnabCategoryGroupRecord[];
+    categories?: YnabCategoryRecord[];
+  };
 };
 
 async function getJson<T>(response: Response): Promise<T> {
@@ -153,7 +208,83 @@ export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): Yn
     };
   }
 
+  async function getMappedDelta<TDataKey extends string, TRecord, TMappedRecord>(
+    planId: string,
+    endpoint: string,
+    dataKey: TDataKey,
+    serverKnowledge: number | undefined,
+    mapRecord: (record: TRecord) => TMappedRecord
+  ): Promise<YnabDeltaResponse<TMappedRecord>> {
+    const delta = await getDelta<TDataKey, TRecord>(planId, endpoint, dataKey, serverKnowledge);
+
+    return {
+      records: delta.records.map(mapRecord),
+      serverKnowledge: delta.serverKnowledge
+    };
+  }
+
+  async function listCategoriesDelta(planId: string, serverKnowledge: number | undefined) {
+    const url = new URL(`${baseUrl}/plans/${encodeURIComponent(planId)}/categories`);
+    applyServerKnowledge(url, serverKnowledge);
+
+    const response = await authorizedFetch(url.toString());
+    const payload = await getJson<YnabCategoriesDeltaEnvelope>(response);
+    const categories = (payload.data.categories ?? []).map(toYnabCategory);
+    const categoriesByGroupId = groupCategoriesByGroupId(categories);
+
+    return {
+      records: payload.data.category_groups.map((group) => toYnabCategoryGroup(group, categoriesByGroupId)),
+      serverKnowledge: payload.data.server_knowledge
+    };
+  }
+
   return {
+    listAccountsDelta(planId, serverKnowledge) {
+      return getMappedDelta<"accounts", YnabAccountRecord, YnabAccountSummary>(
+        planId,
+        "accounts",
+        "accounts",
+        serverKnowledge,
+        toYnabAccount
+      );
+    },
+    listCategoriesDelta,
+    listMonthsDelta(planId, serverKnowledge) {
+      return getMappedDelta<"months", YnabPlanMonthRecord, YnabPlanMonthDetail>(
+        planId,
+        "months",
+        "months",
+        serverKnowledge,
+        toYnabMonth
+      );
+    },
+    listPayeesDelta(planId, serverKnowledge) {
+      return getMappedDelta<"payees", YnabPayeeRecord, YnabPayee>(
+        planId,
+        "payees",
+        "payees",
+        serverKnowledge,
+        toYnabPayee
+      );
+    },
+    listPayeeLocationsDelta(planId, serverKnowledge) {
+      return getMappedDelta<"payee_locations", YnabPayeeLocationRecord, YnabPayeeLocation>(
+        planId,
+        "payee_locations",
+        "payee_locations",
+        serverKnowledge,
+        toYnabPayeeLocation
+      );
+    },
+    listScheduledTransactionsDelta(planId, serverKnowledge) {
+      return getMappedDelta<"scheduled_transactions", YnabScheduledTransactionRecord, YnabScheduledTransaction>(
+        planId,
+        "scheduled_transactions",
+        "scheduled_transactions",
+        serverKnowledge,
+        toYnabScheduledTransaction
+      );
+    },
     listTransactionsDelta(planId, serverKnowledge) {
       return getDelta<"transactions", YnabDeltaTransactionRecord>(
         planId,

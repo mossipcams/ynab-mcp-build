@@ -5,6 +5,10 @@ import type {
   YnabCategoryGroupSummary,
   YnabClient,
   YnabDefaultPlan,
+  YnabMoneyMovement,
+  YnabMoneyMovementGroup,
+  YnabMoneyMovementGroupsResult,
+  YnabMoneyMovementsResult,
   YnabMonthCategoryDetail,
   YnabPayee,
   YnabPayeeLocation,
@@ -140,6 +144,28 @@ type PayeeLocationRow = {
   deleted?: number | null;
 };
 
+type MoneyMovementRow = {
+  id: string;
+  month?: string | null;
+  moved_at?: string | null;
+  note?: string | null;
+  money_movement_group_id?: string | null;
+  performed_by_user_id?: string | null;
+  from_category_id?: string | null;
+  to_category_id?: string | null;
+  amount_milliunits: number;
+  deleted?: number | null;
+};
+
+type MoneyMovementGroupRow = {
+  id: string;
+  group_created_at: string;
+  month: string;
+  note?: string | null;
+  performed_by_user_id?: string | null;
+  deleted?: number | null;
+};
+
 function toBoolean(value: number | null | undefined) {
   return value === undefined || value === null ? undefined : value === 1;
 }
@@ -264,6 +290,32 @@ function toPayeeLocation(row: PayeeLocationRow): YnabPayeeLocation {
     latitude: row.latitude,
     longitude: row.longitude,
     deleted: toBoolean(row.deleted)
+  };
+}
+
+function toMoneyMovement(row: MoneyMovementRow): YnabMoneyMovement {
+  return {
+    amount: row.amount_milliunits,
+    deleted: toBoolean(row.deleted),
+    fromCategoryId: row.from_category_id,
+    id: row.id,
+    moneyMovementGroupId: row.money_movement_group_id,
+    month: row.month,
+    movedAt: row.moved_at,
+    note: row.note,
+    performedByUserId: row.performed_by_user_id,
+    toCategoryId: row.to_category_id
+  };
+}
+
+function toMoneyMovementGroup(row: MoneyMovementGroupRow): YnabMoneyMovementGroup {
+  return {
+    deleted: toBoolean(row.deleted),
+    groupCreatedAt: row.group_created_at,
+    id: row.id,
+    month: row.month,
+    note: row.note,
+    performedByUserId: row.performed_by_user_id
   };
 }
 
@@ -727,6 +779,50 @@ export function createYnabReadModelClient(
         planId,
         payeeId
       )).map(toPayeeLocation);
+    },
+
+    async listMoneyMovements(planId: string): Promise<YnabMoneyMovementsResult> {
+      const moneyMovements = (await all<MoneyMovementRow>(
+        `SELECT id,
+                month,
+                moved_at,
+                note,
+                money_movement_group_id,
+                performed_by_user_id,
+                from_category_id,
+                to_category_id,
+                amount_milliunits,
+                deleted
+         FROM ynab_money_movements
+         WHERE plan_id = ?
+         ORDER BY moved_at DESC, id`,
+        planId
+      )).map(toMoneyMovement);
+
+      return {
+        moneyMovements,
+        serverKnowledge: 0
+      };
+    },
+
+    async listMoneyMovementGroups(planId: string): Promise<YnabMoneyMovementGroupsResult> {
+      const moneyMovementGroups = (await all<MoneyMovementGroupRow>(
+        `SELECT id,
+                group_created_at,
+                month,
+                note,
+                performed_by_user_id,
+                deleted
+         FROM ynab_money_movement_groups
+         WHERE plan_id = ?
+         ORDER BY group_created_at DESC, id`,
+        planId
+      )).map(toMoneyMovementGroup);
+
+      return {
+        moneyMovementGroups,
+        serverKnowledge: 0
+      };
     }
   };
 }

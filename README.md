@@ -109,17 +109,24 @@ Apply the D1 schema with Wrangler once a real database is created and `database_
 
 ## Sync Flow
 
-The transaction sync service:
+The scheduled Worker sync runs from the Wrangler cron trigger every 15 minutes.
+It uses `YNAB_DEFAULT_PLAN_ID` when configured; otherwise it discovers YNAB's
+default plan from `GET /plans`, falling back to the first returned plan. The
+read-model sync service then:
 
 1. Acquires an endpoint lease in `ynab_sync_state`.
-2. Reads the endpoint `server_knowledge` cursor.
+2. Reads that endpoint's `server_knowledge` cursor.
 3. Calls the YNAB delta endpoint with `last_knowledge_of_server`.
 4. Refuses oversized delta responses.
 5. Upserts returned rows into D1.
 6. Advances `server_knowledge` only after D1 writes succeed.
 7. Records failures without advancing the cursor.
 
+Money movements are refreshed as a bounded endpoint because the SDK methods do
+not currently expose a delta cursor argument.
+
 ## Known Limitations
 
 - Only `ynab_search_transactions` is rebuilt against D1 so far.
-- Scheduled Worker/admin refresh wiring still needs to be connected to deployment policy.
+- Scheduled sync refreshes one configured or discovered default plan; multi-plan cron fan-out is not enabled by default.
+- Initial bootstrap for large budgets should be handled carefully because Worker/D1 limits make unbounded imports unsafe.

@@ -50,4 +50,14 @@ describe("repository preflight tooling", () => {
       prePrScript.indexOf("gh pr create")
     );
   });
+
+  it("configures the Worker cron that refreshes the D1 read model", () => {
+    const wranglerConfig = JSON.parse(readRootFile("wrangler.jsonc")) as {
+      triggers?: {
+        crons?: string[];
+      };
+    };
+
+    expect(wranglerConfig.triggers?.crons).toEqual(["*/15 * * * *"]);
+  });
 });

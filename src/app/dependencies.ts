@@ -84,6 +84,12 @@ export function resolveYnabClient(env: AppEnv, dependencies: AppDependencies): Y
       },
       async getPayeeLocationsByPayee() {
         throw new Error("YNAB access token is not configured.");
+      },
+      async listMoneyMovements() {
+        throw new Error("YNAB access token is not configured.");
+      },
+      async listMoneyMovementGroups() {
+        throw new Error("YNAB access token is not configured.");
       }
     };
   }
