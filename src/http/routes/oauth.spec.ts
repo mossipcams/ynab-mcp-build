@@ -83,6 +83,60 @@ describe("oauth routes", () => {
     });
   });
 
+  it("serves OpenID configuration metadata from the local OAuth server", async () => {
+    const response = await worker.fetch(
+      new Request("https://mcp.example.com/.well-known/openid-configuration"),
+      createOAuthEnv(),
+      {} as ExecutionContext
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      authorization_endpoint: "https://mcp.example.com/authorize",
+      code_challenge_methods_supported: ["S256"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      issuer: "https://mcp.example.com",
+      registration_endpoint: "https://mcp.example.com/register",
+      response_types_supported: ["code"],
+      scopes_supported: ["mcp"],
+      subject_types_supported: ["public"],
+      token_endpoint: "https://mcp.example.com/token",
+      token_endpoint_auth_methods_supported: [
+        "client_secret_basic",
+        "client_secret_post",
+        "none"
+      ]
+    });
+  });
+
+  it("keeps OAuth and OpenID discovery endpoint metadata aligned", async () => {
+    const env = createOAuthEnv();
+    const oauthResponse = await worker.fetch(
+      new Request("https://mcp.example.com/.well-known/oauth-authorization-server"),
+      env,
+      {} as ExecutionContext
+    );
+    const openIdResponse = await worker.fetch(
+      new Request("https://mcp.example.com/.well-known/openid-configuration"),
+      env,
+      {} as ExecutionContext
+    );
+    const oauthMetadata = await oauthResponse.json() as Record<string, unknown>;
+    const openIdMetadata = await openIdResponse.json() as Record<string, unknown>;
+
+    expect(openIdResponse.status).toBe(200);
+    expect(openIdMetadata).toMatchObject({
+      authorization_endpoint: oauthMetadata.authorization_endpoint,
+      grant_types_supported: oauthMetadata.grant_types_supported,
+      issuer: oauthMetadata.issuer,
+      registration_endpoint: oauthMetadata.registration_endpoint,
+      response_types_supported: oauthMetadata.response_types_supported,
+      scopes_supported: oauthMetadata.scopes_supported,
+      token_endpoint: oauthMetadata.token_endpoint,
+      token_endpoint_auth_methods_supported: oauthMetadata.token_endpoint_auth_methods_supported
+    });
+  });
+
   it("registers a public client with a single redirect URI", async () => {
     const response = await worker.fetch(
       new Request("https://mcp.example.com/register", {

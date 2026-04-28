@@ -127,10 +127,44 @@ function getAccessOidcAuthorizationRedirect(options: {
 
 const accessOidcFetch: typeof fetch = (input, init) => fetch(input, init);
 
+function getOpenIdConfiguration(request: Request) {
+  const origin = new URL(request.url).origin;
+
+  return {
+    authorization_endpoint: `${origin}/authorize`,
+    client_id_metadata_document_supported: false,
+    code_challenge_methods_supported: ["S256"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    issuer: origin,
+    registration_endpoint: `${origin}/register`,
+    response_modes_supported: ["query"],
+    response_types_supported: ["code"],
+    revocation_endpoint: `${origin}/token`,
+    scopes_supported: ["mcp"],
+    subject_types_supported: ["public"],
+    token_endpoint: `${origin}/token`,
+    token_endpoint_auth_methods_supported: [
+      "client_secret_basic",
+      "client_secret_post",
+      "none"
+    ]
+  };
+}
+
 export function registerOAuthHttpRoutes(
   app: Hono<{ Bindings: Env }>,
   _dependencies: AppDependencies = {}
 ) {
+  app.get("/.well-known/openid-configuration", (context) => {
+    const env = resolveAppEnv(context.env, context.req.raw);
+
+    if (!env.oauthEnabled) {
+      return context.notFound();
+    }
+
+    return context.json(getOpenIdConfiguration(context.req.raw));
+  });
+
   app.get("/authorize", async (context) => {
     const env = resolveAppEnv(context.env, context.req.raw);
 
