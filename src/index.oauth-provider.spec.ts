@@ -50,7 +50,7 @@ describe("Worker OAuth provider", () => {
     const waitUntil = vi.fn();
 
     worker.scheduled!(
-      { cron: "*/15 * * * *", scheduledTime: 1777406400000 } as ScheduledController,
+      { cron: "0 * * * *", scheduledTime: 1777406400000 } as ScheduledController,
       { YNAB_READ_SOURCE: "live" } as unknown as Env,
       { waitUntil } as unknown as ExecutionContext
     );
