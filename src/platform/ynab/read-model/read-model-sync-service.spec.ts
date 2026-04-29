@@ -106,7 +106,6 @@ describe("read-model sync service", () => {
     };
     const service = createReadModelSyncService({
       deltaClient,
-      maxRowsPerRun: 100,
       metadataClient,
       readModelRepository,
       syncStateRepository,
@@ -248,7 +247,6 @@ describe("read-model sync service", () => {
     };
     const service = createReadModelSyncService({
       deltaClient,
-      maxRowsPerRun: 100,
       moneyMovementClient,
       readModelRepository,
       syncStateRepository,
@@ -395,7 +393,6 @@ describe("read-model sync service", () => {
     };
     const service = createReadModelSyncService({
       deltaClient,
-      maxRowsPerRun: 1,
       readModelRepository,
       syncStateRepository,
       transactionsRepository,

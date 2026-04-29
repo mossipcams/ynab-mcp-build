@@ -135,7 +135,6 @@ function createProductionReadModelSyncService(
     reason: null,
     service: createReadModelSyncService({
       deltaClient,
-      maxRowsPerRun: env.ynabSyncMaxRowsPerRun,
       metadataClient,
       moneyMovementClient,
       readModelRepository: createReadModelSyncRepository(database),
@@ -199,7 +198,6 @@ export async function runScheduledReadModelSync(
           accessToken: appEnv.ynabAccessToken,
           baseUrl: appEnv.ynabApiBaseUrl,
         }),
-        maxRowsPerRun: appEnv.ynabSyncMaxRowsPerRun,
         metadataClient: createMetadataClient(
           appEnv.ynabAccessToken,
           appEnv.ynabApiBaseUrl,

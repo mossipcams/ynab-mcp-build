@@ -144,7 +144,6 @@ function createD1Env(
     ...(defaultPlanId ? { ynabDefaultPlanId: defaultPlanId } : {}),
     ynabReadSource: "d1",
     ynabStaleAfterMinutes: 360,
-    ynabSyncMaxRowsPerRun: 100,
   };
 }
 

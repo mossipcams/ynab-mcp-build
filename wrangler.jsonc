@@ -13,7 +13,6 @@
     "YNAB_API_BASE_URL": "https://api.ynab.com/v1",
     "YNAB_READ_SOURCE": "d1",
     "YNAB_STALE_AFTER_MINUTES": "360",
-    "YNAB_SYNC_MAX_ROWS_PER_RUN": "100",
   },
   "secrets": {
     "required": [

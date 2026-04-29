@@ -24,6 +24,19 @@ describe("direct-read removal contract", () => {
     expect(existsSync("src/slices/money-movements")).toBe(false);
   });
 
+  it("does not keep legacy transaction-only sync or row-limit configuration", () => {
+    const scheduledSync = readFile("src/app/scheduled-sync.ts");
+    const env = readFile("src/shared/env.ts");
+    const wranglerConfig = readFile("wrangler.jsonc");
+
+    expect(
+      existsSync("src/platform/ynab/read-model/transaction-sync-service.ts"),
+    ).toBe(false);
+    expect(scheduledSync).not.toContain("maxRowsPerRun");
+    expect(env).not.toContain("YNAB_SYNC_MAX_ROWS_PER_RUN");
+    expect(wranglerConfig).not.toContain("YNAB_SYNC_MAX_ROWS_PER_RUN");
+  });
+
   it("does not document direct API read behavior as an active mode", () => {
     const documentation = [
       readFile("README.md"),
