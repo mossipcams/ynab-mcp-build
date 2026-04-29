@@ -26,6 +26,7 @@ describe("repository preflight tooling", () => {
       "npm run lint",
       "npm run check:deps",
       "npm run check:duplication",
+      "npm run check:knip",
       "npm test"
     ]);
   });
@@ -65,6 +66,19 @@ describe("repository preflight tooling", () => {
     expect(packageJson.devDependencies).toHaveProperty("jscpd");
   });
 
+  it("declares knip as the unused-code detection tool", () => {
+    // DEFECT: unused-code checks can become non-reproducible if knip is not pinned in repository dev dependencies.
+    const packageJson = JSON.parse(readRootFile("package.json")) as {
+      devDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.devDependencies).toHaveProperty("knip");
+    expect(packageJson.scripts).toMatchObject({
+      "check:knip": "knip"
+    });
+  });
+
   it("declares type-aware ESLint tooling", () => {
     // DEFECT: lint rules that require TypeScript type information can silently disappear from local and CI checks.
     const packageJson = JSON.parse(readRootFile("package.json")) as {
@@ -90,13 +104,15 @@ describe("repository preflight tooling", () => {
   it("wires package scripts to the shared preflight entrypoints", () => {
     // DEFECT: package metadata can stop exposing the shared local preflight automation entrypoints.
     const packageJson = JSON.parse(readRootFile("package.json")) as {
+      devDependencies?: Record<string, string>;
       scripts?: Record<string, string>;
     };
 
+    expect(packageJson.devDependencies).toHaveProperty("husky");
     expect(packageJson.scripts).toMatchObject({
       ci: "node scripts/run-ci.mjs",
-      "hooks:install": "node scripts/install-hooks.mjs",
-      prepare: "node scripts/install-hooks.mjs",
+      "hooks:install": "husky",
+      prepare: "husky",
       pr: "node scripts/pre-pr.mjs"
     });
   });
@@ -193,9 +209,17 @@ describe("repository preflight tooling", () => {
     expect(jscpdConfig.threshold).toBe(6);
   });
 
-  it("runs the shared CI command before pushing", () => {
+  it("runs fast feedback checks before committing", () => {
+    // DEFECT: local git hooks can allow commits that fail the agreed fast typecheck and lint loop.
+    const preCommitHook = readRootFile(".husky/pre-commit");
+
+    expect(preCommitHook).toContain("npm run typecheck:tsgo");
+    expect(preCommitHook).toContain("npm run lint:fast");
+  });
+
+  it("runs the shared CI command before pushing through Husky", () => {
     // DEFECT: local git hooks can bypass the shared preflight suite before code reaches the remote branch.
-    expect(readRootFile(".githooks/pre-push")).toContain("npm run ci");
+    expect(readRootFile(".husky/pre-push")).toContain("npm run ci");
   });
 
   it("runs CI before creating a GitHub pull request", () => {

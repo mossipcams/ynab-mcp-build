@@ -11,8 +11,7 @@ import {
   monthSelectorSchema,
   paginationSchema,
   planIdSchema,
-  requiredIdSchema,
-  requiredMonthSchema
+  requiredIdSchema
 } from "./tool-inputs.js";
 
 describe("shared tool input schemas", () => {
@@ -59,7 +58,7 @@ describe("shared tool input schemas", () => {
   it("keeps required YNAB months in first-of-month ISO format", () => {
     // DEFECT: hand-written month schemas can accidentally accept malformed YNAB month selectors.
     const schema = z.object({
-      month: requiredMonthSchema
+      month: monthFieldSchema
     });
 
     expect(schema.parse({ month: "2026-04-01" })).toEqual({ month: "2026-04-01" });

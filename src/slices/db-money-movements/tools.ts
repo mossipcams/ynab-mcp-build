@@ -1,5 +1,5 @@
 import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
-import { paginationSchema, planIdSchema, requiredMonthSchema } from "../../shared/tool-inputs.js";
+import { monthFieldSchema, paginationSchema, planIdSchema } from "../../shared/tool-inputs.js";
 import {
   getDbMoneyMovementGroups,
   getDbMoneyMovementGroupsByMonth,
@@ -29,7 +29,7 @@ export function getDbMoneyMovementToolDefinitions(
       description: "Returns category money movements synced from the D1 read model for a single month.",
       inputSchema: {
         ...planIdSchema,
-        month: requiredMonthSchema,
+        month: monthFieldSchema,
         ...paginationSchema
       },
       execute: async (input) => getDbMoneyMovementsByMonth(dependencies, input)
@@ -50,7 +50,7 @@ export function getDbMoneyMovementToolDefinitions(
       description: "Groups category money movements synced from the D1 read model for a single month.",
       inputSchema: {
         ...planIdSchema,
-        month: requiredMonthSchema,
+        month: monthFieldSchema,
         ...paginationSchema
       },
       execute: async (input) => getDbMoneyMovementGroupsByMonth(dependencies, input)

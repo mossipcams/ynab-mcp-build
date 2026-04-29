@@ -1,6 +1,6 @@
 import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
-import { planIdSchema, requiredIdSchema, requiredMonthSchema } from "../../shared/tool-inputs.js";
+import { monthFieldSchema, planIdSchema, requiredIdSchema } from "../../shared/tool-inputs.js";
 import {
   getCategory,
   getMonthCategory,
@@ -51,7 +51,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       description: "Returns a compact summary for a single category in a specific plan month.",
       inputSchema: {
         ...planIdSchema,
-        month: requiredMonthSchema,
+        month: monthFieldSchema,
         categoryId: requiredIdSchema
       },
       execute: async ({ planId, month, categoryId }) =>
@@ -77,7 +77,7 @@ export function getPlanToolDefinitions(ynabClient: YnabClient): SliceToolDefinit
       description: "Returns a compact summary for a specific month in a YNAB plan.",
       inputSchema: {
         ...planIdSchema,
-        month: requiredMonthSchema
+        month: monthFieldSchema
       },
       execute: async ({ planId, month }) => getPlanMonth(ynabClient, planId, month)
     })

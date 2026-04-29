@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { toMcpErrorResult, toMcpTextResult } from "./results.js";
+import { toErrorResult, toTextResult } from "./results.js";
 
 describe("mcp result helpers", () => {
   it("serializes payloads as MCP text content", () => {
-    expect(toMcpTextResult({ hello: "world" })).toEqual({
+    expect(toTextResult({ hello: "world" })).toEqual({
       isError: false,
       structuredContent: {
         hello: "world"
@@ -19,7 +19,7 @@ describe("mcp result helpers", () => {
   });
 
   it("marks error payloads with MCP error metadata", () => {
-    expect(toMcpErrorResult(new Error("boom"))).toEqual({
+    expect(toErrorResult(new Error("boom"))).toEqual({
       isError: true,
       structuredContent: {
         success: false,

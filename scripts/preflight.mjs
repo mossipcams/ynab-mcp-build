@@ -9,6 +9,7 @@ export const CI_COMMANDS = [
   "npm run lint",
   "npm run check:deps",
   "npm run check:duplication",
+  "npm run check:knip",
   "npm test"
 ];
 

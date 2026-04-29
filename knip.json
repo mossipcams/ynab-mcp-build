@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "manual/**/*.ts",
+    "scripts/**/*.mjs",
+    "*.config.{js,mjs,ts}"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "manual/**/*.ts",
+    "scripts/**/*.mjs",
+    "*.config.{js,mjs,ts}"
+  ],
+  "ignoreDependencies": [
+    "cloudflare",
+    "@stryker-mutator/api"
+  ]
+}
