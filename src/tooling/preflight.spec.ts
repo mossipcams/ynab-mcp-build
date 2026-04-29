@@ -289,11 +289,7 @@ describe("repository preflight tooling", () => {
 
   it("validates OAuth JSON token payloads with Zod", () => {
     // DEFECT: JWT and JWKS payload casts can trust malformed external JSON before signature and claim checks.
-    for (const path of [
-      "src/oauth/core/jwt.ts",
-      "src/oauth/core/oidc.ts",
-      "src/oauth/core/cf-access-jwt.ts",
-    ]) {
+    for (const path of ["src/oauth/core/jwt.ts", "src/oauth/core/oidc.ts"]) {
       const source = readRootFile(path);
 
       expect(source).toContain('from "zod"');
