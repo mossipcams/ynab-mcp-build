@@ -13,6 +13,8 @@ type SyncStateRow = {
   last_error?: string | null;
 };
 
+const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
+
 function subtractMinutes(isoDate: string, minutes: number) {
   return new Date(new Date(isoDate).getTime() - minutes * 60_000).toISOString();
 }
@@ -47,7 +49,7 @@ export function createReadModelFreshness(
         )
         .bind(planId, ...requiredEndpoints)
         .all<SyncStateRow>();
-      const rows = result.results ?? [];
+      const rows = rowsOrEmpty(result);
       const rowsByEndpoint = new Map(rows.map((row) => [row.endpoint, row]));
       const missingEndpoint = requiredEndpoints.find(
         (endpoint) => !rowsByEndpoint.has(endpoint),

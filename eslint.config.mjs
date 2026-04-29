@@ -3,17 +3,21 @@ import tseslint from "typescript-eslint";
 
 const typeAwareRules = {
   "@typescript-eslint/await-thenable": "error",
+  "@typescript-eslint/ban-ts-comment": "error",
   "@typescript-eslint/consistent-type-imports": "error",
   "@typescript-eslint/no-explicit-any": "error",
   "@typescript-eslint/no-floating-promises": "error",
   "@typescript-eslint/no-misused-promises": "error",
+  "@typescript-eslint/no-unnecessary-condition": "error",
   "@typescript-eslint/no-unsafe-assignment": "error",
   "@typescript-eslint/no-unsafe-call": "error",
   "@typescript-eslint/no-unsafe-member-access": "error",
   "@typescript-eslint/no-unsafe-return": "error",
+  "@typescript-eslint/only-throw-error": "error",
   "@typescript-eslint/restrict-template-expressions": "error",
   "@typescript-eslint/require-await": "error",
   "@typescript-eslint/switch-exhaustiveness-check": "error",
+  "@typescript-eslint/use-unknown-in-catch-callback-variable": "error",
 };
 
 export default [

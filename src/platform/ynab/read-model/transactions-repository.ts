@@ -1,5 +1,7 @@
 import type { YnabDeltaTransactionRecord } from "../delta-client.js";
 
+const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
+
 export type UpsertTransactionsInput = {
   planId: string;
   transactions: YnabDeltaTransactionRecord[];
@@ -97,6 +99,8 @@ type TransactionRollupRow = {
   name: string | null;
   transaction_count: number;
 };
+
+const toMilliunits = (value: number | null) => value ?? 0;
 
 const D1_BATCH_SIZE = 50;
 
@@ -404,8 +408,8 @@ export function createTransactionsRepository(database: D1Database) {
         .all<TransactionSearchRow>();
 
       return {
-        rows: result.results ?? [],
-        totalCount: countResult.results?.[0]?.count ?? 0,
+        rows: rowsOrEmpty(result),
+        totalCount: rowsOrEmpty(countResult)[0]?.count ?? 0,
       };
     },
 
@@ -451,22 +455,22 @@ export function createTransactionsRepository(database: D1Database) {
         )
         .bind(...search.params, topN)
         .all<TransactionRollupRow>();
-      const totals = totalsResult.results?.[0];
+      const totals = rowsOrEmpty(totalsResult)[0];
 
       return {
         totals: {
           inflowMilliunits: totals?.inflow_milliunits ?? 0,
           outflowMilliunits: totals?.outflow_milliunits ?? 0,
         },
-        topCategories: (categoryResult.results ?? []).map((row) => ({
+        topCategories: rowsOrEmpty(categoryResult).map((row) => ({
           ...(row.category_id ? { id: row.category_id } : {}),
-          amountMilliunits: row.amount_milliunits ?? 0,
+          amountMilliunits: toMilliunits(row.amount_milliunits),
           name: row.name ?? "Uncategorized",
           transactionCount: row.transaction_count,
         })),
-        topPayees: (payeeResult.results ?? []).map((row) => ({
+        topPayees: rowsOrEmpty(payeeResult).map((row) => ({
           ...(row.payee_id ? { id: row.payee_id } : {}),
-          amountMilliunits: row.amount_milliunits ?? 0,
+          amountMilliunits: toMilliunits(row.amount_milliunits),
           name: row.name ?? "Unknown Payee",
           transactionCount: row.transaction_count,
         })),

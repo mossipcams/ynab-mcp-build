@@ -17,6 +17,8 @@ export type ScheduledTransactionRow = {
   deleted: number;
 };
 
+const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
+
 function selectScheduledTransactionSql(where: string) {
   return `SELECT id,
                  date_first,
@@ -49,7 +51,7 @@ export function createScheduledTransactionsRepository(database: D1Database) {
         .bind(input.planId)
         .all<ScheduledTransactionRow>();
 
-      return result.results ?? [];
+      return rowsOrEmpty(result);
     },
 
     async getScheduledTransaction(input: {
@@ -64,7 +66,7 @@ export function createScheduledTransactionsRepository(database: D1Database) {
         .bind(input.planId, input.scheduledTransactionId)
         .all<ScheduledTransactionRow>();
 
-      return result.results?.[0] ?? null;
+      return rowsOrEmpty(result)[0] ?? null;
     },
   };
 }

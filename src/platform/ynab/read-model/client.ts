@@ -30,6 +30,8 @@ type CountRow = {
   count: number;
 };
 
+const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
+
 type UserRow = {
   id: string;
   name: string;
@@ -344,7 +346,7 @@ export function createYnabReadModelClient(
       .bind(...params)
       .all<T>();
 
-    return result.results ?? [];
+    return rowsOrEmpty(result);
   }
 
   async function count(sql: string, ...params: Array<string | number>) {

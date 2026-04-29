@@ -44,7 +44,7 @@ function resolveDefaultPlanId(ynabClient: YnabClient) {
 
       throw new Error("No default YNAB plan is available.");
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       defaultPlanIdByClient.delete(ynabClient);
       throw error;
     });

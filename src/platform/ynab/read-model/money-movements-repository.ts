@@ -29,6 +29,8 @@ export type ListMoneyMovementsInput = {
   month?: string;
 };
 
+const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
+
 export function createMoneyMovementsRepository(database: D1Database) {
   return {
     async listMoneyMovements(input: ListMoneyMovementsInput) {
@@ -67,7 +69,7 @@ export function createMoneyMovementsRepository(database: D1Database) {
         .bind(...params)
         .all<MoneyMovementRow>();
 
-      return result.results ?? [];
+      return rowsOrEmpty(result);
     },
 
     async listMoneyMovementGroups(input: ListMoneyMovementsInput) {
@@ -104,7 +106,7 @@ export function createMoneyMovementsRepository(database: D1Database) {
         .bind(...params)
         .all<MoneyMovementGroupRow>();
 
-      return result.results ?? [];
+      return rowsOrEmpty(result);
     },
   };
 }

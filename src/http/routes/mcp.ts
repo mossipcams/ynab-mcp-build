@@ -64,7 +64,7 @@ async function readBoundedJsonBody(
   const chunks: Uint8Array[] = [];
   let byteLength = 0;
 
-  while (true) {
+  for (;;) {
     const result = await reader.read();
 
     if (result.done) {

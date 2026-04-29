@@ -128,6 +128,14 @@ function toSpentFromActivity(activity: number | undefined) {
   return toSpentMilliunits(activity ?? 0);
 }
 
+function toOptionalMilliunits(value: number | undefined) {
+  return value ?? 0;
+}
+
+function formatOptionalMilliunits(value: number | undefined) {
+  return formatMilliunits(toOptionalMilliunits(value));
+}
+
 function toMonthKey(date: string) {
   return `${date.slice(0, 7)}-01`;
 }
@@ -625,15 +633,15 @@ export async function getFinancialSnapshot(
     liquid_cash: formatMilliunits(snapshot.liquidCashMilliunits),
     debt: formatMilliunits(
       snapshot.negativeAccounts.reduce(
-        (sum, account) => sum + Math.abs(account.balance ?? 0),
+        (sum, account) => sum + Math.abs(account.balance),
         0,
       ),
     ),
-    ready_to_assign: formatMilliunits(monthDetail.toBeBudgeted ?? 0),
-    income: formatMilliunits(monthDetail.income ?? 0),
+    ready_to_assign: formatOptionalMilliunits(monthDetail.toBeBudgeted),
+    income: formatOptionalMilliunits(monthDetail.income),
     ...buildAssignedSpentSummary(
-      monthDetail.budgeted ?? 0,
-      toSpentMilliunits(monthDetail.activity ?? 0),
+      toOptionalMilliunits(monthDetail.budgeted),
+      toSpentFromActivity(monthDetail.activity),
     ),
     age_of_money: monthDetail.ageOfMoney,
     account_count: snapshot.activeAccounts.length,
@@ -642,16 +650,16 @@ export async function getFinancialSnapshot(
     top_asset_accounts: toTopRollups(
       snapshot.positiveAccounts.map((account) => ({
         id: account.id,
-        name: account.name ?? "Unnamed Account",
-        amountMilliunits: account.balance ?? 0,
+        name: account.name,
+        amountMilliunits: account.balance,
       })),
       topN,
     ),
     top_debt_accounts: toTopRollups(
       snapshot.negativeAccounts.map((account) => ({
         id: account.id,
-        name: account.name ?? "Unnamed Account",
-        amountMilliunits: Math.abs(account.balance ?? 0),
+        name: account.name,
+        amountMilliunits: Math.abs(account.balance),
       })),
       topN,
     ),
@@ -708,11 +716,11 @@ export async function getFinancialHealthCheck(
       liquid_cash: formatMilliunits(snapshot.liquidCashMilliunits),
       debt: formatMilliunits(
         snapshot.negativeAccounts.reduce(
-          (sum, account) => sum + Math.abs(account.balance ?? 0),
+          (sum, account) => sum + Math.abs(account.balance),
           0,
         ),
       ),
-      ready_to_assign: formatMilliunits(monthDetail.toBeBudgeted ?? 0),
+      ready_to_assign: formatOptionalMilliunits(monthDetail.toBeBudgeted),
       age_of_money: monthDetail.ageOfMoney,
       overspent_category_count: budgetHealth.overspent_category_count,
       underfunded_category_count: budgetHealth.underfunded_category_count,
@@ -1450,17 +1458,15 @@ export async function getRecurringExpenseSummary(
       }
 
       const averageAmount = Math.round(average(candidate.amounts));
-      const estimatedMonthlyCost = cadence === "monthly" ? averageAmount : 0;
-
       return {
         payee_id: candidate.payeeId ?? undefined,
         payee_name: candidate.payeeName,
         cadence,
         occurrence_count: candidate.dates.length,
         average_amount: formatMilliunits(averageAmount),
-        estimated_monthly_cost: formatMilliunits(estimatedMonthlyCost),
-        annualized_cost: formatMilliunits(estimatedMonthlyCost * 12),
-        sort_amount: estimatedMonthlyCost,
+        estimated_monthly_cost: formatMilliunits(averageAmount),
+        annualized_cost: formatMilliunits(averageAmount * 12),
+        sort_amount: averageAmount,
       };
     })
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))

@@ -146,11 +146,10 @@ type FreshnessDependencies = {
 };
 
 function requiredEndpointsForTool(name: string) {
-  const explicitEndpoints =
-    REQUIRED_ENDPOINTS_BY_TOOL[name as keyof typeof REQUIRED_ENDPOINTS_BY_TOOL];
-
-  if (explicitEndpoints) {
-    return explicitEndpoints;
+  if (Object.hasOwn(REQUIRED_ENDPOINTS_BY_TOOL, name)) {
+    return REQUIRED_ENDPOINTS_BY_TOOL[
+      name as keyof typeof REQUIRED_ENDPOINTS_BY_TOOL
+    ];
   }
 
   if (
