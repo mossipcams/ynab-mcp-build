@@ -22,6 +22,10 @@ function resolveScheduledAppEnv(env: Env) {
   } as unknown as Partial<Env>);
 }
 
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Scheduled D1 sync failed.";
+}
+
 function createMoneyMovementClient(accessToken: string, baseUrl: string) {
   const client = createYnabClient({
     accessToken,
@@ -154,12 +158,21 @@ export async function runScheduledReadModelSync(
     };
   }
 
-  const planId = await resolveScheduledPlanId({
-    accessToken: appEnv.ynabAccessToken,
-    baseUrl: appEnv.ynabApiBaseUrl,
-    ...(appEnv.ynabDefaultPlanId ? { configuredPlanId: appEnv.ynabDefaultPlanId } : {}),
-    ...(dependencies.ynabClient ? { ynabClient: dependencies.ynabClient } : {})
-  });
+  let planId: string | null;
+
+  try {
+    planId = await resolveScheduledPlanId({
+      accessToken: appEnv.ynabAccessToken,
+      baseUrl: appEnv.ynabApiBaseUrl,
+      ...(appEnv.ynabDefaultPlanId ? { configuredPlanId: appEnv.ynabDefaultPlanId } : {}),
+      ...(dependencies.ynabClient ? { ynabClient: dependencies.ynabClient } : {})
+    });
+  } catch (error) {
+    return {
+      reason: toErrorMessage(error),
+      status: "failed"
+    };
+  }
 
   if (!planId) {
     return {

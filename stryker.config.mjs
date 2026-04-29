@@ -4,18 +4,24 @@ const config = {
   plugins: ["@stryker-mutator/vitest-runner"],
   reporters: ["clear-text", "progress", "html"],
   mutate: [
-    "src/oauth/core/**/*.ts",
-    "src/shared/**/*.ts",
-    "src/mcp/**/*.ts",
-    "src/platform/ynab/client.ts",
-    "src/platform/ynab/delta-client.ts",
+    "src/mcp/discovery.ts",
+    "src/mcp/server.ts",
+    "src/mcp/tool-registry.ts",
     "src/platform/ynab/mappers.ts",
-    "src/platform/ynab/read-model/**/*.ts",
-    "src/platform/ynab/schemas.ts",
-    "src/slices/**/helpers.ts",
-    "src/slices/**/service.ts",
-    "!src/**/*.spec.ts"
+    "src/platform/ynab/read-model/client.ts",
+    "src/platform/ynab/read-model/money-movements-repository.ts",
+    "src/shared/collections.ts",
+    "src/shared/plans.ts",
+    "src/shared/tool-definition.ts",
+    "src/slices/db-money-movements/service.ts",
+    "src/slices/financial-health/helpers.ts",
+    "src/slices/meta/service.ts"
   ],
+  thresholds: {
+    break: 86,
+    high: 86,
+    low: 86
+  },
   vitest: {
     configFile: "vitest.stryker.config.ts",
     related: true

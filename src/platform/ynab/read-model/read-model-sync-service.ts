@@ -492,13 +492,18 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
       };
     } catch (error) {
       const message = toErrorMessage(error);
-      await options.syncStateRepository.recordFailure({
-        endpoint: config.endpoint,
-        error: message,
-        leaseOwner: input.leaseOwner,
-        now: input.now,
-        planId: input.planId
-      });
+
+      try {
+        await options.syncStateRepository.recordFailure({
+          endpoint: config.endpoint,
+          error: message,
+          leaseOwner: input.leaseOwner,
+          now: input.now,
+          planId: input.planId
+        });
+      } catch {
+        // Preserve the primary endpoint failure result even when failure bookkeeping is unavailable.
+      }
 
       return {
         endpoint: config.endpoint,

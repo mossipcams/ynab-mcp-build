@@ -60,22 +60,6 @@ export function createSyncStateRepository(database: D1Database) {
     },
 
     async acquireLease(input: AcquireLeaseInput) {
-      const currentLease = await database
-        .prepare(
-          `SELECT lease_owner, lease_expires_at
-           FROM ynab_sync_state
-           WHERE plan_id = ? AND endpoint = ?`
-        )
-        .bind(input.planId, input.endpoint)
-        .first<LeaseRow>();
-
-      if (currentLease?.lease_owner && currentLease.lease_expires_at && currentLease.lease_expires_at > input.now) {
-        return {
-          acquired: false as const,
-          reason: "lease_active" as const
-        };
-      }
-
       const leaseExpiresAt = addSeconds(input.now, input.leaseSeconds);
       const result = await database
         .prepare(
@@ -92,7 +76,10 @@ export function createSyncStateRepository(database: D1Database) {
            ON CONFLICT(plan_id, endpoint) DO UPDATE SET
              lease_owner = excluded.lease_owner,
              lease_expires_at = excluded.lease_expires_at,
-             updated_at = excluded.updated_at`
+             updated_at = excluded.updated_at
+           WHERE ynab_sync_state.lease_owner IS NULL
+              OR ynab_sync_state.lease_expires_at IS NULL
+              OR ynab_sync_state.lease_expires_at <= ?`
         )
         .bind(
           input.planId,
@@ -100,11 +87,28 @@ export function createSyncStateRepository(database: D1Database) {
           input.leaseOwner,
           leaseExpiresAt,
           input.now,
+          input.now,
           input.now
         )
         .run();
 
       if (getChangeCount(result) === 0) {
+        const currentLease = await database
+          .prepare(
+            `SELECT lease_owner, lease_expires_at
+             FROM ynab_sync_state
+             WHERE plan_id = ? AND endpoint = ?`
+          )
+          .bind(input.planId, input.endpoint)
+          .first<LeaseRow>();
+
+        if (currentLease?.lease_owner && currentLease.lease_expires_at && currentLease.lease_expires_at > input.now) {
+          return {
+            acquired: false as const,
+            reason: "lease_active" as const
+          };
+        }
+
         return {
           acquired: false as const,
           reason: "contention" as const
