@@ -19,7 +19,9 @@ describe("repository preflight tooling", () => {
 
     expect(CI_COMMANDS).toEqual([
       "npm run cf-typegen",
-      "npm run typecheck",
+      "npm run typecheck:tsgo",
+      "npm run lint:fast",
+      "npm run typecheck:tsc",
       "npm run typecheck:spec",
       "npm run lint",
       "npm run check:duplication",
@@ -73,6 +75,17 @@ describe("repository preflight tooling", () => {
     expect(packageJson.devDependencies).toHaveProperty("typescript-eslint");
   });
 
+  it("declares fast native TypeScript and oxlint tooling", () => {
+    // DEFECT: the fast local feedback loop can fall back to slower JS-based tooling without a reproducible package pin.
+    const packageJson = JSON.parse(readRootFile("package.json")) as {
+      devDependencies?: Record<string, string>;
+    };
+
+    expect(packageJson.devDependencies).toHaveProperty("@typescript/native-preview");
+    expect(packageJson.devDependencies).toHaveProperty("oxlint");
+    expect(packageJson.devDependencies).toHaveProperty("oxlint-tsgolint");
+  });
+
   it("wires package scripts to the shared preflight entrypoints", () => {
     // DEFECT: package metadata can stop exposing the shared local preflight automation entrypoints.
     const packageJson = JSON.parse(readRootFile("package.json")) as {
@@ -105,8 +118,33 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      lint: "eslint ."
+      lint: "npm run lint:fast && npm run lint:eslint",
+      "lint:eslint": "eslint .",
+      "lint:fast": "oxlint --type-aware"
     });
+  });
+
+  it("wires package scripts for native and stable TypeScript checks", () => {
+    // DEFECT: fast native type-checking can replace the stable compiler gate without a clear fallback.
+    const packageJson = JSON.parse(readRootFile("package.json")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts).toMatchObject({
+      typecheck: "npm run typecheck:tsgo",
+      "typecheck:tsc": "tsc --noEmit -p tsconfig.json",
+      "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json"
+    });
+  });
+
+  it("documents the fast feedback philosophy for future agents", () => {
+    // DEFECT: future tooling changes can drift away from the repository's agreed fast-fail workflow.
+    const agents = readRootFile("AGENTS.md");
+
+    expect(agents).toContain("test often, fail fast, fix fast");
+    expect(agents).toContain("npm run typecheck:tsgo");
+    expect(agents).toContain("npm run lint:fast");
+    expect(agents).toContain("npm run typecheck:tsc");
   });
 
   it("configures the required type-aware ESLint rules", async () => {
