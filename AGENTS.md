@@ -9,8 +9,8 @@ Before making code changes, read `architecture.md` to refresh the current module
 - Use TDD for implementation work.
 - Follow test-first development for any non-trivial code change.
 - The tooling philosophy is test often, fail fast, fix fast.
-- Prefer the fast local feedback path first: `npm run typecheck:tsgo` for Go-native TypeScript checks and `npm run lint:fast` for oxlint.
-- Keep stable fallback gates in the shared preflight path, including `npm run typecheck:tsc`, ESLint, duplication checks, and tests.
+- Prefer the fast local feedback path first: `pnpm run typecheck:tsgo` for Go-native TypeScript checks and `pnpm run lint:fast` for oxlint.
+- Keep stable fallback gates in the shared preflight path, including `pnpm run typecheck:tsc`, ESLint, duplication checks, and tests.
 - When integrating `@cloudflare/workers-oauth-provider`, test the provider contracts through this MCP server's Worker/app behavior rather than testing or reimplementing the provider internals.
 - Keep transport concerns in transport modules only.
 - Keep streamable HTTP transport handling in `src/http/**`.

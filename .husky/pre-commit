@@ -1,2 +1,2 @@
-npm run typecheck:tsgo
-npm run lint:fast
+pnpm run typecheck:tsgo
+pnpm run lint:fast

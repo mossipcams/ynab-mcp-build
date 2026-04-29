@@ -150,7 +150,7 @@ describe("dependency-cruiser architecture enforcement", () => {
     };
     const ciWorkflow = readFileSync(ciWorkflowPath, "utf8");
 
-    expect(preflight.CI_COMMANDS).toContain("npm run check:deps");
-    expect(ciWorkflow).toContain("npm run check:deps");
+    expect(preflight.CI_COMMANDS).toContain("pnpm run check:deps");
+    expect(ciWorkflow).toContain("pnpm run check:deps");
   });
 });

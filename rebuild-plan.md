@@ -407,9 +407,9 @@ Trade-offs:
 
 Passing:
 
-- `npm test`
-- `npm run typecheck`
-- `npm run typecheck:spec`
+- `pnpm test`
+- `pnpm run typecheck`
+- `pnpm run typecheck:spec`
 
 ## Key Strategy Trade-offs
 
