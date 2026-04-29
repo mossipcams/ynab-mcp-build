@@ -7,60 +7,7 @@ const rootDir = process.cwd();
 const srcDir = join(rootDir, "src");
 
 function listSourceFiles() {
-  return [
-    "app/create-app.ts",
-    "app/dependencies.ts",
-    "durable-objects/OAuthStateDO.ts",
-    "durable-objects/oauth-state-client.ts",
-    "durable-objects/oauth-state-handler.ts",
-    "http/routes/mcp.ts",
-    "http/routes/oauth.ts",
-    "http/routes/well-known.ts",
-    "index.ts",
-    "mcp/discovery.ts",
-    "mcp/results.ts",
-    "mcp/register-slices.ts",
-    "mcp/server.ts",
-    "mcp/tool-registry.ts",
-    "oauth/core/auth.ts",
-    "oauth/core/cf-access-jwt.ts",
-    "oauth/core/jwt.ts",
-    "oauth/core/oidc.ts",
-    "oauth/core/pkce.ts",
-    "oauth/core/store.ts",
-    "oauth/core/token-id.ts",
-    "oauth/http/access-oidc.ts",
-    "oauth/http/provider.ts",
-    "oauth/http/routes.ts",
-    "platform/ynab/client.ts",
-    "shared/collections.ts",
-    "shared/env.ts",
-    "shared/object.ts",
-    "shared/plans.ts",
-    "shared/tool-definition.ts",
-    "slices/accounts/index.ts",
-    "slices/accounts/service.ts",
-    "slices/accounts/tools.ts",
-    "slices/financial-health/helpers.ts",
-    "slices/financial-health/index.ts",
-    "slices/financial-health/service.ts",
-    "slices/financial-health/tools.ts",
-    "slices/meta/index.ts",
-    "slices/meta/service.ts",
-    "slices/meta/tools.ts",
-    "slices/money-movements/index.ts",
-    "slices/money-movements/service.ts",
-    "slices/money-movements/tools.ts",
-    "slices/payees/index.ts",
-    "slices/payees/service.ts",
-    "slices/payees/tools.ts",
-    "slices/plans/index.ts",
-    "slices/plans/service.ts",
-    "slices/plans/tools.ts",
-    "slices/transactions/index.ts",
-    "slices/transactions/service.ts",
-    "slices/transactions/tools.ts"
-  ].map((path) => join(srcDir, path));
+  return discoverProductionSourceFiles(srcDir);
 }
 
 function discoverProductionSourceFiles(dir: string): string[] {
@@ -101,6 +48,11 @@ const sharedFiles = sourceFiles.filter((filePath) => filePath.includes("/src/sha
 const httpFiles = sourceFiles.filter((filePath) => filePath.includes("/src/http/"));
 
 describe("architecture boundaries", () => {
+  it("covers every production source file", () => {
+    // DEFECT: new platform or slice modules can miss boundary assertions when the source list drifts.
+    expect(sourceFiles.map(rel).sort()).toEqual(discoverProductionSourceFiles(srcDir).map(rel).sort());
+  });
+
   it("covers every OAuth production source file", () => {
     // DEFECT: new OAuth files can miss boundary assertions when the source list drifts.
     expect(sourceFiles.filter((filePath) => filePath.includes("/src/oauth/")).map(rel).sort())

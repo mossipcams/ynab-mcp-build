@@ -19,6 +19,7 @@ class FakeStatement {
 }
 
 class FakeD1Database {
+  batchCalls: BoundStatement[][] = [];
   batchStatements: BoundStatement[] = [];
 
   prepare(sql: string) {
@@ -26,22 +27,101 @@ class FakeD1Database {
   }
 
   batch(statements: D1PreparedStatement[]) {
-    this.batchStatements.push(
-      ...statements.map((statement) => {
+    const boundStatements = statements.map((statement) => {
         const fake = statement as unknown as FakeStatement;
 
         return {
           sql: fake.sql,
           params: fake.params
         };
-      })
-    );
+      });
+
+    this.batchCalls.push(boundStatements);
+    this.batchStatements.push(...boundStatements);
 
     return Promise.resolve([] as D1Result[]);
   }
 }
 
 describe("read model sync repository", () => {
+  it("upserts budget metadata into the read-model metadata tables", async () => {
+    const db = new FakeD1Database();
+    const repository = createReadModelSyncRepository(db as unknown as D1Database);
+    const syncedAt = "2026-04-28T12:00:00.000Z";
+
+    await repository.upsertUser({
+      syncedAt,
+      user: {
+        id: "user-1",
+        name: "Avery"
+      }
+    });
+    await repository.upsertPlans({
+      plans: [
+        {
+          id: "plan-1",
+          lastModifiedOn: "2026-04-27T10:00:00Z",
+          name: "Main Budget"
+        }
+      ],
+      syncedAt
+    });
+    await repository.upsertPlanDetail({
+      plan: {
+        firstMonth: "2026-01-01",
+        id: "plan-1",
+        lastModifiedOn: "2026-04-27T10:00:00Z",
+        lastMonth: "2026-12-01",
+        name: "Main Budget"
+      },
+      syncedAt
+    });
+    await repository.upsertPlanSettings({
+      planId: "plan-1",
+      settings: {
+        currencyFormat: {
+          currencySymbol: "$",
+          decimalDigits: 2,
+          decimalSeparator: ".",
+          displaySymbol: true,
+          exampleFormat: "$1,234.56",
+          groupSeparator: ",",
+          isoCode: "USD",
+          symbolFirst: true
+        },
+        dateFormat: {
+          format: "MM/DD/YYYY"
+        }
+      },
+      syncedAt
+    });
+
+    expect(db.batchStatements.map((statement) => statement.sql)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("INSERT INTO ynab_users"),
+        expect.stringContaining("INSERT INTO ynab_plans"),
+        expect.stringContaining("INSERT INTO ynab_plan_settings")
+      ])
+    );
+    expect(db.batchStatements.every((statement) => statement.sql.includes("ON CONFLICT"))).toBe(true);
+    expect(db.batchStatements.find((statement) => statement.sql.includes("ynab_users"))?.params).toEqual([
+      "user-1",
+      "Avery",
+      syncedAt,
+      syncedAt
+    ]);
+    expect(
+      db.batchStatements.find(
+        (statement) => statement.sql.includes("ynab_plans") && statement.params.includes("2026-01-01")
+      )?.params
+    ).toEqual(
+      expect.arrayContaining(["plan-1", "Main Budget", "2026-04-27T10:00:00Z", "2026-01-01", "2026-12-01"])
+    );
+    expect(db.batchStatements.find((statement) => statement.sql.includes("ynab_plan_settings"))?.params).toEqual(
+      expect.arrayContaining(["plan-1", "MM/DD/YYYY", "USD", "$1,234.56", 2, ".", 1, ",", "$", 1])
+    );
+  });
+
   it("upserts scheduled sync records into the existing read-model tables", async () => {
     const db = new FakeD1Database();
     const repository = createReadModelSyncRepository(db as unknown as D1Database);
@@ -228,5 +308,27 @@ describe("read model sync repository", () => {
 
     expect(result).toEqual({ rowsUpserted: 0 });
     expect(db.batchStatements).toEqual([]);
+  });
+
+  it("chunks large D1 writes into bounded batches", async () => {
+    const db = new FakeD1Database();
+    const repository = createReadModelSyncRepository(db as unknown as D1Database);
+
+    await repository.upsertAccounts({
+      accounts: Array.from({ length: 125 }, (_, index) => ({
+        balance: index,
+        closed: false,
+        deleted: false,
+        id: `account-${index}`,
+        name: `Account ${index}`,
+        type: "checking"
+      })),
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z"
+    });
+
+    expect(db.batchCalls).toHaveLength(3);
+    expect(db.batchCalls.map((batch) => batch.length)).toEqual([50, 50, 25]);
+    expect(db.batchStatements).toHaveLength(125);
   });
 });

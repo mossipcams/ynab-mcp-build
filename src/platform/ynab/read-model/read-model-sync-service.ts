@@ -5,7 +5,11 @@ import type {
   YnabMoneyMovementGroup,
   YnabPayee,
   YnabPayeeLocation,
+  YnabPlanDetail,
+  YnabPlanList,
   YnabPlanMonthDetail,
+  YnabPlanSettings,
+  YnabUser,
   YnabScheduledTransaction
 } from "../client.js";
 import type { YnabDeltaClient, YnabDeltaResponse, YnabDeltaTransactionRecord } from "../delta-client.js";
@@ -45,6 +49,23 @@ type SyncStateRepository = {
 };
 
 type ReadModelRepository = {
+  upsertUser?(input: {
+    user: YnabUser;
+    syncedAt: string;
+  }): Promise<{ rowsUpserted: number }>;
+  upsertPlans?(input: {
+    plans: YnabPlanList["plans"];
+    syncedAt: string;
+  }): Promise<{ rowsUpserted: number }>;
+  upsertPlanDetail?(input: {
+    plan: YnabPlanDetail;
+    syncedAt: string;
+  }): Promise<{ rowsUpserted: number }>;
+  upsertPlanSettings?(input: {
+    planId: string;
+    settings: YnabPlanSettings;
+    syncedAt: string;
+  }): Promise<{ rowsUpserted: number }>;
   upsertAccounts(input: {
     planId: string;
     accounts: YnabAccountSummary[];
@@ -109,11 +130,19 @@ type MoneyMovementClient = {
   }>;
 };
 
+type MetadataClient = {
+  getUser(): Promise<YnabUser>;
+  listPlans(): Promise<YnabPlanList>;
+  getPlan(planId: string): Promise<YnabPlanDetail>;
+  getPlanSettings(planId: string): Promise<YnabPlanSettings>;
+};
+
 export type ReadModelSyncServiceOptions = {
   deltaClient: YnabDeltaClient;
   syncStateRepository: SyncStateRepository;
   readModelRepository: ReadModelRepository;
   transactionsRepository: TransactionsRepository;
+  metadataClient?: MetadataClient;
   moneyMovementClient?: MoneyMovementClient;
   maxRowsPerRun: number;
   leaseSeconds?: number;
@@ -149,23 +178,121 @@ type MoneyMovementDeltaRecord = {
   moneyMovements: YnabMoneyMovement[];
 };
 
+type PlansMetadataRecord = {
+  plan: YnabPlanDetail;
+  plans: YnabPlanList["plans"];
+};
+
 function toErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Read-model sync failed.";
-}
-
-function countCategoryRows(categoryGroups: YnabCategoryGroupSummary[]) {
-  return categoryGroups.length
-    + categoryGroups.reduce((sum, group) => sum + group.categories.length, 0);
-}
-
-function countMonthRows(months: YnabPlanMonthDetail[]) {
-  return months.length
-    + months.reduce((sum, month) => sum + (month.categories?.length ?? 0), 0);
 }
 
 export function createReadModelSyncService(options: ReadModelSyncServiceOptions) {
   const leaseSeconds = options.leaseSeconds ?? 60;
   const endpointConfigs: Array<EndpointConfig<unknown>> = [
+    ...(options.metadataClient
+      ? [
+          {
+            endpoint: "users",
+            async fetchDelta(_planId: string, serverKnowledge: number | undefined) {
+              return {
+                records: [await options.metadataClient!.getUser()],
+                serverKnowledge: serverKnowledge ?? 0
+              };
+            },
+            async write(input: {
+              records: unknown[];
+              syncedAt: string;
+            }) {
+              const [user] = input.records as YnabUser[];
+
+              if (!user) {
+                return { rowsUpserted: 0 };
+              }
+
+              if (!options.readModelRepository.upsertUser) {
+                throw new Error("Read-model metadata repository is missing upsertUser.");
+              }
+
+              return options.readModelRepository.upsertUser({
+                syncedAt: input.syncedAt,
+                user
+              });
+            }
+          } satisfies EndpointConfig<unknown>,
+          {
+            endpoint: "plans",
+            async fetchDelta(planId: string, serverKnowledge: number | undefined) {
+              const [planList, plan] = await Promise.all([
+                options.metadataClient!.listPlans(),
+                options.metadataClient!.getPlan(planId)
+              ]);
+
+              return {
+                records: [{ plan, plans: planList.plans }],
+                serverKnowledge: serverKnowledge ?? 0
+              };
+            },
+            async write(input: {
+              records: unknown[];
+              syncedAt: string;
+            }) {
+              const [record] = input.records as PlansMetadataRecord[];
+
+              if (!record) {
+                return { rowsUpserted: 0 };
+              }
+
+              if (!options.readModelRepository.upsertPlans || !options.readModelRepository.upsertPlanDetail) {
+                throw new Error("Read-model metadata repository is missing plan upsert methods.");
+              }
+
+              const plansResult = await options.readModelRepository.upsertPlans({
+                plans: record.plans,
+                syncedAt: input.syncedAt
+              });
+              const planResult = await options.readModelRepository.upsertPlanDetail({
+                plan: record.plan,
+                syncedAt: input.syncedAt
+              });
+
+              return {
+                rowsUpserted: plansResult.rowsUpserted + planResult.rowsUpserted
+              };
+            }
+          } satisfies EndpointConfig<unknown>,
+          {
+            endpoint: "plan_settings",
+            async fetchDelta(planId: string, serverKnowledge: number | undefined) {
+              return {
+                records: [await options.metadataClient!.getPlanSettings(planId)],
+                serverKnowledge: serverKnowledge ?? 0
+              };
+            },
+            async write(input: {
+              planId: string;
+              records: unknown[];
+              syncedAt: string;
+            }) {
+              const [settings] = input.records as YnabPlanSettings[];
+
+              if (!settings) {
+                return { rowsUpserted: 0 };
+              }
+
+              if (!options.readModelRepository.upsertPlanSettings) {
+                throw new Error("Read-model metadata repository is missing upsertPlanSettings.");
+              }
+
+              return options.readModelRepository.upsertPlanSettings({
+                planId: input.planId,
+                settings,
+                syncedAt: input.syncedAt
+              });
+            }
+          } satisfies EndpointConfig<unknown>
+        ]
+      : []),
     {
       endpoint: "accounts",
       fetchDelta: options.deltaClient.listAccountsDelta,
@@ -303,26 +430,6 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
     }
   ];
 
-  function getRowCount(endpoint: string, records: unknown[]) {
-    if (endpoint === "categories") {
-      return countCategoryRows(records as YnabCategoryGroupSummary[]);
-    }
-
-    if (endpoint === "months") {
-      return countMonthRows(records as YnabPlanMonthDetail[]);
-    }
-
-    if (endpoint === "money_movements") {
-      const [record] = records as MoneyMovementDeltaRecord[];
-
-      return record
-        ? record.moneyMovementGroups.length + record.moneyMovements.length
-        : 0;
-    }
-
-    return records.length;
-  }
-
   async function syncEndpoint(input: SyncReadModelInput, config: EndpointConfig<unknown>): Promise<EndpointResult> {
     const lease = await options.syncStateRepository.acquireLease({
       endpoint: config.endpoint,
@@ -344,25 +451,6 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
 
     try {
       const delta = await config.fetchDelta(input.planId, previousServerKnowledge ?? undefined);
-      const rowCount = getRowCount(config.endpoint, delta.records);
-
-      if (rowCount > options.maxRowsPerRun) {
-        const error = `Delta response contained ${rowCount} rows, exceeding the configured limit of ${options.maxRowsPerRun}.`;
-        await options.syncStateRepository.recordFailure({
-          endpoint: config.endpoint,
-          error,
-          leaseOwner: input.leaseOwner,
-          now: input.now,
-          planId: input.planId
-        });
-
-        return {
-          endpoint: config.endpoint,
-          reason: "row_limit_exceeded",
-          status: "failed"
-        };
-      }
-
       const writeResult = await config.write({
         planId: input.planId,
         records: delta.records,

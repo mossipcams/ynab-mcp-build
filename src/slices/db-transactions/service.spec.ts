@@ -3,34 +3,93 @@ import { describe, expect, it, vi } from "vitest";
 import { searchTransactions } from "./service.js";
 
 describe("DB-backed transaction service", () => {
+  it("passes high offsets to D1 and reports pagination from the full match count", async () => {
+    const transactionsRepository = {
+      summarizeTransactions: vi.fn(async () => ({
+        topCategories: [],
+        topPayees: [],
+        totals: {
+          inflowMilliunits: 0,
+          outflowMilliunits: 12000
+        }
+      })),
+      searchTransactions: vi.fn(async () => ({
+        rows: [
+          {
+            amount_milliunits: -12000,
+            date: "2026-04-12",
+            deleted: 0,
+            id: "txn-601",
+            payee_name: "Market"
+          }
+        ],
+        totalCount: 650
+      }))
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-04-28T12:00:00.000Z",
+        stale: false,
+        warning: null
+      }))
+    };
+
+    const result = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      {
+        limit: 25,
+        offset: 600
+      }
+    );
+
+    expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 25,
+      offset: 600
+    }));
+    expect(result).toMatchObject({
+      data: {
+        has_more: true,
+        limit: 25,
+        match_count: 650,
+        offset: 600,
+        returned_count: 1
+      },
+      status: "ok"
+    });
+  });
+
   it("searches D1 transactions with clamped limits and freshness metadata", async () => {
     const transactionsRepository = {
-      searchTransactions: vi.fn(async () => [
-        {
-          id: "txn-1",
-          date: "2026-04-12",
-          amount_milliunits: -12000,
-          memo: "weekly run",
-          cleared: "cleared",
-          approved: 1,
-          flag_color: "blue",
-          flag_name: "follow up",
-          account_id: "account-1",
-          account_name: "Checking",
-          payee_id: "payee-1",
-          payee_name: "Market",
-          category_id: "category-1",
-          category_name: "Groceries",
-          transfer_account_id: null,
-          transfer_transaction_id: "transfer-txn-1",
-          matched_transaction_id: "matched-txn-1",
-          import_id: "YNAB:-12000:2026-04-12:1",
-          import_payee_name: "MKT",
-          import_payee_name_original: "Market Original",
-          debt_transaction_type: "payment",
-          deleted: 0
-        }
-      ])
+      searchTransactions: vi.fn(async () => ({
+        rows: [
+          {
+            id: "txn-1",
+            date: "2026-04-12",
+            amount_milliunits: -12000,
+            memo: "weekly run",
+            cleared: "cleared",
+            approved: 1,
+            flag_color: "blue",
+            flag_name: "follow up",
+            account_id: "account-1",
+            account_name: "Checking",
+            payee_id: "payee-1",
+            payee_name: "Market",
+            category_id: "category-1",
+            category_name: "Groceries",
+            transfer_account_id: null,
+            transfer_transaction_id: "transfer-txn-1",
+            matched_transaction_id: "matched-txn-1",
+            import_id: "YNAB:-12000:2026-04-12:1",
+            import_payee_name: "MKT",
+            import_payee_name_original: "Market Original",
+            debt_transaction_type: "payment",
+            deleted: 0
+          }
+        ],
+        totalCount: 1
+      }))
     };
     const freshness = {
       getFreshness: vi.fn(async () => ({
@@ -60,6 +119,7 @@ describe("DB-backed transaction service", () => {
       includeDeleted: false,
       includeTransfers: false,
       limit: 500,
+      offset: 0,
       payeeIds: ["payee-1"],
       planId: "plan-1",
       startDate: "2026-04-01"
@@ -121,68 +181,34 @@ describe("DB-backed transaction service", () => {
 
   it("preserves public search filters, projection, pagination, sorting, and summaries", async () => {
     const transactionsRepository = {
-      searchTransactions: vi.fn(async () => [
-        {
-          id: "txn-transfer",
-          date: "2026-04-14",
-          amount_milliunits: -1000,
-          cleared: "cleared",
-          approved: 1,
-          account_id: "account-1",
-          account_name: "Checking",
-          payee_id: "payee-transfer",
-          payee_name: "Transfer",
-          category_id: "category-1",
-          category_name: "Groceries",
-          transfer_account_id: "account-2",
-          deleted: 0
-        },
-        {
-          id: "txn-approved-large",
-          date: "2026-04-13",
-          amount_milliunits: -9000,
-          cleared: "cleared",
-          approved: 1,
-          account_id: "account-1",
-          account_name: "Checking",
-          payee_id: "payee-2",
-          payee_name: "Bakery",
-          category_id: "category-1",
-          category_name: "Groceries",
-          transfer_account_id: null,
-          deleted: 0
-        },
-        {
-          id: "txn-approved-small",
-          date: "2026-04-12",
-          amount_milliunits: -3000,
-          cleared: "cleared",
-          approved: 1,
-          account_id: "account-1",
-          account_name: "Checking",
-          payee_id: "payee-1",
-          payee_name: "Market",
-          category_id: "category-1",
-          category_name: "Groceries",
-          transfer_account_id: null,
-          deleted: 0
-        },
-        {
-          id: "txn-uncleared",
-          date: "2026-04-11",
-          amount_milliunits: -2000,
-          cleared: "uncleared",
-          approved: 1,
-          account_id: "account-1",
-          account_name: "Checking",
-          payee_id: "payee-3",
-          payee_name: "Cafe",
-          category_id: "category-1",
-          category_name: "Groceries",
-          transfer_account_id: null,
-          deleted: 0
+      summarizeTransactions: vi.fn(async () => ({
+        topCategories: [],
+        topPayees: [],
+        totals: {
+          inflowMilliunits: 0,
+          outflowMilliunits: 12000
         }
-      ])
+      })),
+      searchTransactions: vi.fn(async () => ({
+        rows: [
+          {
+            id: "txn-approved-small",
+            date: "2026-04-12",
+            amount_milliunits: -3000,
+            cleared: "cleared",
+            approved: 1,
+            account_id: "account-1",
+            account_name: "Checking",
+            payee_id: "payee-1",
+            payee_name: "Market",
+            category_id: "category-1",
+            category_name: "Groceries",
+            transfer_account_id: null,
+            deleted: 0
+          }
+        ],
+        totalCount: 2
+      }))
     };
     const freshness = {
       getFreshness: vi.fn(async () => ({
@@ -212,10 +238,17 @@ describe("DB-backed transaction service", () => {
         approved: true,
         cleared: "cleared",
         includeTransfers: false,
-        limit: 2,
+        limit: 1,
+        offset: 1,
         sort: "amount_asc"
       })
     );
+    expect(transactionsRepository.summarizeTransactions).toHaveBeenCalledWith(expect.objectContaining({
+      approved: true,
+      cleared: "cleared",
+      includeTransfers: false,
+      planId: "plan-1"
+    }));
     expect(result).toMatchObject({
       status: "ok",
       data: {

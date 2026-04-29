@@ -1,7 +1,7 @@
 import { OAuthStateDO } from "./durable-objects/OAuthStateDO.js";
 import { createDurableObjectOAuthKvNamespace } from "./durable-objects/oauth-state-client.js";
 import { createApp } from "./app/create-app.js";
-import { runScheduledReadModelSync } from "./app/scheduled-sync.js";
+import { runScheduledReadModelSyncAndReport } from "./app/scheduled-sync.js";
 import { createOAuthProvider } from "./oauth/http/provider.js";
 import { type AppEnv, resolveAppEnv } from "./shared/env.js";
 
@@ -38,7 +38,7 @@ export default {
     return appHandler.fetch(request, env, executionContext);
   },
   scheduled(controller: ScheduledController, env: Env, executionContext: ExecutionContext) {
-    executionContext.waitUntil(runScheduledReadModelSync(env, controller.scheduledTime));
+    executionContext.waitUntil(runScheduledReadModelSyncAndReport(env, controller.scheduledTime));
   }
 } satisfies ExportedHandler<Env>;
 

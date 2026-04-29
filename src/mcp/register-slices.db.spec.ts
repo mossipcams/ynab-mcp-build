@@ -73,8 +73,13 @@ class FakeStatement {
       } as D1Result<T>);
     }
 
-    this.db.transactionSearchParams = this.params;
+    if (this.sql.includes("COUNT(*) AS count")) {
+      return Promise.resolve({
+        results: [{ count: 1 }]
+      } as D1Result<T>);
+    }
 
+    this.db.transactionSearchParams = this.params;
     return Promise.resolve({
       results: [
         {

@@ -664,9 +664,15 @@ export function createYnabReadModelClient(
       });
     },
 
-    async listTransactions(planId: string, fromDate?: string) {
-      const where = fromDate ? ["date >= ?"] : [];
-      const params = fromDate ? [fromDate] : [];
+    async listTransactions(planId: string, fromDate?: string, toDate?: string) {
+      const where = [
+        ...(fromDate ? ["date >= ?"] : []),
+        ...(toDate ? ["date <= ?"] : [])
+      ];
+      const params = [
+        ...(fromDate ? [fromDate] : []),
+        ...(toDate ? [toDate] : [])
+      ];
 
       return (await listTransactionRows(planId, where, params)).map(toTransaction);
     },

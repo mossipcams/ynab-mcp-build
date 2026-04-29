@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   getBudgetHealthSummary,
+  getCashFlowSummary,
   getFinancialSnapshot,
   getGoalProgressSummary,
   getMonthlyReview,
@@ -27,6 +28,24 @@ function spendingTransaction(index: number) {
 }
 
 describe("financial health context optimization", () => {
+  it("passes both range bounds to transaction reads for range summaries", async () => {
+    const ynabClient = {
+      listPlanMonths: vi.fn().mockResolvedValue([
+        { month: "2026-01-01", budgeted: 100000, activity: -50000, deleted: false },
+        { month: "2026-02-01", budgeted: 100000, activity: -60000, deleted: false }
+      ]),
+      listTransactions: vi.fn().mockResolvedValue([])
+    };
+
+    await getCashFlowSummary(ynabClient as never, {
+      planId: "plan-1",
+      fromMonth: "2026-01-01",
+      toMonth: "2026-02-01"
+    });
+
+    expect(ynabClient.listTransactions).toHaveBeenCalledWith("plan-1", "2026-01-01", "2026-02-28");
+  });
+
   it("reconstructs net worth trajectories without rescanning every transaction for every month", async () => {
     let dateReadCount = 0;
     const transactions = Array.from({ length: 24 }, (_, index) => ({

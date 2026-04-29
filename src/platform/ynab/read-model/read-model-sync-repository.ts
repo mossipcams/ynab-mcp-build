@@ -5,8 +5,12 @@ import type {
   YnabMoneyMovementGroup,
   YnabPayee,
   YnabPayeeLocation,
+  YnabPlanDetail,
+  YnabPlanSettings,
+  YnabPlanSummary,
   YnabPlanMonthDetail,
-  YnabScheduledTransaction
+  YnabScheduledTransaction,
+  YnabUser
 } from "../client.js";
 
 type UpsertResult = {
@@ -23,6 +27,8 @@ type UpsertMonthsResult = {
   monthsUpserted: number;
 };
 
+const D1_BATCH_SIZE = 50;
+
 function toIntegerBoolean(value: boolean | null | undefined) {
   if (value === undefined || value === null) {
     return null;
@@ -32,13 +38,158 @@ function toIntegerBoolean(value: boolean | null | undefined) {
 }
 
 async function runBatch(database: D1Database, statements: D1PreparedStatement[]): Promise<void> {
-  if (statements.length > 0) {
-    await database.batch(statements);
+  for (let index = 0; index < statements.length; index += D1_BATCH_SIZE) {
+    await database.batch(statements.slice(index, index + D1_BATCH_SIZE));
   }
 }
 
 export function createReadModelSyncRepository(database: D1Database) {
   return {
+    async upsertUser(input: { syncedAt: string; user: YnabUser }): Promise<UpsertResult> {
+      await runBatch(database, [
+        database
+          .prepare(
+            `INSERT INTO ynab_users (
+               id,
+               name,
+               synced_at,
+               updated_at
+             )
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               synced_at = excluded.synced_at,
+               updated_at = excluded.updated_at`
+          )
+          .bind(input.user.id, input.user.name, input.syncedAt, input.syncedAt)
+      ]);
+
+      return { rowsUpserted: 1 };
+    },
+
+    async upsertPlans(input: { plans: YnabPlanSummary[]; syncedAt: string }): Promise<UpsertResult> {
+      const statements = input.plans.map((plan) =>
+        database
+          .prepare(
+            `INSERT INTO ynab_plans (
+               id,
+               name,
+               last_modified_on,
+               first_month,
+               last_month,
+               deleted,
+               synced_at,
+               updated_at
+             )
+             VALUES (?, ?, ?, NULL, NULL, 0, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               last_modified_on = excluded.last_modified_on,
+               deleted = excluded.deleted,
+               synced_at = excluded.synced_at,
+               updated_at = excluded.updated_at`
+          )
+          .bind(plan.id, plan.name, plan.lastModifiedOn ?? null, input.syncedAt, input.syncedAt)
+      );
+
+      await runBatch(database, statements);
+
+      return { rowsUpserted: input.plans.length };
+    },
+
+    async upsertPlanDetail(input: { plan: YnabPlanDetail; syncedAt: string }): Promise<UpsertResult> {
+      await runBatch(database, [
+        database
+          .prepare(
+            `INSERT INTO ynab_plans (
+               id,
+               name,
+               last_modified_on,
+               first_month,
+               last_month,
+               deleted,
+               synced_at,
+               updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               last_modified_on = excluded.last_modified_on,
+               first_month = excluded.first_month,
+               last_month = excluded.last_month,
+               deleted = excluded.deleted,
+               synced_at = excluded.synced_at,
+               updated_at = excluded.updated_at`
+          )
+          .bind(
+            input.plan.id,
+            input.plan.name,
+            input.plan.lastModifiedOn ?? null,
+            input.plan.firstMonth ?? null,
+            input.plan.lastMonth ?? null,
+            input.syncedAt,
+            input.syncedAt
+          )
+      ]);
+
+      return { rowsUpserted: 1 };
+    },
+
+    async upsertPlanSettings(input: {
+      planId: string;
+      settings: YnabPlanSettings;
+      syncedAt: string;
+    }): Promise<UpsertResult> {
+      await runBatch(database, [
+        database
+          .prepare(
+            `INSERT INTO ynab_plan_settings (
+               plan_id,
+               date_format,
+               currency_iso_code,
+               currency_example_format,
+               currency_decimal_digits,
+               currency_decimal_separator,
+               currency_symbol_first,
+               currency_group_separator,
+               currency_symbol,
+               currency_display_symbol,
+               synced_at,
+               updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(plan_id) DO UPDATE SET
+               date_format = excluded.date_format,
+               currency_iso_code = excluded.currency_iso_code,
+               currency_example_format = excluded.currency_example_format,
+               currency_decimal_digits = excluded.currency_decimal_digits,
+               currency_decimal_separator = excluded.currency_decimal_separator,
+               currency_symbol_first = excluded.currency_symbol_first,
+               currency_group_separator = excluded.currency_group_separator,
+               currency_symbol = excluded.currency_symbol,
+               currency_display_symbol = excluded.currency_display_symbol,
+               synced_at = excluded.synced_at,
+               updated_at = excluded.updated_at`
+          )
+          .bind(
+            input.planId,
+            input.settings.dateFormat?.format ?? null,
+            input.settings.currencyFormat?.isoCode ?? null,
+            input.settings.currencyFormat?.exampleFormat ?? null,
+            input.settings.currencyFormat?.decimalDigits ?? null,
+            input.settings.currencyFormat?.decimalSeparator ?? null,
+            toIntegerBoolean(input.settings.currencyFormat?.symbolFirst),
+            input.settings.currencyFormat?.groupSeparator ?? null,
+            input.settings.currencyFormat?.currencySymbol ?? null,
+            toIntegerBoolean(input.settings.currencyFormat?.displaySymbol),
+            input.syncedAt,
+            input.syncedAt
+          )
+      ]);
+
+      return { rowsUpserted: 1 };
+    },
+
     async upsertAccounts(input: {
       planId: string;
       accounts: YnabAccountSummary[];

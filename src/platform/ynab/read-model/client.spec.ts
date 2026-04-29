@@ -95,11 +95,48 @@ class FakeD1Database {
       return false;
     }
 
+    if (sql.includes("date <= ?") && typeof row.date === "string" && row.date > String(params.at(-1))) {
+      return false;
+    }
+
     return true;
   }
 }
 
 describe("YNAB read-model client", () => {
+  it("applies both start and end date predicates when listing transactions", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "txn-apr",
+        date: "2026-04-12",
+        amount_milliunits: -12000,
+        deleted: 0
+      },
+      {
+        plan_id: "plan-1",
+        id: "txn-may",
+        date: "2026-05-01",
+        amount_milliunits: -9000,
+        deleted: 0
+      }
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(client.listTransactions("plan-1", "2026-04-01", "2026-04-30")).resolves.toEqual([
+      expect.objectContaining({
+        id: "txn-apr"
+      })
+    ]);
+
+    expect(db.calls[0]).toMatchObject({
+      params: ["plan-1", "2026-04-01", "2026-04-30"]
+    });
+    expect(db.calls[0]?.sql).toContain("date >= ?");
+    expect(db.calls[0]?.sql).toContain("date <= ?");
+  });
+
   it("serves core YNAB client reads from D1 rows without HTTP access", async () => {
     const db = new FakeD1Database();
     db.rows.ynab_plans = [
