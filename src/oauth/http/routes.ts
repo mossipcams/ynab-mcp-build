@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 
 import type { AppDependencies } from "../../app/dependencies.js";
+import { verifyCfAccessJwt } from "../core/cf-access-jwt.js";
 import { resolveAppEnv } from "../../shared/env.js";
 import { createAccessOidcClient, resolveAccessOidcEndpoints } from "./access-oidc.js";
 import { createOAuthProviderApi } from "./provider.js";
@@ -128,8 +129,31 @@ function getAccessOidcAuthorizationRedirect(options: {
 
 const accessOidcFetch: typeof fetch = (input, init) => fetch(input, init);
 
-function getOpenIdConfiguration(request: Request) {
-  const origin = new URL(request.url).origin;
+async function validateCloudflareAccessRequest(request: Request, env: {
+  cfAccessAudience?: string;
+  cfAccessTeamDomain?: string;
+}) {
+  if (!env.cfAccessAudience || !env.cfAccessTeamDomain) {
+    return;
+  }
+
+  const token = request.headers.get("cf-access-jwt-assertion");
+
+  if (!token) {
+    throw new Error("Cloudflare Access JWT is required.");
+  }
+
+  try {
+    await verifyCfAccessJwt(token, env.cfAccessTeamDomain, {
+      audience: env.cfAccessAudience
+    });
+  } catch {
+    throw new Error("Cloudflare Access JWT is invalid.");
+  }
+}
+
+function getOpenIdConfiguration(publicUrl: string) {
+  const origin = getPublicOrigin(publicUrl);
 
   return {
     authorization_endpoint: `${origin}/authorize`,
@@ -163,7 +187,7 @@ export function registerOAuthHttpRoutes(
       return context.notFound();
     }
 
-    return context.json(getOpenIdConfiguration(context.req.raw));
+    return context.json(getOpenIdConfiguration(env.publicUrl!));
   });
 
   app.get("/authorize", async (context) => {
@@ -175,6 +199,7 @@ export function registerOAuthHttpRoutes(
 
     try {
       validateAuthorizationCodePkce(context.req.raw);
+      await validateCloudflareAccessRequest(context.req.raw, env);
 
       const oauth = createOAuthProviderApi(context.env);
       const request = await oauth.parseAuthRequest(context.req.raw);
@@ -222,7 +247,14 @@ export function registerOAuthHttpRoutes(
 
       return context.redirect(result.redirectTo, 302);
     } catch (error) {
-      return writeOAuthError("invalid_request", error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      const requiresAccessJwt = env.cfAccessAudience && env.cfAccessTeamDomain;
+
+      return writeOAuthError(
+        requiresAccessJwt ? "unauthorized" : "invalid_request",
+        message,
+        requiresAccessJwt && message.startsWith("Cloudflare Access JWT") ? 401 : 400
+      );
     }
   });
 
@@ -255,6 +287,7 @@ export function registerOAuthHttpRoutes(
       const identity = await createAccessOidcClient({
         clientId: env.accessOidc.clientId,
         clientSecret: env.accessOidc.clientSecret,
+        ...(accessEndpoints.issuer ? { expectedIssuer: accessEndpoints.issuer } : {}),
         fetch: accessOidcFetch,
         jwksUrl: accessEndpoints.jwksUrl,
         redirectUri: getAccessOidcCallbackUrl(env.publicUrl!),

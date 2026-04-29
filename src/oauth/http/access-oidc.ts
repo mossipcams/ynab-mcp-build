@@ -12,6 +12,7 @@ export type AccessOidcConfig = {
 type AccessOidcClientOptions = {
   clientId: string;
   clientSecret: string;
+  expectedIssuer?: string;
   fetch: typeof fetch;
   jwksUrl: string;
   redirectUri: string;
@@ -28,12 +29,14 @@ type AccessJwks = {
 
 type AccessDiscoveryResponse = {
   authorization_endpoint?: unknown;
+  issuer?: unknown;
   jwks_uri?: unknown;
   token_endpoint?: unknown;
 };
 
 export type AccessOidcEndpoints = {
   authorizationUrl: string;
+  issuer?: string;
   jwksUrl: string;
   tokenUrl: string;
 };
@@ -134,6 +137,7 @@ export async function resolveAccessOidcEndpoints(options: {
 
     return {
       authorizationUrl: payload.authorization_endpoint,
+      ...(typeof payload.issuer === "string" ? { issuer: payload.issuer } : {}),
       jwksUrl: payload.jwks_uri,
       tokenUrl: payload.token_endpoint
     };
@@ -198,6 +202,7 @@ export function createAccessOidcClient(options: AccessOidcClientOptions) {
 
       return verifyOidcIdToken({
         expectedAudience: options.clientId,
+        ...(options.expectedIssuer ? { expectedIssuer: options.expectedIssuer } : {}),
         jwks: await fetchJwks(),
         token
       });

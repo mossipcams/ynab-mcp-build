@@ -120,6 +120,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
   const accessTeamDomain = accessOidcValues.teamDomain
     ? normalizeAccessTeamDomain(accessOidcValues.teamDomain)
     : undefined;
+  const oauthEnabled = runtimeEnv?.MCP_OAUTH_ENABLED === "true";
   const derivedPublicUrl = request
     ? `${new URL(request.url).origin}/mcp`
     : undefined;
@@ -141,10 +142,10 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
     cfAccessTeamDomain: runtimeEnv?.CF_ACCESS_TEAM_DOMAIN,
     mcpServerName: runtimeEnv?.MCP_SERVER_NAME ?? DEFAULT_APP_ENV.mcpServerName,
     mcpServerVersion: runtimeEnv?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
-    oauthEnabled: runtimeEnv?.MCP_OAUTH_ENABLED === "true",
+    oauthEnabled,
     oauthKvNamespace: runtimeEnv?.OAUTH_KV,
     oauthStateNamespace: runtimeEnv?.OAUTH_STATE,
-    publicUrl: runtimeEnv?.MCP_PUBLIC_URL ?? derivedPublicUrl,
+    publicUrl: runtimeEnv?.MCP_PUBLIC_URL ?? (oauthEnabled ? undefined : derivedPublicUrl),
     ynabApiBaseUrl: runtimeEnv?.YNAB_API_BASE_URL ?? DEFAULT_APP_ENV.ynabApiBaseUrl,
     ynabAccessToken: runtimeEnv?.YNAB_ACCESS_TOKEN ?? runtimeEnv?.YNAB_API_TOKEN,
     ynabDatabase: runtimeEnv?.YNAB_DB,

@@ -44,4 +44,37 @@ describe("http mcp route optimization", () => {
     expect(response.status).toBe(200);
     expect(resolveClient).toHaveBeenCalledTimes(1);
   });
+
+  it("rejects oversized JSON bodies before creating MCP dependencies", async () => {
+    const resolveClient = vi.fn(() => ({}) as YnabClient);
+    const app = createApp({
+      get ynabClient() {
+        return resolveClient();
+      }
+    });
+    const response = await app.request(
+      "http://localhost/mcp",
+      {
+        body: JSON.stringify({
+          id: "oversized-call",
+          jsonrpc: "2.0",
+          method: "tools/list",
+          padding: "x".repeat(1024 * 1024 + 1),
+          params: {}
+        }),
+        headers: {
+          accept: "application/json, text/event-stream",
+          "content-type": "application/json"
+        },
+        method: "POST"
+      },
+      createEnv()
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "request_too_large"
+    });
+    expect(resolveClient).not.toHaveBeenCalled();
+  });
 });

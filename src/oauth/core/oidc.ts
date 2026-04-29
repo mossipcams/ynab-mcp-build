@@ -9,6 +9,7 @@ type OidcJwtPayload = {
   aud?: string | string[];
   email?: string;
   exp?: number;
+  iss?: string;
   sub?: string;
 };
 
@@ -25,6 +26,7 @@ const OidcJwtPayloadSchema = z.object({
   aud: z.union([z.string(), z.array(z.string())]).optional(),
   email: z.string().optional(),
   exp: z.number().optional(),
+  iss: z.string().optional(),
   sub: z.string().optional()
 }).passthrough();
 
@@ -89,8 +91,15 @@ function validateAudience(audience: string | string[] | undefined, expectedAudie
   }
 }
 
+function validateIssuer(issuer: string | undefined, expectedIssuer: string | undefined) {
+  if (expectedIssuer && issuer !== expectedIssuer) {
+    throw new Error("Access OIDC ID token issuer does not match.");
+  }
+}
+
 export async function verifyOidcIdToken(input: {
   expectedAudience: string;
+  expectedIssuer?: string;
   jwks: OidcJwks;
   now?: () => number;
   token: string;
@@ -136,6 +145,7 @@ export async function verifyOidcIdToken(input: {
     throw new Error("Access OIDC ID token is missing a subject.");
   }
 
+  validateIssuer(payload.iss, input.expectedIssuer);
   validateAudience(payload.aud, input.expectedAudience);
 
   return {
