@@ -24,6 +24,7 @@ describe("repository preflight tooling", () => {
       "npm run typecheck:tsc",
       "npm run typecheck:spec",
       "npm run lint",
+      "npm run check:deps",
       "npm run check:duplication",
       "npm test"
     ]);

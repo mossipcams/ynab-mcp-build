@@ -6,6 +6,7 @@
   "description": "TypeScript-first Cloudflare Workers rebuild of ynab-mcp-bridge",
   "scripts": {
     "cf-typegen": "wrangler types",
+    "check:deps": "depcruise --config .dependency-cruiser.cjs src",
     "check:duplication": "jscpd",
     "ci": "node scripts/run-ci.mjs",
     "dev": "wrangler dev",
@@ -38,6 +39,7 @@
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/node": "^25.6.0",
     "@typescript/native-preview": "^7.0.0-dev.20260429.1",
+    "dependency-cruiser": "^17.3.10",
     "eslint": "^10.2.1",
     "fast-check": "^4.7.0",
     "jscpd": "^4.0.9",
