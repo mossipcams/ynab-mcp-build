@@ -70,12 +70,11 @@ function getDbBackedToolDefinitions(env: AppEnv, dependencies: AppDependencies) 
     now,
     staleAfterMinutes: env.ynabStaleAfterMinutes
   });
-  const ynabClient = createYnabReadModelClient(env.ynabDatabase, {
-    ...(env.ynabDefaultPlanId ? { defaultPlanId: env.ynabDefaultPlanId } : {})
-  });
-  const baseDependencies = {
-    ...(env.ynabDefaultPlanId ? { defaultPlanId: env.ynabDefaultPlanId } : {})
-  };
+  const defaultPlanDependencies = env.ynabDefaultPlanId
+    ? { defaultPlanId: env.ynabDefaultPlanId }
+    : {};
+  const ynabClient = createYnabReadModelClient(env.ynabDatabase, defaultPlanDependencies);
+  const baseDependencies = defaultPlanDependencies;
   const definitions: SliceToolDefinition[] = [
     defineTool({
       name: "ynab_get_mcp_version",
@@ -198,6 +197,13 @@ function isUnhealthy(freshness: { health_status: string }) {
   return freshness.health_status === "never_synced" || freshness.health_status === "unhealthy";
 }
 
+function buildReadModelSyncNextAction(planId: string, requiredEndpoints: readonly string[]) {
+  return {
+    code: "sync_read_model",
+    message: `Run the scheduled YNAB read-model sync for ${planId}, then retry after endpoints are healthy: ${requiredEndpoints.join(", ")}.`
+  };
+}
+
 function withReadModelFreshness(
   definition: SliceToolDefinition,
   dependencies: FreshnessDependencies
@@ -222,6 +228,7 @@ function withReadModelFreshness(
         return {
           status: "unhealthy",
           data_freshness: dataFreshness,
+          next_action: buildReadModelSyncNextAction(planId, requiredEndpoints),
           data: null
         };
       }

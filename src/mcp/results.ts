@@ -10,6 +10,14 @@ function sanitizeErrorMessage(message: string) {
     );
 }
 
+function toStructuredContent(payload: unknown): Record<string, unknown> {
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    return payload as Record<string, unknown>;
+  }
+
+  return { value: payload };
+}
+
 export function toTextResult(payload: unknown) {
   return {
     content: [
@@ -18,7 +26,8 @@ export function toTextResult(payload: unknown) {
         text: JSON.stringify(payload)
       }
     ],
-    isError: false
+    isError: false,
+    structuredContent: toStructuredContent(payload)
   };
 }
 

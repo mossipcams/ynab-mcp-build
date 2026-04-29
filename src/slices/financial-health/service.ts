@@ -343,14 +343,6 @@ function buildHealthRisks(input: {
   return risks;
 }
 
-function buildCategoryGroupLookup(monthDetail: YnabPlanMonthDetail) {
-  return new Map(
-    (monthDetail.categories ?? [])
-      .filter((category) => !category.deleted)
-      .map((category) => [category.id, category.categoryGroupName ?? "Uncategorized"] as const)
-  );
-}
-
 function buildSpendingAnomalies(
   latestCategories: FinancialHealthCategory[],
   baselineMonthDetails: YnabPlanMonthDetail[],

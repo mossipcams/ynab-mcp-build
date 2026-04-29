@@ -1,6 +1,5 @@
 import type { YnabClient } from "../../platform/ynab/client.js";
 import {
-  hasPaginationControls,
   hasProjectionControls,
   paginateEntries,
   projectRecord,

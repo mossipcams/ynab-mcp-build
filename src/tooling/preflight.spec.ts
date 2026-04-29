@@ -132,6 +132,7 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
+      "pretypecheck:tsgo": "npm run cf-typegen",
       typecheck: "npm run typecheck:tsgo",
       "typecheck:tsc": "tsc --noEmit -p tsconfig.json",
       "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json"

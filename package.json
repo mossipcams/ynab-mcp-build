@@ -21,6 +21,7 @@
     "test:watch": "vitest watch",
     "test:mutation": "stryker run",
     "test:mutation:dry": "stryker run --dryRunOnly",
+    "pretypecheck:tsgo": "npm run cf-typegen",
     "typecheck": "npm run typecheck:tsgo",
     "typecheck:tsc": "tsc --noEmit -p tsconfig.json",
     "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json",

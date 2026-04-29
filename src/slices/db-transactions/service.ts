@@ -128,6 +128,13 @@ function isUnhealthy(freshness: FreshnessResult) {
   return freshness.health_status === "never_synced" || freshness.health_status === "unhealthy";
 }
 
+function buildReadModelSyncNextAction(planId: string) {
+  return {
+    code: "sync_read_model",
+    message: `Run the scheduled YNAB read-model sync for ${planId}, then retry after endpoints are healthy: ${REQUIRED_ENDPOINTS.join(", ")}.`
+  };
+}
+
 function toDisplayTransaction(row: TransactionSearchRow) {
   return Object.fromEntries(Object.entries({
     id: row.id,
@@ -294,6 +301,7 @@ export async function searchTransactions(
     return {
       status: "unhealthy",
       data_freshness: dataFreshness,
+      next_action: buildReadModelSyncNextAction(planId),
       data: null
     };
   }
