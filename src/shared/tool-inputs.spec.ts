@@ -2,9 +2,13 @@ import { z } from "zod";
 import { describe, expect, it } from "vitest";
 
 import {
+  amountFilterSchema,
+  clearedStatusSchema,
   dateFieldSchema,
   fieldProjectionSchema,
   includeIdsSchema,
+  monthFieldSchema,
+  monthSelectorSchema,
   paginationSchema,
   planIdSchema,
   requiredIdSchema,
@@ -52,14 +56,16 @@ describe("shared tool input schemas", () => {
     expect(() => schema.parse({ transactionId: "" })).toThrow();
   });
 
-  it("keeps required months non-empty", () => {
-    // DEFECT: hand-written month schemas can accidentally accept empty month selectors.
+  it("keeps required YNAB months in first-of-month ISO format", () => {
+    // DEFECT: hand-written month schemas can accidentally accept malformed YNAB month selectors.
     const schema = z.object({
       month: requiredMonthSchema
     });
 
     expect(schema.parse({ month: "2026-04-01" })).toEqual({ month: "2026-04-01" });
     expect(() => schema.parse({ month: "" })).toThrow();
+    expect(() => schema.parse({ month: "2026-04" })).toThrow();
+    expect(() => schema.parse({ month: "2026-04-02" })).toThrow();
   });
 
   it("keeps YNAB date filters in ISO date format", () => {
@@ -70,5 +76,27 @@ describe("shared tool input schemas", () => {
 
     expect(schema.parse({ fromDate: "2026-04-01" })).toEqual({ fromDate: "2026-04-01" });
     expect(() => schema.parse({ fromDate: "04/01/2026" })).toThrow();
+  });
+
+  it("accepts current only for month selectors that resolve relative to the latest budget month", () => {
+    // DEFECT: broad month schemas can reject the documented current selector or accept it for raw YNAB month endpoints.
+    expect(monthSelectorSchema.parse("current")).toBe("current");
+    expect(monthSelectorSchema.parse("2026-04-01")).toBe("2026-04-01");
+    expect(() => monthFieldSchema.parse("current")).toThrow();
+  });
+
+  it("keeps transaction cleared status filters limited to YNAB values", () => {
+    // DEFECT: broad cleared filters can silently query impossible transaction states.
+    expect(clearedStatusSchema.parse("cleared")).toBe("cleared");
+    expect(clearedStatusSchema.parse("uncleared")).toBe("uncleared");
+    expect(clearedStatusSchema.parse("reconciled")).toBe("reconciled");
+    expect(() => clearedStatusSchema.parse("pending")).toThrow();
+  });
+
+  it("rejects non-finite amount filters", () => {
+    // DEFECT: amount filters can accept NaN or Infinity values that cannot safely map to API or DB filters.
+    expect(amountFilterSchema.parse(12.34)).toBe(12.34);
+    expect(() => amountFilterSchema.parse(Number.NaN)).toThrow();
+    expect(() => amountFilterSchema.parse(Number.POSITIVE_INFINITY)).toThrow();
   });
 });

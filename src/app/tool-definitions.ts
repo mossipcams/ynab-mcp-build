@@ -6,7 +6,7 @@ import { createMoneyMovementsRepository } from "../platform/ynab/read-model/mone
 import { createScheduledTransactionsRepository } from "../platform/ynab/read-model/scheduled-transactions-repository.js";
 import { createTransactionsRepository } from "../platform/ynab/read-model/transactions-repository.js";
 import type { AppEnv } from "../shared/env.js";
-import type { SliceToolDefinition } from "../shared/tool-definition.js";
+import { defineTool, type SliceToolDefinition } from "../shared/tool-definition.js";
 import { getAccountToolDefinitions } from "../slices/accounts/index.js";
 import { getDbMoneyMovementToolDefinitions } from "../slices/db-money-movements/index.js";
 import { getDbScheduledTransactionToolDefinitions } from "../slices/db-scheduled-transactions/index.js";
@@ -77,7 +77,7 @@ function getDbBackedToolDefinitions(env: AppEnv, dependencies: AppDependencies) 
     ...(env.ynabDefaultPlanId ? { defaultPlanId: env.ynabDefaultPlanId } : {})
   };
   const definitions: SliceToolDefinition[] = [
-    {
+    defineTool({
       name: "ynab_get_mcp_version",
       title: "YNAB MCP Version",
       description: "Returns the MCP server name and version for this deployment.",
@@ -86,7 +86,7 @@ function getDbBackedToolDefinitions(env: AppEnv, dependencies: AppDependencies) 
         name: env.mcpServerName,
         version: env.mcpServerVersion
       })
-    },
+    }),
     ...getMetaToolDefinitions(env, ynabClient).filter((definition) => definition.name !== "ynab_get_mcp_version"),
     ...getPlanToolDefinitions(ynabClient),
     ...getAccountToolDefinitions(ynabClient),

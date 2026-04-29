@@ -1,5 +1,5 @@
 import type { YnabClient } from "../../platform/ynab/client.js";
-import type { SliceToolDefinition } from "../../shared/tool-definition.js";
+import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
 import { paginationSchema, planIdSchema, requiredMonthSchema } from "../../shared/tool-inputs.js";
 import {
   getMoneyMovementGroups,
@@ -10,7 +10,7 @@ import {
 
 export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
   return [
-    {
+    defineTool({
       name: "ynab_get_money_movements",
       title: "Get YNAB Money Movements",
       description: "Returns transfer-style money movements derived from YNAB transactions.",
@@ -19,8 +19,8 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
         ...paginationSchema
       },
       execute: async (input) => getMoneyMovements(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_money_movements_by_month",
       title: "Get YNAB Money Movements By Month",
       description: "Returns transfer-style money movements for a single plan month.",
@@ -30,8 +30,8 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
         ...paginationSchema
       },
       execute: async (input) => getMoneyMovementsByMonth(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_money_movement_groups",
       title: "Get YNAB Money Movement Groups",
       description: "Groups transfer-style money movements by source and destination account.",
@@ -40,8 +40,8 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
         ...paginationSchema
       },
       execute: async (input) => getMoneyMovementGroups(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_money_movement_groups_by_month",
       title: "Get YNAB Money Movement Groups By Month",
       description: "Groups transfer-style money movements by source and destination account for a single month.",
@@ -51,6 +51,6 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
         ...paginationSchema
       },
       execute: async (input) => getMoneyMovementGroupsByMonth(ynabClient, input)
-    }
+    })
   ];
 }
