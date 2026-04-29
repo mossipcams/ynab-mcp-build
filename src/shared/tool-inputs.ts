@@ -3,7 +3,12 @@ import { z } from "zod";
 type EnumValues = readonly [string, ...string[]];
 
 export const planIdSchema = {
-  planId: z.string().optional(),
+  planId: z
+    .string()
+    .optional()
+    .describe(
+      "Optional YNAB plan id. Omit to use the configured or synced default plan.",
+    ),
 };
 
 export const paginationSchema = {

@@ -31,6 +31,12 @@ describe("shared tool input schemas", () => {
     expect(() => schema.parse({ offset: -1 })).toThrow();
   });
 
+  it("documents that plan ids are optional for default-backed tools", () => {
+    expect(planIdSchema.planId.description).toBe(
+      "Optional YNAB plan id. Omit to use the configured or synced default plan.",
+    );
+  });
+
   it("keeps field projection values limited to the selected enum", () => {
     // DEFECT: duplicated projection schemas can drift to accept fields that the service layer does not project.
     const schema = z.object({

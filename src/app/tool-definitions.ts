@@ -1,10 +1,12 @@
 import type { AppDependencies } from "./dependencies.js";
+import type { YnabClient } from "../platform/ynab/client.js";
 import { createYnabReadModelClient } from "../platform/ynab/read-model/client.js";
 import { createReadModelFreshness } from "../platform/ynab/read-model/freshness.js";
 import { createMoneyMovementsRepository } from "../platform/ynab/read-model/money-movements-repository.js";
 import { createScheduledTransactionsRepository } from "../platform/ynab/read-model/scheduled-transactions-repository.js";
 import { createTransactionsRepository } from "../platform/ynab/read-model/transactions-repository.js";
 import type { AppEnv } from "../shared/env.js";
+import { getKnownDefaultPlan } from "../shared/plans.js";
 import {
   defineTool,
   type SliceToolDefinition,
@@ -120,14 +122,23 @@ export function getRegisteredToolDefinitions(
     ...getFinancialHealthToolDefinitions(ynabClient),
   ];
 
-  return definitions.map((definition) =>
-    DEFINITIONS_WITH_OWN_FRESHNESS.has(definition.name)
-      ? definition
-      : withReadModelFreshness(definition, {
-          ...baseDependencies,
-          freshness,
-        }),
-  );
+  const planIdResolver = createDefaultPlanIdResolver({
+    ...(env.ynabDefaultPlanId ? { defaultPlanId: env.ynabDefaultPlanId } : {}),
+    ynabClient,
+  });
+
+  return definitions
+    .map((definition) =>
+      DEFINITIONS_WITH_OWN_FRESHNESS.has(definition.name)
+        ? definition
+        : withReadModelFreshness(definition, {
+            ...baseDependencies,
+            freshness,
+          }),
+    )
+    .map((definition) =>
+      withAutoPopulatedPlanId(definition, { resolvePlanId: planIdResolver }),
+    );
 }
 
 type FreshnessDependencies = {
@@ -144,6 +155,85 @@ type FreshnessDependencies = {
     }>;
   };
 };
+
+function hasPlanIdInput(definition: SliceToolDefinition) {
+  return Object.hasOwn(definition.inputSchema, "planId");
+}
+
+function getExplicitPlanId(input: unknown) {
+  if (!input || typeof input !== "object" || !("planId" in input)) {
+    return undefined;
+  }
+
+  const planId = (input as { planId?: unknown }).planId;
+
+  return typeof planId === "string" && planId.trim().length > 0
+    ? planId.trim()
+    : undefined;
+}
+
+function createDefaultPlanIdResolver(dependencies: {
+  defaultPlanId?: string;
+  ynabClient: YnabClient;
+}) {
+  let discoveredPlanId: Promise<string> | undefined;
+
+  return () => {
+    const configuredPlanId = dependencies.defaultPlanId?.trim();
+
+    if (configuredPlanId) {
+      return Promise.resolve(configuredPlanId);
+    }
+
+    discoveredPlanId ??= dependencies.ynabClient
+      .listPlans()
+      .then((plans) => {
+        const defaultPlan = getKnownDefaultPlan(plans);
+
+        if (defaultPlan) {
+          return defaultPlan.id;
+        }
+
+        throw new Error(
+          "planId is required when YNAB_DEFAULT_PLAN_ID is not configured.",
+        );
+      })
+      .catch((error: unknown) => {
+        discoveredPlanId = undefined;
+        throw error;
+      });
+
+    return discoveredPlanId;
+  };
+}
+
+function withAutoPopulatedPlanId(
+  definition: SliceToolDefinition,
+  dependencies: {
+    resolvePlanId(): Promise<string>;
+  },
+): SliceToolDefinition {
+  if (!hasPlanIdInput(definition)) {
+    return definition;
+  }
+
+  return {
+    ...definition,
+    execute: async (input) => {
+      const toolInput = input as unknown;
+      const explicitPlanId = getExplicitPlanId(toolInput);
+
+      if (explicitPlanId) {
+        return definition.execute(input);
+      }
+
+      return definition.execute({
+        ...(toolInput && typeof toolInput === "object" ? toolInput : {}),
+        planId: await dependencies.resolvePlanId(),
+      } as never);
+    },
+  };
+}
 
 function requiredEndpointsForTool(name: string) {
   if (Object.hasOwn(REQUIRED_ENDPOINTS_BY_TOOL, name)) {
