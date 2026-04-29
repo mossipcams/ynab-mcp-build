@@ -27,12 +27,14 @@ describe("direct-read removal contract", () => {
   it("does not document direct API read behavior as an active mode", () => {
     const documentation = [
       readFile("README.md"),
-      readFile("architecture.md")
+      readFile("architecture.md"),
     ].join("\n");
 
     expect(documentation).not.toContain(`${legacyReadPathTerm} YNAB`);
     expect(documentation).not.toContain(`${legacyReadPathTerm} YNAB reads`);
-    expect(documentation).not.toContain(`existing ${legacyReadPathTerm} YNAB slices`);
+    expect(documentation).not.toContain(
+      `existing ${legacyReadPathTerm} YNAB slices`,
+    );
     expect(documentation).not.toContain(`${legacyReadPathTerm} mode`);
   });
 });

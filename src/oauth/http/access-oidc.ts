@@ -47,7 +47,10 @@ type CacheEntry<T> = {
 };
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const discoveryEndpointCache = new Map<string, CacheEntry<AccessOidcEndpoints>>();
+const discoveryEndpointCache = new Map<
+  string,
+  CacheEntry<AccessOidcEndpoints>
+>();
 const jwksCache = new Map<string, CacheEntry<AccessJwks>>();
 
 function readCached<T>(cache: Map<string, CacheEntry<T>>, key: string) {
@@ -61,10 +64,14 @@ function readCached<T>(cache: Map<string, CacheEntry<T>>, key: string) {
   return entry.value;
 }
 
-function writeCached<T>(cache: Map<string, CacheEntry<T>>, key: string, value: Promise<T>) {
+function writeCached<T>(
+  cache: Map<string, CacheEntry<T>>,
+  key: string,
+  value: Promise<T>,
+) {
   cache.set(key, {
     expiresAt: Date.now() + CACHE_TTL_MS,
-    value
+    value,
   });
 
   value.catch(() => {
@@ -86,12 +93,14 @@ async function readJsonObject(response: Response) {
   return payload as Record<string, unknown>;
 }
 
-function getEndpointOverrides(config: AccessOidcConfig): AccessOidcEndpoints | undefined {
+function getEndpointOverrides(
+  config: AccessOidcConfig,
+): AccessOidcEndpoints | undefined {
   if (config.authorizationUrl && config.jwksUrl && config.tokenUrl) {
     return {
       authorizationUrl: config.authorizationUrl,
       jwksUrl: config.jwksUrl,
-      tokenUrl: config.tokenUrl
+      tokenUrl: config.tokenUrl,
     };
   }
 
@@ -108,40 +117,53 @@ export async function resolveAccessOidcEndpoints(options: {
     return overrides;
   }
 
-  const cachedEndpoints = readCached(discoveryEndpointCache, options.config.discoveryUrl);
+  const cachedEndpoints = readCached(
+    discoveryEndpointCache,
+    options.config.discoveryUrl,
+  );
 
   if (cachedEndpoints) {
     return cachedEndpoints;
   }
 
-  return writeCached(discoveryEndpointCache, options.config.discoveryUrl, (async () => {
-    const response = await options.fetch(options.config.discoveryUrl, {
-      headers: {
-        accept: "application/json"
+  return writeCached(
+    discoveryEndpointCache,
+    options.config.discoveryUrl,
+    (async () => {
+      const response = await options.fetch(options.config.discoveryUrl, {
+        headers: {
+          accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Access OIDC discovery request failed.");
       }
-    });
 
-    if (!response.ok) {
-      throw new Error("Access OIDC discovery request failed.");
-    }
+      const payload = (await readJsonObject(
+        response,
+      )) as AccessDiscoveryResponse;
 
-    const payload = await readJsonObject(response) as AccessDiscoveryResponse;
+      if (
+        typeof payload.authorization_endpoint !== "string" ||
+        typeof payload.jwks_uri !== "string" ||
+        typeof payload.token_endpoint !== "string"
+      ) {
+        throw new Error(
+          "Access OIDC discovery response is missing required endpoints.",
+        );
+      }
 
-    if (
-      typeof payload.authorization_endpoint !== "string" ||
-      typeof payload.jwks_uri !== "string" ||
-      typeof payload.token_endpoint !== "string"
-    ) {
-      throw new Error("Access OIDC discovery response is missing required endpoints.");
-    }
-
-    return {
-      authorizationUrl: payload.authorization_endpoint,
-      ...(typeof payload.issuer === "string" ? { issuer: payload.issuer } : {}),
-      jwksUrl: payload.jwks_uri,
-      tokenUrl: payload.token_endpoint
-    };
-  })());
+      return {
+        authorizationUrl: payload.authorization_endpoint,
+        ...(typeof payload.issuer === "string"
+          ? { issuer: payload.issuer }
+          : {}),
+        jwksUrl: payload.jwks_uri,
+        tokenUrl: payload.token_endpoint,
+      };
+    })(),
+  );
 }
 
 export function createAccessOidcClient(options: AccessOidcClientOptions) {
@@ -152,20 +174,20 @@ export function createAccessOidcClient(options: AccessOidcClientOptions) {
         client_secret: options.clientSecret,
         code,
         grant_type: "authorization_code",
-        redirect_uri: options.redirectUri
+        redirect_uri: options.redirectUri,
       }).toString(),
       headers: {
         accept: "application/json",
-        "content-type": "application/x-www-form-urlencoded"
+        "content-type": "application/x-www-form-urlencoded",
       },
-      method: "POST"
+      method: "POST",
     });
 
     if (!response.ok) {
       throw new Error("Access OIDC token exchange failed.");
     }
 
-    const payload = await readJsonObject(response) as AccessTokenResponse;
+    const payload = (await readJsonObject(response)) as AccessTokenResponse;
 
     if (typeof payload.id_token !== "string" || payload.id_token.length === 0) {
       throw new Error("Access OIDC token exchange did not return an ID token.");
@@ -181,19 +203,23 @@ export function createAccessOidcClient(options: AccessOidcClientOptions) {
       return cachedJwks;
     }
 
-    return writeCached(jwksCache, options.jwksUrl, (async () => {
-      const response = await options.fetch(options.jwksUrl, {
-        headers: {
-          accept: "application/json"
+    return writeCached(
+      jwksCache,
+      options.jwksUrl,
+      (async () => {
+        const response = await options.fetch(options.jwksUrl, {
+          headers: {
+            accept: "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Access OIDC JWKS request failed.");
         }
-      });
 
-      if (!response.ok) {
-        throw new Error("Access OIDC JWKS request failed.");
-      }
-
-      return readJsonObject(response) as Promise<AccessJwks>;
-    })());
+        return readJsonObject(response) as Promise<AccessJwks>;
+      })(),
+    );
   }
 
   return {
@@ -202,10 +228,12 @@ export function createAccessOidcClient(options: AccessOidcClientOptions) {
 
       return verifyOidcIdToken({
         expectedAudience: options.clientId,
-        ...(options.expectedIssuer ? { expectedIssuer: options.expectedIssuer } : {}),
+        ...(options.expectedIssuer
+          ? { expectedIssuer: options.expectedIssuer }
+          : {}),
         jwks: await fetchJwks(),
-        token
+        token,
       });
-    }
+    },
   };
 }

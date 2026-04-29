@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { listPayeeLocations, listPayees } from "../../../src/slices/payees/service.js";
+import {
+  listPayeeLocations,
+  listPayees,
+} from "../../../src/slices/payees/service.js";
 import { getPayeeToolDefinitions } from "../../../src/slices/payees/tools.js";
 
 describe("payees service", () => {
@@ -13,19 +16,19 @@ describe("payees service", () => {
           id: "payee-1",
           name: "Grocer",
           transferAccountId: null,
-          deleted: false
+          deleted: false,
         },
         {
           id: "payee-2",
           name: "Old Payee",
           transferAccountId: null,
-          deleted: true
-        }
+          deleted: true,
+        },
       ]),
       listPlans: vi.fn().mockResolvedValue({
         plans: [{ id: "plan-1", name: "Household" }],
-        defaultPlan: { id: "plan-1", name: "Household" }
-      })
+        defaultPlan: { id: "plan-1", name: "Household" },
+      }),
     };
 
     await expect(listPayees(ynabClient as never, {})).resolves.toEqual({
@@ -33,10 +36,10 @@ describe("payees service", () => {
         {
           id: "payee-1",
           name: "Grocer",
-          transfer_account_id: null
-        }
+          transfer_account_id: null,
+        },
       ],
-      payee_count: 1
+      payee_count: 1,
     });
   });
 
@@ -49,20 +52,20 @@ describe("payees service", () => {
           payeeId: "payee-1",
           latitude: 30.2672,
           longitude: -97.7431,
-          deleted: false
+          deleted: false,
         },
         {
           id: "location-2",
           payeeId: "payee-2",
           latitude: 40.7128,
           longitude: -74.006,
-          deleted: true
-        }
+          deleted: true,
+        },
       ]),
       listPlans: vi.fn().mockResolvedValue({
         plans: [{ id: "plan-1", name: "Household" }],
-        defaultPlan: { id: "plan-1", name: "Household" }
-      })
+        defaultPlan: { id: "plan-1", name: "Household" },
+      }),
     };
 
     await expect(listPayeeLocations(ynabClient as never, {})).resolves.toEqual({
@@ -71,10 +74,10 @@ describe("payees service", () => {
           id: "location-1",
           payee_id: "payee-1",
           latitude: 30.2672,
-          longitude: -97.7431
-        }
+          longitude: -97.7431,
+        },
       ],
-      payee_location_count: 1
+      payee_location_count: 1,
     });
   });
 
@@ -85,10 +88,12 @@ describe("payees service", () => {
       getPayeeLocation: vi.fn(),
       getPayeeLocationsByPayee: vi.fn(),
       listPayeeLocations: vi.fn(),
-      listPayees: vi.fn()
+      listPayees: vi.fn(),
     };
     const definitions = getPayeeToolDefinitions(ynabClient as never);
-    const payeeTool = definitions.find((definition) => definition.name === "ynab_get_payee");
+    const payeeTool = definitions.find(
+      (definition) => definition.name === "ynab_get_payee",
+    );
 
     expect(payeeTool).toBeDefined();
     expect(() => z.object(payeeTool?.inputSchema ?? {}).parse({})).toThrow();

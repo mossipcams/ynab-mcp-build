@@ -53,14 +53,20 @@ export type OAuthRefreshTokenRotationResult =
 
 export type OAuthStore = {
   getAccessToken(token: string): Promise<OAuthAccessToken | undefined>;
-  getAuthorizationCode(code: string): Promise<OAuthAuthorizationCode | undefined>;
-  getRegisteredClient(clientId: string): Promise<OAuthRegisteredClient | undefined>;
+  getAuthorizationCode(
+    code: string,
+  ): Promise<OAuthAuthorizationCode | undefined>;
+  getRegisteredClient(
+    clientId: string,
+  ): Promise<OAuthRegisteredClient | undefined>;
   issueAccessToken(record: OAuthAccessToken): Promise<void>;
   issueAuthorizationCode(record: OAuthAuthorizationCode): Promise<void>;
   issueRefreshToken(record: OAuthRefreshToken): Promise<void>;
   registerClient(record: OAuthRegisteredClient): Promise<void>;
   rotateRefreshToken(token: string): Promise<OAuthRefreshTokenRotationResult>;
-  useAuthorizationCode(code: string): Promise<OAuthAuthorizationCode | undefined>;
+  useAuthorizationCode(
+    code: string,
+  ): Promise<OAuthAuthorizationCode | undefined>;
 };
 
 export function createInMemoryOAuthStore(): OAuthStore {
@@ -105,14 +111,14 @@ export function createInMemoryOAuthStore(): OAuthStore {
 
       if (!record) {
         return Promise.resolve({
-          status: "not_found"
+          status: "not_found",
         } satisfies OAuthRefreshTokenRotationResult);
       }
 
       if (revokedRefreshTokenFamilies.has(record.familyId)) {
         return Promise.resolve({
           record,
-          status: "replay_detected"
+          status: "replay_detected",
         } satisfies OAuthRefreshTokenRotationResult);
       }
 
@@ -121,20 +127,20 @@ export function createInMemoryOAuthStore(): OAuthStore {
 
         return Promise.resolve({
           record,
-          status: "replay_detected"
+          status: "replay_detected",
         } satisfies OAuthRefreshTokenRotationResult);
       }
 
       const nextRecord = {
         ...record,
-        used: true
+        used: true,
       };
 
       refreshTokens.set(token, nextRecord);
 
       return Promise.resolve({
         record,
-        status: "rotated"
+        status: "rotated",
       } satisfies OAuthRefreshTokenRotationResult);
     },
     useAuthorizationCode(code) {
@@ -146,10 +152,10 @@ export function createInMemoryOAuthStore(): OAuthStore {
 
       authorizationCodes.set(code, {
         ...record,
-        used: true
+        used: true,
       });
 
       return Promise.resolve(record);
-    }
+    },
   };
 }

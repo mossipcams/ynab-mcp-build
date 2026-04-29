@@ -23,14 +23,14 @@ function createMemoryKvNamespace(): KVNamespace {
     },
     async list(options?: { prefix?: string }) {
       const keys = [...records.keys()].filter((name) =>
-        options?.prefix ? name.startsWith(options.prefix) : true
+        options?.prefix ? name.startsWith(options.prefix) : true,
       );
 
       return {
         keys: keys.map((name) => ({ name })),
-        list_complete: true
+        list_complete: true,
       };
-    }
+    },
   } as unknown as KVNamespace;
 }
 
@@ -41,7 +41,7 @@ function createOAuthProviderEnv(): Env {
     MCP_SERVER_NAME: "ynab-mcp-build",
     MCP_SERVER_VERSION: "0.1.0",
     OAUTH_KV: createMemoryKvNamespace(),
-    YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+    YNAB_API_BASE_URL: "https://api.ynab.com/v1",
   } as unknown as Env;
 }
 
@@ -50,9 +50,12 @@ describe("Worker OAuth provider", () => {
     const waitUntil = vi.fn();
 
     worker.scheduled!(
-      { cron: "0 * * * *", scheduledTime: 1777406400000 } as ScheduledController,
+      {
+        cron: "0 * * * *",
+        scheduledTime: 1777406400000,
+      } as ScheduledController,
       {} as Env,
-      { waitUntil } as unknown as ExecutionContext
+      { waitUntil } as unknown as ExecutionContext,
     );
 
     expect(waitUntil).toHaveBeenCalledTimes(1);
@@ -60,7 +63,7 @@ describe("Worker OAuth provider", () => {
 
     expect(scheduledPromise).toBeDefined();
     await expect(scheduledPromise).rejects.toThrow(
-      "Scheduled D1 sync failed: YNAB_ACCESS_TOKEN is required for scheduled D1 sync."
+      "Scheduled D1 sync failed: YNAB_ACCESS_TOKEN is required for scheduled D1 sync.",
     );
   });
 
@@ -69,28 +72,32 @@ describe("Worker OAuth provider", () => {
       new Request("https://mcp.example.com/mcp", {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           id: 1,
           jsonrpc: "2.0",
           method: "tools/list",
-          params: {}
-        })
+          params: {},
+        }),
       }),
       createOAuthProviderEnv(),
-      {} as ExecutionContext
+      {} as ExecutionContext,
     );
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("www-authenticate")).toContain('Bearer realm="OAuth"');
+    expect(response.headers.get("www-authenticate")).toContain(
+      'Bearer realm="OAuth"',
+    );
   });
 
   it("serves Cloudflare OAuth provider metadata with S256 PKCE", async () => {
     const response = await worker.fetch(
-      new Request("https://mcp.example.com/.well-known/oauth-authorization-server"),
+      new Request(
+        "https://mcp.example.com/.well-known/oauth-authorization-server",
+      ),
       createOAuthProviderEnv(),
-      {} as ExecutionContext
+      {} as ExecutionContext,
     );
 
     expect(response.status).toBe(200);
@@ -99,7 +106,7 @@ describe("Worker OAuth provider", () => {
       code_challenge_methods_supported: ["S256"],
       registration_endpoint: "https://mcp.example.com/register",
       scopes_supported: ["mcp"],
-      token_endpoint: "https://mcp.example.com/token"
+      token_endpoint: "https://mcp.example.com/token",
     });
   });
 
@@ -108,18 +115,18 @@ describe("Worker OAuth provider", () => {
       new Request("https://mcp.example.com/register", {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           client_name: "Claude",
           grant_types: ["authorization_code", "refresh_token"],
           redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
           response_types: ["code"],
-          token_endpoint_auth_method: "none"
-        })
+          token_endpoint_auth_method: "none",
+        }),
       }),
       createOAuthProviderEnv(),
-      {} as ExecutionContext
+      {} as ExecutionContext,
     );
 
     expect(response.status).toBe(201);
@@ -128,7 +135,7 @@ describe("Worker OAuth provider", () => {
       grant_types: ["authorization_code", "refresh_token"],
       redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
       response_types: ["code"],
-      token_endpoint_auth_method: "none"
+      token_endpoint_auth_method: "none",
     });
   });
 
@@ -138,54 +145,56 @@ describe("Worker OAuth provider", () => {
       new Request("https://mcp.example.com/register", {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           client_name: "Claude",
           grant_types: ["authorization_code", "refresh_token"],
           redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
           response_types: ["code"],
-          token_endpoint_auth_method: "none"
-        })
+          token_endpoint_auth_method: "none",
+        }),
       }),
       env,
-      {} as ExecutionContext
+      {} as ExecutionContext,
     );
-    const registration = await registrationResponse.json() as {
+    const registration = (await registrationResponse.json()) as {
       client_id: string;
     };
 
     expect(
       await (env as unknown as { OAUTH_KV: KVNamespace }).OAUTH_KV.get(
         `client:${registration.client_id}`,
-        { type: "json" }
-      )
+        { type: "json" },
+      ),
     ).toBeTruthy();
     const authorizeResponse = await worker.fetch(
       new Request(
-        `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`
+        `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`,
       ),
       env,
-      {} as ExecutionContext
+      {} as ExecutionContext,
     );
     const redirectLocation = authorizeResponse.headers.get("location");
-    const code = redirectLocation ? new URL(redirectLocation).searchParams.get("code") : null;
+    const code = redirectLocation
+      ? new URL(redirectLocation).searchParams.get("code")
+      : null;
     const tokenResponse = await worker.fetch(
       new Request("https://mcp.example.com/token", {
         method: "POST",
         headers: {
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           client_id: registration.client_id,
           code: code ?? "",
           code_verifier: "test-code-verifier",
           grant_type: "authorization_code",
-          redirect_uri: "https://claude.ai/api/mcp/auth_callback"
-        }).toString()
+          redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+        }).toString(),
       }),
       env,
-      {} as ExecutionContext
+      {} as ExecutionContext,
     );
 
     expect(authorizeResponse.status).toBe(302);
@@ -194,7 +203,7 @@ describe("Worker OAuth provider", () => {
     expect(tokenResponse.status).toBe(200);
     await expect(tokenResponse.json()).resolves.toMatchObject({
       scope: "mcp",
-      token_type: "bearer"
+      token_type: "bearer",
     });
   });
 
@@ -205,36 +214,38 @@ describe("Worker OAuth provider", () => {
       new Request("https://mcp.example.com/register", {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           client_name: "Claude",
           grant_types: ["authorization_code", "refresh_token"],
           redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
           response_types: ["code"],
-          token_endpoint_auth_method: "none"
-        })
+          token_endpoint_auth_method: "none",
+        }),
       }),
       env,
-      executionContext
+      executionContext,
     );
-    const registration = await registrationResponse.json() as {
+    const registration = (await registrationResponse.json()) as {
       client_id: string;
     };
     const authorizeResponse = await worker.fetch(
       new Request(
-        `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`
+        `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`,
       ),
       env,
-      executionContext
+      executionContext,
     );
     const redirectLocation = authorizeResponse.headers.get("location");
-    const code = redirectLocation ? new URL(redirectLocation).searchParams.get("code") : null;
+    const code = redirectLocation
+      ? new URL(redirectLocation).searchParams.get("code")
+      : null;
     const tokenResponse = await worker.fetch(
       new Request("https://mcp.example.com/token", {
         method: "POST",
         headers: {
-          "content-type": "application/x-www-form-urlencoded"
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           client_id: registration.client_id,
@@ -242,13 +253,13 @@ describe("Worker OAuth provider", () => {
           code_verifier: "test-code-verifier",
           grant_type: "authorization_code",
           redirect_uri: "https://claude.ai/api/mcp/auth_callback",
-          scope: "not-mcp"
-        }).toString()
+          scope: "not-mcp",
+        }).toString(),
       }),
       env,
-      executionContext
+      executionContext,
     );
-    const tokenPayload = await tokenResponse.json() as {
+    const tokenPayload = (await tokenResponse.json()) as {
       access_token: string;
       scope: string;
     };
@@ -258,24 +269,24 @@ describe("Worker OAuth provider", () => {
         headers: {
           accept: "application/json, text/event-stream",
           authorization: `Bearer ${tokenPayload.access_token}`,
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           id: 1,
           jsonrpc: "2.0",
           method: "tools/list",
-          params: {}
-        })
+          params: {},
+        }),
       }),
       env,
-      executionContext
+      executionContext,
     );
 
     expect(tokenPayload.scope).toBe("");
     expect(mcpResponse.status).toBe(403);
     await expect(mcpResponse.json()).resolves.toMatchObject({
       error: "insufficient_scope",
-      error_description: "Bearer token does not grant the mcp scope."
+      error_description: "Bearer token does not grant the mcp scope.",
     });
   });
 });

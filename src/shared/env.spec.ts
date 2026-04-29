@@ -6,9 +6,11 @@ describe("resolveAppEnv", () => {
   it("throws when OAuth is enabled without MCP_PUBLIC_URL", () => {
     expect(() =>
       resolveAppEnv({
-        MCP_OAUTH_ENABLED: "true"
-      } as Partial<Env> & { MCP_OAUTH_ENABLED: string })
-    ).toThrowError("MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.");
+        MCP_OAUTH_ENABLED: "true",
+      } as Partial<Env> & { MCP_OAUTH_ENABLED: string }),
+    ).toThrowError(
+      "MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.",
+    );
   });
 
   it("does not derive OAuth public URL from the request origin", () => {
@@ -16,18 +18,20 @@ describe("resolveAppEnv", () => {
       resolveAppEnv(
         {
           MCP_OAUTH_ENABLED: "true",
-          OAUTH_STATE: {} as DurableObjectNamespace
+          OAUTH_STATE: {} as DurableObjectNamespace,
         } as Partial<Env> & { MCP_OAUTH_ENABLED: string },
-        new Request("https://spoof.example.net/mcp")
-      )
-    ).toThrowError("MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.");
+        new Request("https://spoof.example.net/mcp"),
+      ),
+    ).toThrowError(
+      "MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.",
+    );
   });
 
   it("allows OAuth when MCP_PUBLIC_URL and state backing are present", () => {
     const env = resolveAppEnv({
       MCP_OAUTH_ENABLED: "true",
       MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
-      OAUTH_STATE: {} as DurableObjectNamespace
+      OAUTH_STATE: {} as DurableObjectNamespace,
     } as Partial<Env> & { MCP_OAUTH_ENABLED: string; MCP_PUBLIC_URL: string });
 
     expect(env.oauthEnabled).toBe(true);
@@ -37,7 +41,7 @@ describe("resolveAppEnv", () => {
   it("uses YNAB_API_TOKEN as a fallback alias for YNAB access token", () => {
     const env = resolveAppEnv({
       YNAB_API_BASE_URL: "https://api.ynab.com/v1",
-      YNAB_API_TOKEN: "alias-token"
+      YNAB_API_TOKEN: "alias-token",
     } as Partial<Env> & { YNAB_API_TOKEN: string });
 
     expect(env.ynabAccessToken).toBe("alias-token");
@@ -47,7 +51,7 @@ describe("resolveAppEnv", () => {
     const env = resolveAppEnv({
       YNAB_ACCESS_TOKEN: "primary-token",
       YNAB_API_BASE_URL: "https://api.ynab.com/v1",
-      YNAB_API_TOKEN: "alias-token"
+      YNAB_API_TOKEN: "alias-token",
     } as Partial<Env> & { YNAB_API_TOKEN: string });
 
     expect(env.ynabAccessToken).toBe("primary-token");
@@ -61,7 +65,7 @@ describe("resolveAppEnv", () => {
       YNAB_DEFAULT_PLAN_ID: "plan-1",
       YNAB_READ_SOURCE: "d1",
       YNAB_STALE_AFTER_MINUTES: "120",
-      YNAB_SYNC_MAX_ROWS_PER_RUN: "50"
+      YNAB_SYNC_MAX_ROWS_PER_RUN: "50",
     } as Partial<Env> & {
       YNAB_DB: D1Database;
       YNAB_DEFAULT_PLAN_ID: string;
@@ -83,8 +87,8 @@ describe("resolveAppEnv", () => {
 
     expect(() =>
       resolveAppEnv({
-        YNAB_READ_SOURCE: "direct"
-      } as Partial<Env> & { YNAB_READ_SOURCE: string })
+        YNAB_READ_SOURCE: "direct",
+      } as Partial<Env> & { YNAB_READ_SOURCE: string }),
     ).toThrowError("YNAB_READ_SOURCE must be d1.");
   });
 });

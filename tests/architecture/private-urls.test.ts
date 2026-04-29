@@ -11,14 +11,14 @@ const skippedDirectories = new Set([
   "coverage",
   "dist",
   "node_modules",
-  "reports"
+  "reports",
 ]);
 const skippedFiles = new Set([
   ".dev.vars",
   ".env",
   ".env.local",
   "package-lock.json",
-  "worker-configuration.d.ts"
+  "worker-configuration.d.ts",
 ]);
 const textFileExtensions = new Set([
   ".cjs",
@@ -33,7 +33,7 @@ const textFileExtensions = new Set([
   ".tsx",
   ".txt",
   ".yml",
-  ".yaml"
+  ".yaml",
 ]);
 
 function listTextFiles(dir: string): string[] {
@@ -66,11 +66,21 @@ describe("private URL exposure", () => {
   it("keeps Cloudflare tenant and worker hostnames out of repo text files", () => {
     // DEFECT: real deployment hostnames in fixtures or config expose private infrastructure in the public GitHub repo.
     const blockedHostPatterns = [
-      new RegExp(String.raw`\b[a-z0-9-]+\.${[["cloudflare", "access"].join(""), "com"].join(String.raw`\.`)}\b`, "iu"),
-      new RegExp(String.raw`\b[a-z0-9-]+\.[a-z0-9-]+\.${["workers", "dev"].join(String.raw`\.`)}\b`, "iu")
+      new RegExp(
+        String.raw`\b[a-z0-9-]+\.${[["cloudflare", "access"].join(""), "com"].join(String.raw`\.`)}\b`,
+        "iu",
+      ),
+      new RegExp(
+        String.raw`\b[a-z0-9-]+\.[a-z0-9-]+\.${["workers", "dev"].join(String.raw`\.`)}\b`,
+        "iu",
+      ),
     ];
     const offenders = listTextFiles(rootDir)
-      .filter((filePath) => blockedHostPatterns.some((pattern) => pattern.test(readFileSync(filePath, "utf8"))))
+      .filter((filePath) =>
+        blockedHostPatterns.some((pattern) =>
+          pattern.test(readFileSync(filePath, "utf8")),
+        ),
+      )
       .map(rel);
 
     expect(offenders).toEqual([]);

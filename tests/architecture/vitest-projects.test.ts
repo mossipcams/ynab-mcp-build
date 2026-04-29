@@ -10,6 +10,9 @@ describe("vitest project layout", () => {
     expect(projects).toBeDefined();
     expect(Array.isArray(projects)).toBe(true);
     expect(projects).toHaveLength(2);
-    expect(projects?.map((project) => project.test?.name)).toEqual(["unit", "workers"]);
+    expect(projects?.map((project) => project.test?.name)).toEqual([
+      "unit",
+      "workers",
+    ]);
   });
 });

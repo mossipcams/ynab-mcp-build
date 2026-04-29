@@ -8,20 +8,20 @@ describe("plans service", () => {
       listPlans: vi.fn().mockResolvedValue({
         defaultPlan: {
           id: "plan-default",
-          name: "Default"
+          name: "Default",
         },
         plans: [
           { id: "plan-1", name: "One" },
-          { id: "plan-default", name: "Default" }
-        ]
-      })
+          { id: "plan-default", name: "Default" },
+        ],
+      }),
     };
 
     await expect(listPlans(ynabClient as never)).resolves.toMatchObject({
       default_plan: {
         id: "plan-default",
-        name: "Default"
-      }
+        name: "Default",
+      },
     });
   });
 
@@ -29,15 +29,15 @@ describe("plans service", () => {
     const ynabClient = {
       listPlans: vi.fn().mockResolvedValue({
         defaultPlan: null,
-        plans: [{ id: "plan-only", name: "Only plan" }]
-      })
+        plans: [{ id: "plan-only", name: "Only plan" }],
+      }),
     };
 
     await expect(listPlans(ynabClient as never)).resolves.toMatchObject({
       default_plan: {
         id: "plan-only",
-        name: "Only plan"
-      }
+        name: "Only plan",
+      },
     });
   });
 
@@ -47,13 +47,13 @@ describe("plans service", () => {
         defaultPlan: null,
         plans: [
           { id: "plan-1", name: "One" },
-          { id: "plan-2", name: "Two" }
-        ]
-      })
+          { id: "plan-2", name: "Two" },
+        ],
+      }),
     };
 
     await expect(listPlans(ynabClient as never)).resolves.toMatchObject({
-      default_plan: null
+      default_plan: null,
     });
   });
 });

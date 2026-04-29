@@ -13,17 +13,19 @@ describe("account context optimization", () => {
           type: "checking",
           closed: false,
           deleted: false,
-          balance: index * 1000
-        }))
-      )
+          balance: index * 1000,
+        })),
+      ),
     };
 
-    await expect(listAccounts(ynabClient as never, { planId: "plan-1" })).resolves.toMatchObject({
+    await expect(
+      listAccounts(ynabClient as never, { planId: "plan-1" }),
+    ).resolves.toMatchObject({
       account_count: 70,
       limit: 65,
       offset: 0,
       returned_count: 65,
-      has_more: true
+      has_more: true,
     });
   });
 });

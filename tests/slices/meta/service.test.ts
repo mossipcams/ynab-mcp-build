@@ -11,12 +11,12 @@ describe("meta service", () => {
       mcpServerName: "ynab-mcp-build",
       mcpServerVersion: "0.1.0",
       oauthEnabled: false,
-      ynabApiBaseUrl: "https://api.ynab.com/v1"
+      ynabApiBaseUrl: "https://api.ynab.com/v1",
     });
 
     expect(result).toEqual({
       name: "ynab-mcp-build",
-      version: "0.1.0"
+      version: "0.1.0",
     });
   });
 
@@ -25,15 +25,15 @@ describe("meta service", () => {
     const ynabClient = {
       getUser: vi.fn().mockResolvedValue({
         id: "user-1",
-        name: "Casey Budgeter"
-      })
+        name: "Casey Budgeter",
+      }),
     };
 
     await expect(getUser(ynabClient as never)).resolves.toEqual({
       user: {
         id: "user-1",
-        name: "Casey Budgeter"
-      }
+        name: "Casey Budgeter",
+      },
     });
     expect(ynabClient.getUser).toHaveBeenCalledOnce();
   });
@@ -44,21 +44,28 @@ describe("meta service", () => {
       mcpServerName: "ynab-mcp-build",
       mcpServerVersion: "0.1.0",
       oauthEnabled: false,
-      ynabApiBaseUrl: "https://api.ynab.com/v1"
+      ynabApiBaseUrl: "https://api.ynab.com/v1",
     };
     const ynabClient = {
       getUser: vi.fn().mockResolvedValue({
         id: "user-1",
-        name: "Casey Budgeter"
-      })
+        name: "Casey Budgeter",
+      }),
     };
-    const definitions = getMetaToolDefinitions(env as never, ynabClient as never);
-    const versionTool = definitions.find((definition) => definition.name === "ynab_get_mcp_version");
-    const userTool = definitions.find((definition) => definition.name === "ynab_get_user");
+    const definitions = getMetaToolDefinitions(
+      env as never,
+      ynabClient as never,
+    );
+    const versionTool = definitions.find(
+      (definition) => definition.name === "ynab_get_mcp_version",
+    );
+    const userTool = definitions.find(
+      (definition) => definition.name === "ynab_get_user",
+    );
 
     expect(definitions.map((definition) => definition.name).sort()).toEqual([
       "ynab_get_mcp_version",
-      "ynab_get_user"
+      "ynab_get_user",
     ]);
     expect(versionTool).toBeDefined();
     expect(userTool).toBeDefined();
@@ -66,13 +73,13 @@ describe("meta service", () => {
     expect(z.object(userTool?.inputSchema ?? {}).parse({})).toEqual({});
     await expect(versionTool?.execute({})).resolves.toEqual({
       name: "ynab-mcp-build",
-      version: "0.1.0"
+      version: "0.1.0",
     });
     await expect(userTool?.execute({})).resolves.toEqual({
       user: {
         id: "user-1",
-        name: "Casey Budgeter"
-      }
+        name: "Casey Budgeter",
+      },
     });
   });
 });

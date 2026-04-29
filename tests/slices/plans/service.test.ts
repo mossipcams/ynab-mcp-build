@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { listCategories, listPlanMonths } from "../../../src/slices/plans/service.js";
+import {
+  listCategories,
+  listPlanMonths,
+} from "../../../src/slices/plans/service.js";
 import { getPlanToolDefinitions } from "../../../src/slices/plans/tools.js";
 
 describe("plans service", () => {
@@ -19,27 +22,29 @@ describe("plans service", () => {
               id: "category-visible",
               name: "Rent",
               hidden: false,
-              deleted: false
+              deleted: false,
             },
             {
               id: "category-hidden",
               name: "Internal",
               hidden: true,
-              deleted: false
-            }
-          ]
+              deleted: false,
+            },
+          ],
         },
         {
           id: "group-hidden",
           name: "Archived",
           hidden: true,
           deleted: false,
-          categories: []
-        }
-      ])
+          categories: [],
+        },
+      ]),
     };
 
-    await expect(listCategories(ynabClient as never, "plan-1")).resolves.toEqual({
+    await expect(
+      listCategories(ynabClient as never, "plan-1"),
+    ).resolves.toEqual({
       category_groups: [
         {
           id: "group-visible",
@@ -47,12 +52,12 @@ describe("plans service", () => {
           categories: [
             {
               id: "category-visible",
-              name: "Rent"
-            }
-          ]
-        }
+              name: "Rent",
+            },
+          ],
+        },
       ],
-      category_group_count: 1
+      category_group_count: 1,
     });
   });
 
@@ -66,7 +71,7 @@ describe("plans service", () => {
           budgeted: 800,
           activity: -500,
           toBeBudgeted: 200,
-          deleted: false
+          deleted: false,
         },
         {
           month: "2026-03-01",
@@ -74,22 +79,24 @@ describe("plans service", () => {
           budgeted: 700,
           activity: -450,
           toBeBudgeted: 150,
-          deleted: true
-        }
-      ])
+          deleted: true,
+        },
+      ]),
     };
 
-    await expect(listPlanMonths(ynabClient as never, "plan-1")).resolves.toEqual({
+    await expect(
+      listPlanMonths(ynabClient as never, "plan-1"),
+    ).resolves.toEqual({
       months: [
         {
           month: "2026-04-01",
           income: 1000,
           budgeted: 800,
           activity: -500,
-          to_be_budgeted: 200
-        }
+          to_be_budgeted: 200,
+        },
       ],
-      month_count: 1
+      month_count: 1,
     });
   });
 
@@ -103,13 +110,19 @@ describe("plans service", () => {
       getPlanSettings: vi.fn(),
       listCategories: vi.fn(),
       listPlanMonths: vi.fn(),
-      listPlans: vi.fn()
+      listPlans: vi.fn(),
     };
     const definitions = getPlanToolDefinitions(ynabClient as never);
-    const monthTool = definitions.find((definition) => definition.name === "ynab_get_plan_month");
+    const monthTool = definitions.find(
+      (definition) => definition.name === "ynab_get_plan_month",
+    );
 
     expect(monthTool).toBeDefined();
-    expect(() => z.object(monthTool?.inputSchema ?? {}).parse({ planId: "plan-1" })).toThrow();
-    expect(() => z.object(monthTool?.inputSchema ?? {}).parse({ month: "2026-04-01" })).not.toThrow();
+    expect(() =>
+      z.object(monthTool?.inputSchema ?? {}).parse({ planId: "plan-1" }),
+    ).toThrow();
+    expect(() =>
+      z.object(monthTool?.inputSchema ?? {}).parse({ month: "2026-04-01" }),
+    ).not.toThrow();
   });
 });

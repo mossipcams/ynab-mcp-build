@@ -12,26 +12,26 @@ describe("YNAB upstream chaos", () => {
       if (calls === 1) {
         return Response.json(
           { error: { detail: "temporary upstream outage" } },
-          { status: 500, statusText: "Server Error" }
+          { status: 500, statusText: "Server Error" },
         );
       }
 
       return Response.json({
         data: {
           default_plan: { id: "plan-1", name: "Household" },
-          plans: [{ id: "plan-1", name: "Household" }]
-        }
+          plans: [{ id: "plan-1", name: "Household" }],
+        },
       });
     }) as unknown as typeof fetch;
     const client = createYnabClient({
       accessToken: "token",
       baseUrl: "https://api.example.test",
-      fetchFn
+      fetchFn,
     });
 
     await expect(client.listPlans()).resolves.toEqual({
       defaultPlan: { id: "plan-1", name: "Household" },
-      plans: [{ id: "plan-1", name: "Household" }]
+      plans: [{ id: "plan-1", name: "Household" }],
     });
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
@@ -44,7 +44,7 @@ describe("YNAB upstream chaos", () => {
       if (calls === 1) {
         return Response.json(
           { error: { detail: "temporary delta outage" } },
-          { status: 500, statusText: "Server Error" }
+          { status: 500, statusText: "Server Error" },
         );
       }
 
@@ -56,17 +56,17 @@ describe("YNAB upstream chaos", () => {
               closed: false,
               id: "account-1",
               name: "Checking",
-              type: "checking"
-            }
+              type: "checking",
+            },
           ],
-          server_knowledge: 12
-        }
+          server_knowledge: 12,
+        },
       });
     }) as unknown as typeof fetch;
     const client = createYnabDeltaClient({
       accessToken: "token",
       baseUrl: "https://api.example.test",
-      fetchFn
+      fetchFn,
     });
 
     await expect(client.listAccountsDelta("plan-1")).resolves.toEqual({
@@ -76,10 +76,10 @@ describe("YNAB upstream chaos", () => {
           closed: false,
           id: "account-1",
           name: "Checking",
-          type: "checking"
-        }
+          type: "checking",
+        },
       ],
-      serverKnowledge: 12
+      serverKnowledge: 12,
     });
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });

@@ -10,11 +10,14 @@ type BoundStatement = {
 class FakeStatement {
   constructor(
     readonly sql: string,
-    readonly params: unknown[] = []
+    readonly params: unknown[] = [],
   ) {}
 
   bind(...params: unknown[]) {
-    return new FakeStatement(this.sql, params) as unknown as D1PreparedStatement;
+    return new FakeStatement(
+      this.sql,
+      params,
+    ) as unknown as D1PreparedStatement;
   }
 }
 
@@ -28,13 +31,13 @@ class FakeD1Database {
 
   batch(statements: D1PreparedStatement[]) {
     const boundStatements = statements.map((statement) => {
-        const fake = statement as unknown as FakeStatement;
+      const fake = statement as unknown as FakeStatement;
 
-        return {
-          sql: fake.sql,
-          params: fake.params
-        };
-      });
+      return {
+        sql: fake.sql,
+        params: fake.params,
+      };
+    });
 
     this.batchCalls.push(boundStatements);
     this.batchStatements.push(...boundStatements);
@@ -46,25 +49,27 @@ class FakeD1Database {
 describe("read model sync repository", () => {
   it("upserts budget metadata into the read-model metadata tables", async () => {
     const db = new FakeD1Database();
-    const repository = createReadModelSyncRepository(db as unknown as D1Database);
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
     const syncedAt = "2026-04-28T12:00:00.000Z";
 
     await repository.upsertUser({
       syncedAt,
       user: {
         id: "user-1",
-        name: "Avery"
-      }
+        name: "Avery",
+      },
     });
     await repository.upsertPlans({
       plans: [
         {
           id: "plan-1",
           lastModifiedOn: "2026-04-27T10:00:00Z",
-          name: "Main Budget"
-        }
+          name: "Main Budget",
+        },
       ],
-      syncedAt
+      syncedAt,
     });
     await repository.upsertPlanDetail({
       plan: {
@@ -72,9 +77,9 @@ describe("read model sync repository", () => {
         id: "plan-1",
         lastModifiedOn: "2026-04-27T10:00:00Z",
         lastMonth: "2026-12-01",
-        name: "Main Budget"
+        name: "Main Budget",
       },
-      syncedAt
+      syncedAt,
     });
     await repository.upsertPlanSettings({
       planId: "plan-1",
@@ -87,44 +92,72 @@ describe("read model sync repository", () => {
           exampleFormat: "$1,234.56",
           groupSeparator: ",",
           isoCode: "USD",
-          symbolFirst: true
+          symbolFirst: true,
         },
         dateFormat: {
-          format: "MM/DD/YYYY"
-        }
+          format: "MM/DD/YYYY",
+        },
       },
-      syncedAt
+      syncedAt,
     });
 
     expect(db.batchStatements.map((statement) => statement.sql)).toEqual(
       expect.arrayContaining([
         expect.stringContaining("INSERT INTO ynab_users"),
         expect.stringContaining("INSERT INTO ynab_plans"),
-        expect.stringContaining("INSERT INTO ynab_plan_settings")
-      ])
+        expect.stringContaining("INSERT INTO ynab_plan_settings"),
+      ]),
     );
-    expect(db.batchStatements.every((statement) => statement.sql.includes("ON CONFLICT"))).toBe(true);
-    expect(db.batchStatements.find((statement) => statement.sql.includes("ynab_users"))?.params).toEqual([
-      "user-1",
-      "Avery",
-      syncedAt,
-      syncedAt
-    ]);
+    expect(
+      db.batchStatements.every((statement) =>
+        statement.sql.includes("ON CONFLICT"),
+      ),
+    ).toBe(true);
+    expect(
+      db.batchStatements.find((statement) =>
+        statement.sql.includes("ynab_users"),
+      )?.params,
+    ).toEqual(["user-1", "Avery", syncedAt, syncedAt]);
     expect(
       db.batchStatements.find(
-        (statement) => statement.sql.includes("ynab_plans") && statement.params.includes("2026-01-01")
-      )?.params
+        (statement) =>
+          statement.sql.includes("ynab_plans") &&
+          statement.params.includes("2026-01-01"),
+      )?.params,
     ).toEqual(
-      expect.arrayContaining(["plan-1", "Main Budget", "2026-04-27T10:00:00Z", "2026-01-01", "2026-12-01"])
+      expect.arrayContaining([
+        "plan-1",
+        "Main Budget",
+        "2026-04-27T10:00:00Z",
+        "2026-01-01",
+        "2026-12-01",
+      ]),
     );
-    expect(db.batchStatements.find((statement) => statement.sql.includes("ynab_plan_settings"))?.params).toEqual(
-      expect.arrayContaining(["plan-1", "MM/DD/YYYY", "USD", "$1,234.56", 2, ".", 1, ",", "$", 1])
+    expect(
+      db.batchStatements.find((statement) =>
+        statement.sql.includes("ynab_plan_settings"),
+      )?.params,
+    ).toEqual(
+      expect.arrayContaining([
+        "plan-1",
+        "MM/DD/YYYY",
+        "USD",
+        "$1,234.56",
+        2,
+        ".",
+        1,
+        ",",
+        "$",
+        1,
+      ]),
     );
   });
 
   it("upserts scheduled sync records into the existing read-model tables", async () => {
     const db = new FakeD1Database();
-    const repository = createReadModelSyncRepository(db as unknown as D1Database);
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
     const syncedAt = "2026-04-28T12:00:00.000Z";
 
     await repository.upsertAccounts({
@@ -139,11 +172,11 @@ describe("read model sync repository", () => {
           note: "daily account",
           onBudget: true,
           type: "checking",
-          unclearedBalance: 10000
-        }
+          unclearedBalance: 10000,
+        },
       ],
       planId: "plan-1",
-      syncedAt
+      syncedAt,
     });
     await repository.upsertCategoryGroups({
       categoryGroups: [
@@ -156,17 +189,17 @@ describe("read model sync repository", () => {
               hidden: false,
               id: "category-1",
               name: "Groceries",
-              note: "food"
-            }
+              note: "food",
+            },
           ],
           deleted: false,
           hidden: false,
           id: "group-1",
-          name: "Everyday"
-        }
+          name: "Everyday",
+        },
       ],
       planId: "plan-1",
-      syncedAt
+      syncedAt,
     });
     await repository.upsertMonths({
       months: [
@@ -181,26 +214,26 @@ describe("read model sync repository", () => {
               deleted: false,
               hidden: false,
               id: "category-1",
-              name: "Groceries"
-            }
+              name: "Groceries",
+            },
           ],
           deleted: false,
-          month: "2026-04-01"
-        }
+          month: "2026-04-01",
+        },
       ],
       planId: "plan-1",
-      syncedAt
+      syncedAt,
     });
     await repository.upsertPayees({
       payees: [
         {
           deleted: false,
           id: "payee-1",
-          name: "Market"
-        }
+          name: "Market",
+        },
       ],
       planId: "plan-1",
-      syncedAt
+      syncedAt,
     });
     await repository.upsertPayeeLocations({
       locations: [
@@ -209,11 +242,11 @@ describe("read model sync repository", () => {
           id: "location-1",
           latitude: 41.1,
           longitude: -87.2,
-          payeeId: "payee-1"
-        }
+          payeeId: "payee-1",
+        },
       ],
       planId: "plan-1",
-      syncedAt
+      syncedAt,
     });
     await repository.upsertScheduledTransactions({
       planId: "plan-1",
@@ -231,12 +264,12 @@ describe("read model sync repository", () => {
               categoryId: "category-1",
               deleted: false,
               id: "scheduled-sub-1",
-              scheduledTransactionId: "scheduled-1"
-            }
-          ]
-        }
+              scheduledTransactionId: "scheduled-1",
+            },
+          ],
+        },
       ],
-      syncedAt
+      syncedAt,
     });
     await repository.upsertMoneyMovements({
       moneyMovements: [
@@ -250,11 +283,11 @@ describe("read model sync repository", () => {
           movedAt: "2026-04-03T10:00:00Z",
           note: "rebalance",
           performedByUserId: "user-1",
-          toCategoryId: "category-2"
-        }
+          toCategoryId: "category-2",
+        },
       ],
       planId: "plan-1",
-      syncedAt
+      syncedAt,
     });
     await repository.upsertMoneyMovementGroups({
       moneyMovementGroups: [
@@ -264,11 +297,11 @@ describe("read model sync repository", () => {
           id: "movement-group-1",
           month: "2026-04-01",
           note: "rebalance",
-          performedByUserId: "user-1"
-        }
+          performedByUserId: "user-1",
+        },
       ],
       planId: "plan-1",
-      syncedAt
+      syncedAt,
     });
 
     expect(db.batchStatements.map((statement) => statement.sql)).toEqual(
@@ -283,27 +316,50 @@ describe("read model sync repository", () => {
         expect.stringContaining("INSERT INTO ynab_scheduled_transactions"),
         expect.stringContaining("INSERT INTO ynab_scheduled_subtransactions"),
         expect.stringContaining("INSERT INTO ynab_money_movements"),
-        expect.stringContaining("INSERT INTO ynab_money_movement_groups")
-      ])
+        expect.stringContaining("INSERT INTO ynab_money_movement_groups"),
+      ]),
     );
-    expect(db.batchStatements.every((statement) => statement.sql.includes("ON CONFLICT"))).toBe(true);
-    expect(db.batchStatements.find((statement) => statement.sql.includes("ynab_accounts"))?.params).toEqual(
-      expect.arrayContaining(["daily account", 110000, 10000])
+    expect(
+      db.batchStatements.every((statement) =>
+        statement.sql.includes("ON CONFLICT"),
+      ),
+    ).toBe(true);
+    expect(
+      db.batchStatements.find((statement) =>
+        statement.sql.includes("ynab_accounts"),
+      )?.params,
+    ).toEqual(expect.arrayContaining(["daily account", 110000, 10000]));
+    expect(
+      db.batchStatements.find((statement) =>
+        statement.sql.includes("ynab_money_movements"),
+      )?.params,
+    ).toEqual(
+      expect.arrayContaining([
+        "movement-1",
+        "movement-group-1",
+        "user-1",
+        "category-1",
+        "category-2",
+        25000,
+      ]),
     );
-    expect(db.batchStatements.find((statement) => statement.sql.includes("ynab_money_movements"))?.params).toEqual(
-      expect.arrayContaining(["movement-1", "movement-group-1", "user-1", "category-1", "category-2", 25000])
-    );
-    expect(db.batchStatements.find((statement) => statement.sql.includes("ynab_payee_locations"))?.params).toContain(1);
+    expect(
+      db.batchStatements.find((statement) =>
+        statement.sql.includes("ynab_payee_locations"),
+      )?.params,
+    ).toContain(1);
   });
 
   it("skips D1 batches for empty record sets", async () => {
     const db = new FakeD1Database();
-    const repository = createReadModelSyncRepository(db as unknown as D1Database);
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
 
     const result = await repository.upsertAccounts({
       accounts: [],
       planId: "plan-1",
-      syncedAt: "2026-04-28T12:00:00.000Z"
+      syncedAt: "2026-04-28T12:00:00.000Z",
     });
 
     expect(result).toEqual({ rowsUpserted: 0 });
@@ -312,7 +368,9 @@ describe("read model sync repository", () => {
 
   it("chunks large D1 writes into bounded batches", async () => {
     const db = new FakeD1Database();
-    const repository = createReadModelSyncRepository(db as unknown as D1Database);
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
 
     await repository.upsertAccounts({
       accounts: Array.from({ length: 125 }, (_, index) => ({
@@ -321,10 +379,10 @@ describe("read model sync repository", () => {
         deleted: false,
         id: `account-${index}`,
         name: `Account ${index}`,
-        type: "checking"
+        type: "checking",
       })),
       planId: "plan-1",
-      syncedAt: "2026-04-28T12:00:00.000Z"
+      syncedAt: "2026-04-28T12:00:00.000Z",
     });
 
     expect(db.batchCalls).toHaveLength(3);

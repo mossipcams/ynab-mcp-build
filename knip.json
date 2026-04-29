@@ -14,8 +14,6 @@
     "scripts/**/*.mjs",
     "*.config.{js,mjs,ts}"
   ],
-  "ignoreDependencies": [
-    "cloudflare",
-    "@stryker-mutator/api"
-  ]
+  "ignoreDependencies": ["cloudflare", "@stryker-mutator/api"],
+  "ignoreBinaries": ["gitleaks"]
 }

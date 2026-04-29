@@ -7,7 +7,7 @@ import {
   MCP_RESOURCE,
   REDIRECT_URI,
   registerClient,
-  requestAuthorization
+  requestAuthorization,
 } from "../helpers/oauth-provider.js";
 
 const JWT_SIGNING_KEY = "jwt-signing-key-super-secret";
@@ -16,7 +16,7 @@ const YNAB_ACCESS_TOKEN = "ynab-pat-super-secret";
 function createSecureOAuthEnv(): Env {
   return createOAuthEnv({
     JWT_SIGNING_KEY,
-    YNAB_ACCESS_TOKEN
+    YNAB_ACCESS_TOKEN,
   } as Partial<Env>);
 }
 
@@ -28,7 +28,7 @@ function createPlainEnv(): Env {
     YNAB_ACCESS_TOKEN,
     YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     YNAB_DB: {} as D1Database,
-    YNAB_READ_SOURCE: "d1"
+    YNAB_READ_SOURCE: "d1",
   } as unknown as Env;
 }
 
@@ -40,11 +40,11 @@ function createFailingD1Database(message: string): D1Database {
           return {
             async all() {
               throw new Error(message);
-            }
+            },
           };
-        }
+        },
       };
-    }
+    },
   } as unknown as D1Database;
 }
 
@@ -57,7 +57,7 @@ async function callUserToolWithFailure(message: string) {
       method: "POST",
       headers: {
         accept: "application/json, text/event-stream",
-        "content-type": "application/json"
+        "content-type": "application/json",
       },
       body: JSON.stringify({
         id: 1,
@@ -65,14 +65,14 @@ async function callUserToolWithFailure(message: string) {
         method: "tools/call",
         params: {
           arguments: {},
-          name: "ynab_get_user"
-        }
-      })
+          name: "ynab_get_user",
+        },
+      }),
     },
     {
       ...createPlainEnv(),
-      YNAB_DB: createFailingD1Database(message)
-    } as Env
+      YNAB_DB: createFailingD1Database(message),
+    } as Env,
   );
 }
 
@@ -82,16 +82,16 @@ describe("response secret leakage", () => {
       new Request(MCP_RESOURCE, {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           id: 1,
           jsonrpc: "2.0",
           method: "tools/list",
-          params: {}
-        })
+          params: {},
+        }),
       }),
-      createSecureOAuthEnv()
+      createSecureOAuthEnv(),
     );
     const body = await response.text();
 
@@ -102,7 +102,7 @@ describe("response secret leakage", () => {
 
   it("redacts bearer token values from MCP tool error responses", async () => {
     const response = await callUserToolWithFailure(
-      `Upstream sent Authorization: Bearer ${YNAB_ACCESS_TOKEN}`
+      `Upstream sent Authorization: Bearer ${YNAB_ACCESS_TOKEN}`,
     );
     const body = await response.text();
 
@@ -112,7 +112,9 @@ describe("response secret leakage", () => {
   });
 
   it("redacts secret-style key assignments from MCP tool error responses", async () => {
-    const response = await callUserToolWithFailure(`JWT_SIGNING_KEY=${JWT_SIGNING_KEY}`);
+    const response = await callUserToolWithFailure(
+      `JWT_SIGNING_KEY=${JWT_SIGNING_KEY}`,
+    );
     const body = await response.text();
 
     expect(response.status).toBe(200);
@@ -124,12 +126,15 @@ describe("response secret leakage", () => {
     const env = createSecureOAuthEnv();
     const { registration } = await registerClient(env, [REDIRECT_URI]);
     const response = await requestAuthorization(env, registration.client_id, {
-      scope: "mcp /Users/matt/Desktop/Projects/ynab-mcp-build-ci/src/oauth/http/routes.ts"
+      scope:
+        "mcp /Users/matt/Desktop/Projects/ynab-mcp-build-ci/src/oauth/http/routes.ts",
     });
     const body = await response.text();
 
     expect(response.status).toBe(400);
-    expect(body).not.toContain("/Users/matt/Desktop/Projects/ynab-mcp-build-ci");
+    expect(body).not.toContain(
+      "/Users/matt/Desktop/Projects/ynab-mcp-build-ci",
+    );
     expect(body).not.toContain("src/oauth/http/routes.ts");
   });
 });

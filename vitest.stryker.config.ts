@@ -14,12 +14,12 @@ const unitIncludes = [
   "tests/platform/ynab/mappers.test.ts",
   "tests/platform/ynab/schemas.test.ts",
   "tests/shared/**/*.test.ts",
-  "tests/slices/**/{service,mappers,schemas,helpers}.test.ts"
+  "tests/slices/**/{service,mappers,schemas,helpers}.test.ts",
 ];
 
 export default defineConfig({
   test: {
     globals: true,
-    include: unitIncludes
-  }
+    include: unitIncludes,
+  },
 });

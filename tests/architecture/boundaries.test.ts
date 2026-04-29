@@ -18,7 +18,9 @@ function discoverProductionSourceFiles(dir: string): string[] {
       return discoverProductionSourceFiles(entryPath);
     }
 
-    return entry.isFile() && entry.name.endsWith(".ts") && !entry.name.endsWith(".spec.ts")
+    return entry.isFile() &&
+      entry.name.endsWith(".ts") &&
+      !entry.name.endsWith(".spec.ts")
       ? [entryPath]
       : [];
   });
@@ -32,7 +34,11 @@ function rel(filePath: string) {
   return relative(rootDir, filePath);
 }
 
-function expectNoMatches(filePaths: string[], matcher: (source: string) => boolean, defect: string) {
+function expectNoMatches(
+  filePaths: string[],
+  matcher: (source: string) => boolean,
+  defect: string,
+) {
   const offenders = filePaths
     .filter((filePath) => matcher(readSource(filePath)))
     .map(rel);
@@ -41,22 +47,40 @@ function expectNoMatches(filePaths: string[], matcher: (source: string) => boole
 }
 
 const sourceFiles = listSourceFiles();
-const sliceFiles = sourceFiles.filter((filePath) => filePath.includes("/src/slices/"));
-const oauthCoreFiles = sourceFiles.filter((filePath) => filePath.includes("/src/oauth/core/"));
-const mcpFiles = sourceFiles.filter((filePath) => filePath.includes("/src/mcp/"));
-const sharedFiles = sourceFiles.filter((filePath) => filePath.includes("/src/shared/"));
-const httpFiles = sourceFiles.filter((filePath) => filePath.includes("/src/http/"));
+const sliceFiles = sourceFiles.filter((filePath) =>
+  filePath.includes("/src/slices/"),
+);
+const oauthCoreFiles = sourceFiles.filter((filePath) =>
+  filePath.includes("/src/oauth/core/"),
+);
+const mcpFiles = sourceFiles.filter((filePath) =>
+  filePath.includes("/src/mcp/"),
+);
+const sharedFiles = sourceFiles.filter((filePath) =>
+  filePath.includes("/src/shared/"),
+);
+const httpFiles = sourceFiles.filter((filePath) =>
+  filePath.includes("/src/http/"),
+);
 
 describe("architecture boundaries", () => {
   it("covers every production source file", () => {
     // DEFECT: new platform or slice modules can miss boundary assertions when the source list drifts.
-    expect(sourceFiles.map(rel).sort()).toEqual(discoverProductionSourceFiles(srcDir).map(rel).sort());
+    expect(sourceFiles.map(rel).sort()).toEqual(
+      discoverProductionSourceFiles(srcDir).map(rel).sort(),
+    );
   });
 
   it("covers every OAuth production source file", () => {
     // DEFECT: new OAuth files can miss boundary assertions when the source list drifts.
-    expect(sourceFiles.filter((filePath) => filePath.includes("/src/oauth/")).map(rel).sort())
-      .toEqual(discoverProductionSourceFiles(join(srcDir, "oauth")).map(rel).sort());
+    expect(
+      sourceFiles
+        .filter((filePath) => filePath.includes("/src/oauth/"))
+        .map(rel)
+        .sort(),
+    ).toEqual(
+      discoverProductionSourceFiles(join(srcDir, "oauth")).map(rel).sort(),
+    );
   });
 
   it("keeps slices free of MCP, Hono, DO, and Worker env imports", () => {
@@ -68,7 +92,7 @@ describe("architecture boundaries", () => {
         /from\s+["']hono["']/u.test(source) ||
         /durable-objects\//u.test(source) ||
         /\bEnv\b/u.test(source),
-      "slices must stay transport- and runtime-agnostic"
+      "slices must stay transport- and runtime-agnostic",
     );
   });
 
@@ -80,7 +104,7 @@ describe("architecture boundaries", () => {
         /from\s+["']hono["']/u.test(source) ||
         /durable-objects\//u.test(source) ||
         /slices\//u.test(source),
-      "oauth core must remain runtime-agnostic"
+      "oauth core must remain runtime-agnostic",
     );
   });
 
@@ -89,9 +113,12 @@ describe("architecture boundaries", () => {
     const offenders = sourceFiles
       .filter(
         (filePath) =>
-          !filePath.includes("/src/mcp/") && !filePath.endsWith("/src/http/routes/mcp.ts")
+          !filePath.includes("/src/mcp/") &&
+          !filePath.endsWith("/src/http/routes/mcp.ts"),
       )
-      .filter((filePath) => /@modelcontextprotocol\//u.test(readSource(filePath)))
+      .filter((filePath) =>
+        /@modelcontextprotocol\//u.test(readSource(filePath)),
+      )
       .map(rel);
 
     expect(offenders).toEqual([]);
@@ -106,16 +133,18 @@ describe("architecture boundaries", () => {
         /\bToolResult\b/u.test(source) ||
         /isError/u.test(source) ||
         /content:\s*\[/u.test(source),
-      "shared helpers must stay runtime-agnostic"
+      "shared helpers must stay runtime-agnostic",
     );
   });
 
   it("keeps direct YNAB API fetch code in the platform layer", () => {
     // DEFECT: upstream HTTP calls can leak into feature or transport code and bypass shared auth/error handling.
     expectNoMatches(
-      sourceFiles.filter((filePath) => !filePath.includes("/src/platform/ynab/")),
+      sourceFiles.filter(
+        (filePath) => !filePath.includes("/src/platform/ynab/"),
+      ),
       (source) => /fetch\s*\(/u.test(source) && /api\.ynab\.com/u.test(source),
-      "direct YNAB fetches must be isolated in src/platform/ynab/**"
+      "direct YNAB fetches must be isolated in src/platform/ynab/**",
     );
   });
 
@@ -123,8 +152,9 @@ describe("architecture boundaries", () => {
     // DEFECT: transport wiring can drift into the MCP layer and blur the seam between protocol logic and HTTP delivery.
     expectNoMatches(
       mcpFiles,
-      (source) => /StreamableHTTP|streamableHttp|webStandardStreamableHttp/u.test(source),
-      "streamable HTTP transport belongs in src/http/routes/mcp.ts"
+      (source) =>
+        /StreamableHTTP|streamableHttp|webStandardStreamableHttp/u.test(source),
+      "streamable HTTP transport belongs in src/http/routes/mcp.ts",
     );
   });
 
@@ -133,7 +163,7 @@ describe("architecture boundaries", () => {
     expectNoMatches(
       httpFiles,
       (source) => /platform\/ynab\//u.test(source),
-      "http routes must cross into business logic through slices/dependencies"
+      "http routes must cross into business logic through slices/dependencies",
     );
   });
 
@@ -142,7 +172,7 @@ describe("architecture boundaries", () => {
     expectNoMatches(
       mcpFiles,
       (source) => /from\s+["']hono["']/u.test(source),
-      "mcp modules must remain HTTP-framework agnostic"
+      "mcp modules must remain HTTP-framework agnostic",
     );
   });
 });

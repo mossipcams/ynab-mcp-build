@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import {
   getDbMoneyMovementGroups,
-  getDbMoneyMovements
+  getDbMoneyMovements,
 } from "../../../src/slices/db-money-movements/service.js";
 import { getDbMoneyMovementToolDefinitions } from "../../../src/slices/db-money-movements/tools.js";
 
@@ -23,19 +23,19 @@ describe("money movements service", () => {
           to_category_id: "cat-dining",
           to_category_name: "Dining Out",
           money_movement_group_id: "group-1",
-          performed_by_user_id: "user-1"
-        }
-      ])
+          performed_by_user_id: "user-1",
+        },
+      ]),
     };
 
     await expect(
       getDbMoneyMovements(
         {
           defaultPlanId: "plan-1",
-          moneyMovementsRepository: repository
+          moneyMovementsRepository: repository,
         },
-        {}
-      )
+        {},
+      ),
     ).resolves.toEqual({
       money_movements: [
         {
@@ -50,13 +50,13 @@ describe("money movements service", () => {
           to_category_id: "cat-dining",
           to_category_name: "Dining Out",
           money_movement_group_id: "group-1",
-          performed_by_user_id: "user-1"
-        }
+          performed_by_user_id: "user-1",
+        },
       ],
-      movement_count: 1
+      movement_count: 1,
     });
     expect(repository.listMoneyMovements).toHaveBeenCalledWith({
-      planId: "plan-1"
+      planId: "plan-1",
     });
   });
 
@@ -70,20 +70,20 @@ describe("money movements service", () => {
           note: "Cover dining",
           performed_by_user_id: "user-1",
           movement_count: 2,
-          total_amount_milliunits: 17500
-        }
+          total_amount_milliunits: 17500,
+        },
       ]),
-      listMoneyMovements: vi.fn()
+      listMoneyMovements: vi.fn(),
     };
 
     await expect(
       getDbMoneyMovementGroups(
         {
           defaultPlanId: "plan-1",
-          moneyMovementsRepository: repository
+          moneyMovementsRepository: repository,
         },
-        {}
-      )
+        {},
+      ),
     ).resolves.toEqual({
       money_movement_groups: [
         {
@@ -94,27 +94,27 @@ describe("money movements service", () => {
           performed_by_user_id: "user-1",
           movement_count: 2,
           total_amount: "17.50",
-          total_amount_milliunits: 17500
-        }
+          total_amount_milliunits: 17500,
+        },
       ],
-      group_count: 1
+      group_count: 1,
     });
     expect(repository.listMoneyMovementGroups).toHaveBeenCalledWith({
-      planId: "plan-1"
+      planId: "plan-1",
     });
   });
 
   it("requires month in the month-scoped money movement tool schema", () => {
     const repository = {
       listMoneyMovementGroups: vi.fn(),
-      listMoneyMovements: vi.fn()
+      listMoneyMovements: vi.fn(),
     };
     const definitions = getDbMoneyMovementToolDefinitions({
       defaultPlanId: "plan-1",
-      moneyMovementsRepository: repository
+      moneyMovementsRepository: repository,
     });
     const monthlyTool = definitions.find(
-      (definition) => definition.name === "ynab_get_money_movements_by_month"
+      (definition) => definition.name === "ynab_get_money_movements_by_month",
     );
 
     expect(monthlyTool).toBeDefined();

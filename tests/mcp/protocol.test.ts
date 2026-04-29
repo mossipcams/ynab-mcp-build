@@ -13,11 +13,11 @@ function createFailingD1Database(message: string): D1Database {
           return {
             async all() {
               throw new Error(message);
-            }
+            },
           };
-        }
+        },
       };
-    }
+    },
   } as unknown as D1Database;
 }
 
@@ -28,7 +28,7 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     YNAB_DB: {} as D1Database,
     YNAB_READ_SOURCE: "d1",
-    ...overrides
+    ...overrides,
   } as unknown as Env;
 }
 
@@ -37,9 +37,9 @@ function createRawRpcRequest(body: unknown) {
     method: "POST",
     headers: {
       accept: "application/json, text/event-stream",
-      "content-type": "application/json"
+      "content-type": "application/json",
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 }
 
@@ -87,15 +87,19 @@ describe("mcp protocol", () => {
   it("lists every registered slice tool with name, description, and input schema", async () => {
     // DEFECT: slice tools can drift out of MCP registration and silently disappear from discovery.
     const app = createApp();
-    const transport = new StreamableHTTPClientTransport(new URL("http://localhost/mcp"), {
-      fetch: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        return app.fetch(request, createEnv());
-      }
-    });
+    const transport = new StreamableHTTPClientTransport(
+      new URL("http://localhost/mcp"),
+      {
+        fetch: async (input, init) => {
+          const request =
+            input instanceof Request ? input : new Request(input, init);
+          return app.fetch(request, createEnv());
+        },
+      },
+    );
     const client = new Client({
       name: "ynab-mcp-build-test-client",
-      version: "1.0.0"
+      version: "1.0.0",
     });
 
     cleanups.push(async () => {
@@ -107,27 +111,46 @@ describe("mcp protocol", () => {
 
     const result = await client.listTools();
 
-    expect(result.tools.map((tool) => tool.name).sort()).toEqual([...DISCOVERY_TOOL_NAMES].sort());
-    expect(result.tools.every((tool) => typeof tool.description === "string" && tool.description.length > 0)).toBe(true);
-    expect(result.tools.every((tool) => typeof tool.inputSchema === "object" && tool.inputSchema !== null)).toBe(true);
-    expect(result.tools.find((tool) => tool.name === "ynab_get_account")?.inputSchema).toMatchObject({
+    expect(result.tools.map((tool) => tool.name).sort()).toEqual(
+      [...DISCOVERY_TOOL_NAMES].sort(),
+    );
+    expect(
+      result.tools.every(
+        (tool) =>
+          typeof tool.description === "string" && tool.description.length > 0,
+      ),
+    ).toBe(true);
+    expect(
+      result.tools.every(
+        (tool) =>
+          typeof tool.inputSchema === "object" && tool.inputSchema !== null,
+      ),
+    ).toBe(true);
+    expect(
+      result.tools.find((tool) => tool.name === "ynab_get_account")
+        ?.inputSchema,
+    ).toMatchObject({
       required: ["accountId"],
-      type: "object"
+      type: "object",
     });
   });
 
   it("formats successful tool results as non-error text content blocks", async () => {
     // DEFECT: successful slice outputs can be wrapped in malformed MCP result envelopes and become unreadable to clients.
     const app = createApp();
-    const transport = new StreamableHTTPClientTransport(new URL("http://localhost/mcp"), {
-      fetch: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        return app.fetch(request, createEnv());
-      }
-    });
+    const transport = new StreamableHTTPClientTransport(
+      new URL("http://localhost/mcp"),
+      {
+        fetch: async (input, init) => {
+          const request =
+            input instanceof Request ? input : new Request(input, init);
+          return app.fetch(request, createEnv());
+        },
+      },
+    );
     const client = new Client({
       name: "ynab-mcp-build-test-client",
-      version: "1.0.0"
+      version: "1.0.0",
     });
 
     cleanups.push(async () => {
@@ -139,30 +162,37 @@ describe("mcp protocol", () => {
 
     const result = await client.callTool({
       name: "ynab_get_mcp_version",
-      arguments: {}
+      arguments: {},
     });
 
     expect(result.isError).toBe(false);
     expect(result.content).toHaveLength(1);
     expect(result.content[0]).toMatchObject({
-      type: "text"
+      type: "text",
     });
   });
 
   it("formats thrown tool errors as MCP error results with a human-readable message", async () => {
     // DEFECT: slice failures can escape as transport exceptions instead of structured MCP tool errors.
     const app = createApp();
-    const transport = new StreamableHTTPClientTransport(new URL("http://localhost/mcp"), {
-      fetch: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        return app.fetch(request, createEnv({
-          YNAB_DB: createFailingD1Database("Upstream auth_client failure")
-        }));
-      }
-    });
+    const transport = new StreamableHTTPClientTransport(
+      new URL("http://localhost/mcp"),
+      {
+        fetch: async (input, init) => {
+          const request =
+            input instanceof Request ? input : new Request(input, init);
+          return app.fetch(
+            request,
+            createEnv({
+              YNAB_DB: createFailingD1Database("Upstream auth_client failure"),
+            }),
+          );
+        },
+      },
+    );
     const client = new Client({
       name: "ynab-mcp-build-test-client",
-      version: "1.0.0"
+      version: "1.0.0",
     });
 
     cleanups.push(async () => {
@@ -174,13 +204,15 @@ describe("mcp protocol", () => {
 
     const result = await client.callTool({
       name: "ynab_get_user",
-      arguments: {}
+      arguments: {},
     });
     const textContent = result.content.find((entry) => entry.type === "text");
 
     expect(result.isError).toBe(true);
     expect(textContent).toBeDefined();
-    expect((textContent as { text: string }).text).toContain("Upstream auth_client failure");
+    expect((textContent as { text: string }).text).toContain(
+      "Upstream auth_client failure",
+    );
   });
 
   it("returns a JSON-RPC error when the client calls an unknown tool name", async () => {
@@ -193,10 +225,10 @@ describe("mcp protocol", () => {
         method: "tools/call",
         params: {
           name: "ynab_missing_tool",
-          arguments: {}
-        }
+          arguments: {},
+        },
       }),
-      createEnv()
+      createEnv(),
     );
     const payload = parseFirstSseMessagePayload(await response.text());
 
@@ -213,9 +245,9 @@ describe("mcp protocol", () => {
         id: "request-123",
         jsonrpc: "2.0",
         method: "tools/list",
-        params: {}
+        params: {},
       }),
-      createEnv()
+      createEnv(),
     );
     const payload = parseFirstSseMessagePayload(await response.text());
 
@@ -234,10 +266,10 @@ describe("mcp protocol", () => {
         method: "tools/call",
         params: {
           name: "ynab_get_mcp_version",
-          arguments: {}
-        }
+          arguments: {},
+        },
       }),
-      createEnv()
+      createEnv(),
     );
     const payload = parseFirstSseMessagePayload(await response.text());
 
@@ -256,16 +288,18 @@ describe("mcp protocol", () => {
         method: "tools/call",
         params: {
           name: "ynab_get_account",
-          arguments: {}
-        }
+          arguments: {},
+        },
       }),
-      createEnv()
+      createEnv(),
     );
     const payload = parseFirstSseMessagePayload(await response.text());
 
     expect(payload.jsonrpc).toBe("2.0");
     expect(payload.id).toBe(9);
     expect(payload.error?.code).toBe(-32602);
-    expect((payload.error as { message?: string } | undefined)?.message).toContain("accountId");
+    expect(
+      (payload.error as { message?: string } | undefined)?.message,
+    ).toContain("accountId");
   });
 });

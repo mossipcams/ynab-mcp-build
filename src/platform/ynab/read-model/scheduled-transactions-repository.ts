@@ -17,6 +17,8 @@ export type ScheduledTransactionRow = {
   deleted: number;
 };
 
+const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
+
 function selectScheduledTransactionSql(where: string) {
   return `SELECT id,
                  date_first,
@@ -44,24 +46,27 @@ export function createScheduledTransactionsRepository(database: D1Database) {
       const result = await database
         .prepare(
           `${selectScheduledTransactionSql("plan_id = ? AND deleted = 0")}
-           ORDER BY date_next, id`
+           ORDER BY date_next, id`,
         )
         .bind(input.planId)
         .all<ScheduledTransactionRow>();
 
-      return result.results ?? [];
+      return rowsOrEmpty(result);
     },
 
-    async getScheduledTransaction(input: { planId: string; scheduledTransactionId: string }) {
+    async getScheduledTransaction(input: {
+      planId: string;
+      scheduledTransactionId: string;
+    }) {
       const result = await database
         .prepare(
           `${selectScheduledTransactionSql("plan_id = ? AND id = ?")}
-           LIMIT 1`
+           LIMIT 1`,
         )
         .bind(input.planId, input.scheduledTransactionId)
         .all<ScheduledTransactionRow>();
 
-      return result.results?.[0] ?? null;
-    }
+      return rowsOrEmpty(result)[0] ?? null;
+    },
   };
 }

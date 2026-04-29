@@ -51,7 +51,7 @@ export function createSyncStateRepository(database: D1Database) {
         .prepare(
           `SELECT server_knowledge
            FROM ynab_sync_state
-           WHERE plan_id = ? AND endpoint = ?`
+           WHERE plan_id = ? AND endpoint = ?`,
         )
         .bind(planId, endpoint)
         .first<ServerKnowledgeRow>();
@@ -79,7 +79,7 @@ export function createSyncStateRepository(database: D1Database) {
              updated_at = excluded.updated_at
            WHERE ynab_sync_state.lease_owner IS NULL
               OR ynab_sync_state.lease_expires_at IS NULL
-              OR ynab_sync_state.lease_expires_at <= ?`
+              OR ynab_sync_state.lease_expires_at <= ?`,
         )
         .bind(
           input.planId,
@@ -88,7 +88,7 @@ export function createSyncStateRepository(database: D1Database) {
           leaseExpiresAt,
           input.now,
           input.now,
-          input.now
+          input.now,
         )
         .run();
 
@@ -97,34 +97,39 @@ export function createSyncStateRepository(database: D1Database) {
           .prepare(
             `SELECT lease_owner, lease_expires_at
              FROM ynab_sync_state
-             WHERE plan_id = ? AND endpoint = ?`
+             WHERE plan_id = ? AND endpoint = ?`,
           )
           .bind(input.planId, input.endpoint)
           .first<LeaseRow>();
 
-        if (currentLease?.lease_owner && currentLease.lease_expires_at && currentLease.lease_expires_at > input.now) {
+        if (
+          currentLease?.lease_owner &&
+          currentLease.lease_expires_at &&
+          currentLease.lease_expires_at > input.now
+        ) {
           return {
             acquired: false as const,
-            reason: "lease_active" as const
+            reason: "lease_active" as const,
           };
         }
 
         return {
           acquired: false as const,
-          reason: "contention" as const
+          reason: "contention" as const,
         };
       }
 
       return {
         acquired: true as const,
-        leaseExpiresAt
+        leaseExpiresAt,
       };
     },
 
     async advanceCursor(input: AdvanceCursorInput) {
-      const cursorPredicate = input.previousServerKnowledge === null
-        ? "server_knowledge IS NULL"
-        : "server_knowledge = ?";
+      const cursorPredicate =
+        input.previousServerKnowledge === null
+          ? "server_knowledge IS NULL"
+          : "server_knowledge = ?";
       const params = [
         input.serverKnowledge,
         input.now,
@@ -134,7 +139,9 @@ export function createSyncStateRepository(database: D1Database) {
         input.planId,
         input.endpoint,
         input.leaseOwner,
-        ...(input.previousServerKnowledge === null ? [] : [input.previousServerKnowledge])
+        ...(input.previousServerKnowledge === null
+          ? []
+          : [input.previousServerKnowledge]),
       ];
       const result = await database
         .prepare(
@@ -151,7 +158,7 @@ export function createSyncStateRepository(database: D1Database) {
            WHERE plan_id = ?
              AND endpoint = ?
              AND lease_owner = ?
-             AND ${cursorPredicate}`
+             AND ${cursorPredicate}`,
         )
         .bind(...params)
         .run();
@@ -159,12 +166,12 @@ export function createSyncStateRepository(database: D1Database) {
       if (getChangeCount(result) === 0) {
         return {
           advanced: false as const,
-          reason: "contention" as const
+          reason: "contention" as const,
         };
       }
 
       return {
-        advanced: true as const
+        advanced: true as const,
       };
     },
 
@@ -180,7 +187,7 @@ export function createSyncStateRepository(database: D1Database) {
                updated_at = ?
            WHERE plan_id = ?
              AND endpoint = ?
-             AND lease_owner = ?`
+             AND lease_owner = ?`,
         )
         .bind(
           input.now,
@@ -188,9 +195,9 @@ export function createSyncStateRepository(database: D1Database) {
           input.now,
           input.planId,
           input.endpoint,
-          input.leaseOwner
+          input.leaseOwner,
         )
         .run();
-    }
+    },
   };
 }

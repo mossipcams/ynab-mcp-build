@@ -1,23 +1,12 @@
 import { spawnSync } from "node:child_process";
 
-export const CI_COMMANDS = [
-  "pnpm run cf-typegen",
-  "pnpm run typecheck:tsgo",
-  "pnpm run lint:fast",
-  "pnpm run typecheck:tsc",
-  "pnpm run typecheck:spec",
-  "pnpm run lint",
-  "pnpm run check:deps",
-  "pnpm run check:duplication",
-  "pnpm run check:knip",
-  "pnpm test"
-];
+export const CI_COMMANDS = ["pnpm check:pr"];
 
 export const runCommand = (command, args, options = {}) => {
   const result = spawnSync(command, args, {
     stdio: "inherit",
     shell: false,
-    ...options
+    ...options,
   });
 
   if (result.error) {
@@ -29,7 +18,7 @@ export const runCommand = (command, args, options = {}) => {
 
 export const runShellCommand = (command) =>
   runCommand(command, [], {
-    shell: true
+    shell: true,
   });
 
 export const runCi = () => {

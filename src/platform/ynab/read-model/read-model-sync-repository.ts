@@ -10,7 +10,7 @@ import type {
   YnabPlanSummary,
   YnabPlanMonthDetail,
   YnabScheduledTransaction,
-  YnabUser
+  YnabUser,
 } from "../client.js";
 
 type UpsertResult = {
@@ -37,7 +37,10 @@ function toIntegerBoolean(value: boolean | null | undefined) {
   return value ? 1 : 0;
 }
 
-async function runBatch(database: D1Database, statements: D1PreparedStatement[]): Promise<void> {
+async function runBatch(
+  database: D1Database,
+  statements: D1PreparedStatement[],
+): Promise<void> {
   for (let index = 0; index < statements.length; index += D1_BATCH_SIZE) {
     await database.batch(statements.slice(index, index + D1_BATCH_SIZE));
   }
@@ -45,7 +48,10 @@ async function runBatch(database: D1Database, statements: D1PreparedStatement[])
 
 export function createReadModelSyncRepository(database: D1Database) {
   return {
-    async upsertUser(input: { syncedAt: string; user: YnabUser }): Promise<UpsertResult> {
+    async upsertUser(input: {
+      syncedAt: string;
+      user: YnabUser;
+    }): Promise<UpsertResult> {
       await runBatch(database, [
         database
           .prepare(
@@ -59,15 +65,18 @@ export function createReadModelSyncRepository(database: D1Database) {
              ON CONFLICT(id) DO UPDATE SET
                name = excluded.name,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
-          .bind(input.user.id, input.user.name, input.syncedAt, input.syncedAt)
+          .bind(input.user.id, input.user.name, input.syncedAt, input.syncedAt),
       ]);
 
       return { rowsUpserted: 1 };
     },
 
-    async upsertPlans(input: { plans: YnabPlanSummary[]; syncedAt: string }): Promise<UpsertResult> {
+    async upsertPlans(input: {
+      plans: YnabPlanSummary[];
+      syncedAt: string;
+    }): Promise<UpsertResult> {
       const statements = input.plans.map((plan) =>
         database
           .prepare(
@@ -87,9 +96,15 @@ export function createReadModelSyncRepository(database: D1Database) {
                last_modified_on = excluded.last_modified_on,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
-          .bind(plan.id, plan.name, plan.lastModifiedOn ?? null, input.syncedAt, input.syncedAt)
+          .bind(
+            plan.id,
+            plan.name,
+            plan.lastModifiedOn ?? null,
+            input.syncedAt,
+            input.syncedAt,
+          ),
       );
 
       await runBatch(database, statements);
@@ -97,7 +112,10 @@ export function createReadModelSyncRepository(database: D1Database) {
       return { rowsUpserted: input.plans.length };
     },
 
-    async upsertPlanDetail(input: { plan: YnabPlanDetail; syncedAt: string }): Promise<UpsertResult> {
+    async upsertPlanDetail(input: {
+      plan: YnabPlanDetail;
+      syncedAt: string;
+    }): Promise<UpsertResult> {
       await runBatch(database, [
         database
           .prepare(
@@ -119,7 +137,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                last_month = excluded.last_month,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.plan.id,
@@ -128,8 +146,8 @@ export function createReadModelSyncRepository(database: D1Database) {
             input.plan.firstMonth ?? null,
             input.plan.lastMonth ?? null,
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       ]);
 
       return { rowsUpserted: 1 };
@@ -169,7 +187,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                currency_symbol = excluded.currency_symbol,
                currency_display_symbol = excluded.currency_display_symbol,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -183,8 +201,8 @@ export function createReadModelSyncRepository(database: D1Database) {
             input.settings.currencyFormat?.currencySymbol ?? null,
             toIntegerBoolean(input.settings.currencyFormat?.displaySymbol),
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       ]);
 
       return { rowsUpserted: 1 };
@@ -233,7 +251,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                last_reconciled_at = excluded.last_reconciled_at,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -252,8 +270,8 @@ export function createReadModelSyncRepository(database: D1Database) {
             account.lastReconciledAt ?? null,
             account.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       );
 
       await runBatch(database, statements);
@@ -284,7 +302,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                hidden = excluded.hidden,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -293,8 +311,8 @@ export function createReadModelSyncRepository(database: D1Database) {
             group.hidden ? 1 : 0,
             group.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       );
       const categoryStatements = input.categoryGroups.flatMap((group) =>
         group.categories.map((category) =>
@@ -359,7 +377,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                  goal_snoozed_at = excluded.goal_snoozed_at,
                  deleted = excluded.deleted,
                  synced_at = excluded.synced_at,
-                 updated_at = excluded.updated_at`
+                 updated_at = excluded.updated_at`,
             )
             .bind(
               input.planId,
@@ -390,16 +408,16 @@ export function createReadModelSyncRepository(database: D1Database) {
               category.goalSnoozedAt ?? null,
               category.deleted ? 1 : 0,
               input.syncedAt,
-              input.syncedAt
-            )
-        )
+              input.syncedAt,
+            ),
+        ),
       );
 
       await runBatch(database, [...groupStatements, ...categoryStatements]);
 
       return {
         categoriesUpserted: categoryStatements.length,
-        categoryGroupsUpserted: groupStatements.length
+        categoryGroupsUpserted: groupStatements.length,
       };
     },
 
@@ -434,7 +452,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                age_of_money = excluded.age_of_money,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -446,8 +464,8 @@ export function createReadModelSyncRepository(database: D1Database) {
             month.ageOfMoney ?? null,
             month.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       );
       const monthCategoryStatements = input.months.flatMap((month) =>
         (month.categories ?? []).map((category) =>
@@ -513,7 +531,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                  hidden = excluded.hidden,
                  deleted = excluded.deleted,
                  synced_at = excluded.synced_at,
-                 updated_at = excluded.updated_at`
+                 updated_at = excluded.updated_at`,
             )
             .bind(
               input.planId,
@@ -545,16 +563,19 @@ export function createReadModelSyncRepository(database: D1Database) {
               category.hidden ? 1 : 0,
               category.deleted ? 1 : 0,
               input.syncedAt,
-              input.syncedAt
-            )
-        )
+              input.syncedAt,
+            ),
+        ),
       );
 
-      await runBatch(database, [...monthStatements, ...monthCategoryStatements]);
+      await runBatch(database, [
+        ...monthStatements,
+        ...monthCategoryStatements,
+      ]);
 
       return {
         monthCategoriesUpserted: monthCategoryStatements.length,
-        monthsUpserted: monthStatements.length
+        monthsUpserted: monthStatements.length,
       };
     },
 
@@ -581,7 +602,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                transfer_account_id = excluded.transfer_account_id,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -590,8 +611,8 @@ export function createReadModelSyncRepository(database: D1Database) {
             payee.transferAccountId ?? null,
             payee.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       );
 
       await runBatch(database, statements);
@@ -624,7 +645,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                longitude = excluded.longitude,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -634,8 +655,8 @@ export function createReadModelSyncRepository(database: D1Database) {
             location.longitude ?? null,
             location.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       );
 
       await runBatch(database, statements);
@@ -690,7 +711,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                transfer_account_id = excluded.transfer_account_id,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -711,9 +732,11 @@ export function createReadModelSyncRepository(database: D1Database) {
             transaction.transferAccountId ?? null,
             transaction.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
+            input.syncedAt,
           );
-        const subtransactionStatements = (transaction.subtransactions ?? []).map((subtransaction) =>
+        const subtransactionStatements = (
+          transaction.subtransactions ?? []
+        ).map((subtransaction) =>
           database
             .prepare(
               `INSERT INTO ynab_scheduled_subtransactions (
@@ -742,7 +765,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                  transfer_account_id = excluded.transfer_account_id,
                  deleted = excluded.deleted,
                  synced_at = excluded.synced_at,
-                 updated_at = excluded.updated_at`
+                 updated_at = excluded.updated_at`,
             )
             .bind(
               input.planId,
@@ -757,8 +780,8 @@ export function createReadModelSyncRepository(database: D1Database) {
               subtransaction.transferAccountId ?? null,
               subtransaction.deleted ? 1 : 0,
               input.syncedAt,
-              input.syncedAt
-            )
+              input.syncedAt,
+            ),
         );
 
         return [transactionStatement, ...subtransactionStatements];
@@ -804,7 +827,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                amount_milliunits = excluded.amount_milliunits,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -819,8 +842,8 @@ export function createReadModelSyncRepository(database: D1Database) {
             movement.amount,
             movement.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       );
 
       await runBatch(database, statements);
@@ -855,7 +878,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                performed_by_user_id = excluded.performed_by_user_id,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -866,13 +889,13 @@ export function createReadModelSyncRepository(database: D1Database) {
             group.performedByUserId ?? null,
             group.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
-          )
+            input.syncedAt,
+          ),
       );
 
       await runBatch(database, statements);
 
       return { rowsUpserted: input.moneyMovementGroups.length };
-    }
+    },
   };
 }

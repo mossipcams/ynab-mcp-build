@@ -1,11 +1,14 @@
-import type { YnabClient, YnabTransaction } from "../../platform/ynab/client.js";
+import type {
+  YnabClient,
+  YnabTransaction,
+} from "../../platform/ynab/client.js";
 import {
   formatAmountMilliunits,
   hasPaginationControls,
   hasProjectionControls,
   paginateEntries,
   projectRecord,
-  shouldPaginateEntries
+  shouldPaginateEntries,
 } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 import { resolvePlanId } from "../../shared/plans.js";
@@ -17,7 +20,7 @@ const transactionFields = [
   "category_name",
   "account_name",
   "approved",
-  "cleared"
+  "cleared",
 ] as const;
 
 type TransactionField = (typeof transactionFields)[number];
@@ -75,7 +78,14 @@ export type ListScheduledTransactionsInput = {
   planId?: string;
   limit?: number;
   offset?: number;
-  fields?: Array<"date_first" | "date_next" | "amount" | "payee_name" | "category_name" | "account_name">;
+  fields?: Array<
+    | "date_first"
+    | "date_next"
+    | "amount"
+    | "payee_name"
+    | "category_name"
+    | "account_name"
+  >;
   includeIds?: boolean;
 };
 
@@ -95,29 +105,57 @@ type DisplayTransaction = {
   cleared?: string | null;
 };
 
-function toDisplayTransaction(transaction: YnabTransaction): DisplayTransaction {
+function toDisplayTransaction(
+  transaction: YnabTransaction,
+): DisplayTransaction {
   return {
     id: transaction.id,
     date: transaction.date,
     amount: formatAmountMilliunits(transaction.amount),
-    ...(transaction.payeeName !== undefined ? { payee_name: transaction.payeeName } : {}),
-    ...(transaction.categoryName !== undefined ? { category_name: transaction.categoryName } : {}),
-    ...(transaction.accountName !== undefined ? { account_name: transaction.accountName } : {}),
-    ...(transaction.approved !== undefined ? { approved: transaction.approved } : {}),
-    ...(transaction.cleared !== undefined ? { cleared: transaction.cleared } : {})
+    ...(transaction.payeeName !== undefined
+      ? { payee_name: transaction.payeeName }
+      : {}),
+    ...(transaction.categoryName !== undefined
+      ? { category_name: transaction.categoryName }
+      : {}),
+    ...(transaction.accountName !== undefined
+      ? { account_name: transaction.accountName }
+      : {}),
+    ...(transaction.approved !== undefined
+      ? { approved: transaction.approved }
+      : {}),
+    ...(transaction.cleared !== undefined
+      ? { cleared: transaction.cleared }
+      : {}),
   };
 }
 
-function compareTransactions(left: YnabTransaction, right: YnabTransaction, sort: TransactionSort) {
+function compareTransactions(
+  left: YnabTransaction,
+  right: YnabTransaction,
+  sort: TransactionSort,
+) {
   switch (sort) {
     case "date_asc":
-      return left.date.localeCompare(right.date) || left.id.localeCompare(right.id);
+      return (
+        left.date.localeCompare(right.date) || left.id.localeCompare(right.id)
+      );
     case "date_desc":
-      return right.date.localeCompare(left.date) || left.id.localeCompare(right.id);
+      return (
+        right.date.localeCompare(left.date) || left.id.localeCompare(right.id)
+      );
     case "amount_asc":
-      return left.amount - right.amount || right.date.localeCompare(left.date) || left.id.localeCompare(right.id);
+      return (
+        left.amount - right.amount ||
+        right.date.localeCompare(left.date) ||
+        left.id.localeCompare(right.id)
+      );
     case "amount_desc":
-      return right.amount - left.amount || right.date.localeCompare(left.date) || left.id.localeCompare(right.id);
+      return (
+        right.amount - left.amount ||
+        right.date.localeCompare(left.date) ||
+        left.id.localeCompare(right.id)
+      );
   }
 }
 
@@ -125,7 +163,7 @@ function buildTransactionCollectionResult(
   transactions: YnabTransaction[],
   input: ListTransactionsInput,
   totalKey: "transaction_count" | "match_count",
-  extra: Record<string, unknown> = {}
+  extra: Record<string, unknown> = {},
 ) {
   const displayTransactions = transactions.map(toDisplayTransaction);
   const shouldPaginate = shouldPaginateEntries(displayTransactions, input);
@@ -134,15 +172,17 @@ function buildTransactionCollectionResult(
     return {
       transactions: displayTransactions,
       [totalKey]: transactions.length,
-      ...extra
+      ...extra,
     };
   }
 
   if (!shouldPaginate) {
     return {
-      transactions: displayTransactions.map((transaction) => projectRecord(transaction, transactionFields, input)),
+      transactions: displayTransactions.map((transaction) =>
+        projectRecord(transaction, transactionFields, input),
+      ),
       [totalKey]: transactions.length,
-      ...extra
+      ...extra,
     };
   }
 
@@ -150,15 +190,20 @@ function buildTransactionCollectionResult(
 
   return {
     transactions: hasProjectionControls(input)
-      ? pagedTransactions.entries.map((transaction) => projectRecord(transaction, transactionFields, input))
+      ? pagedTransactions.entries.map((transaction) =>
+          projectRecord(transaction, transactionFields, input),
+        )
       : pagedTransactions.entries,
     [totalKey]: transactions.length,
     ...pagedTransactions.metadata,
-    ...extra
+    ...extra,
   };
 }
 
-function matchesTransactionFilters(transaction: YnabTransaction, input: SearchTransactionsInput) {
+function matchesTransactionFilters(
+  transaction: YnabTransaction,
+  input: SearchTransactionsInput,
+) {
   return [
     input.includeTransfers === true || !transaction.transferAccountId,
     !input.toDate || transaction.date <= input.toDate,
@@ -168,13 +213,29 @@ function matchesTransactionFilters(transaction: YnabTransaction, input: SearchTr
     input.approved === undefined || transaction.approved === input.approved,
     !input.cleared || transaction.cleared === input.cleared,
     input.minAmount === undefined || transaction.amount >= input.minAmount,
-    input.maxAmount === undefined || transaction.amount <= input.maxAmount
+    input.maxAmount === undefined || transaction.amount <= input.maxAmount,
   ].every(Boolean);
 }
 
 function buildTransactionSummary(transactions: YnabTransaction[], topN = 5) {
-  const categoryRollups = new Map<string, { id?: string; name: string; amountMilliunits: number; transactionCount: number }>();
-  const payeeRollups = new Map<string, { id?: string; name: string; amountMilliunits: number; transactionCount: number }>();
+  const categoryRollups = new Map<
+    string,
+    {
+      id?: string;
+      name: string;
+      amountMilliunits: number;
+      transactionCount: number;
+    }
+  >();
+  const payeeRollups = new Map<
+    string,
+    {
+      id?: string;
+      name: string;
+      amountMilliunits: number;
+      transactionCount: number;
+    }
+  >();
   let inflowMilliunits = 0;
   let outflowMilliunits = 0;
 
@@ -185,7 +246,8 @@ function buildTransactionSummary(transactions: YnabTransaction[], topN = 5) {
       const amountMilliunits = Math.abs(transaction.amount);
       outflowMilliunits += amountMilliunits;
 
-      const categoryKey = transaction.categoryId ?? transaction.categoryName ?? "uncategorized";
+      const categoryKey =
+        transaction.categoryId ?? transaction.categoryName ?? "uncategorized";
       const existingCategory = categoryRollups.get(categoryKey);
       if (existingCategory) {
         existingCategory.amountMilliunits += amountMilliunits;
@@ -195,11 +257,12 @@ function buildTransactionSummary(transactions: YnabTransaction[], topN = 5) {
           ...(transaction.categoryId ? { id: transaction.categoryId } : {}),
           name: transaction.categoryName ?? "Uncategorized",
           amountMilliunits,
-          transactionCount: 1
+          transactionCount: 1,
         });
       }
 
-      const payeeKey = transaction.payeeId ?? transaction.payeeName ?? "unknown";
+      const payeeKey =
+        transaction.payeeId ?? transaction.payeeName ?? "unknown";
       const existingPayee = payeeRollups.get(payeeKey);
       if (existingPayee) {
         existingPayee.amountMilliunits += amountMilliunits;
@@ -209,50 +272,72 @@ function buildTransactionSummary(transactions: YnabTransaction[], topN = 5) {
           ...(transaction.payeeId ? { id: transaction.payeeId } : {}),
           name: transaction.payeeName ?? "Unknown Payee",
           amountMilliunits,
-          transactionCount: 1
+          transactionCount: 1,
         });
       }
     }
   }
 
   const toTopRollups = (
-    entries: Array<{ id?: string; name: string; amountMilliunits: number; transactionCount: number }>
+    entries: Array<{
+      id?: string;
+      name: string;
+      amountMilliunits: number;
+      transactionCount: number;
+    }>,
   ) =>
     entries
-      .sort((left, right) => right.amountMilliunits - left.amountMilliunits || left.name.localeCompare(right.name))
+      .sort(
+        (left, right) =>
+          right.amountMilliunits - left.amountMilliunits ||
+          left.name.localeCompare(right.name),
+      )
       .slice(0, topN)
       .map((entry) =>
         compactObject({
           id: entry.id,
           name: entry.name,
           amount: formatAmountMilliunits(entry.amountMilliunits),
-          transaction_count: entry.transactionCount
-        })
+          transaction_count: entry.transactionCount,
+        }),
       );
 
   return {
     totals: {
       total_inflow: formatAmountMilliunits(inflowMilliunits),
       total_outflow: formatAmountMilliunits(outflowMilliunits),
-      net: formatAmountMilliunits(inflowMilliunits - outflowMilliunits)
+      net: formatAmountMilliunits(inflowMilliunits - outflowMilliunits),
     },
     top_categories: toTopRollups(Array.from(categoryRollups.values())),
-    top_payees: toTopRollups(Array.from(payeeRollups.values()))
+    top_payees: toTopRollups(Array.from(payeeRollups.values())),
   };
 }
 
-export async function listTransactions(ynabClient: YnabClient, input: ListTransactionsInput) {
+export async function listTransactions(
+  ynabClient: YnabClient,
+  input: ListTransactionsInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const transactions = (await ynabClient.listTransactions(planId, undefined))
     .filter((transaction) => !transaction.deleted)
     .sort((left, right) => compareTransactions(left, right, "date_desc"));
 
-  return buildTransactionCollectionResult(transactions, input, "transaction_count");
+  return buildTransactionCollectionResult(
+    transactions,
+    input,
+    "transaction_count",
+  );
 }
 
-export async function getTransaction(ynabClient: YnabClient, input: GetTransactionInput) {
+export async function getTransaction(
+  ynabClient: YnabClient,
+  input: GetTransactionInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const transaction = await ynabClient.getTransaction(planId, input.transactionId);
+  const transaction = await ynabClient.getTransaction(
+    planId,
+    input.transactionId,
+  );
 
   return {
     transaction: compactObject({
@@ -263,19 +348,27 @@ export async function getTransaction(ynabClient: YnabClient, input: GetTransacti
       category_name: transaction.categoryName,
       account_name: transaction.accountName,
       approved: transaction.approved,
-      cleared: transaction.cleared
-    })
+      cleared: transaction.cleared,
+    }),
   };
 }
 
-export async function searchTransactions(ynabClient: YnabClient, input: SearchTransactionsInput) {
+export async function searchTransactions(
+  ynabClient: YnabClient,
+  input: SearchTransactionsInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const sort = input.sort ?? "date_desc";
-  const transactions = (await ynabClient.listTransactions(planId, input.fromDate))
+  const transactions = (
+    await ynabClient.listTransactions(planId, input.fromDate)
+  )
     .filter((transaction) => !transaction.deleted)
     .filter((transaction) => matchesTransactionFilters(transaction, input))
     .sort((left, right) => compareTransactions(left, right, sort));
-  const includeSummary = input.includeSummary === true || (!hasPaginationControls(input) && shouldPaginateEntries(transactions, input));
+  const includeSummary =
+    input.includeSummary === true ||
+    (!hasPaginationControls(input) &&
+      shouldPaginateEntries(transactions, input));
 
   return buildTransactionCollectionResult(transactions, input, "match_count", {
     ...(includeSummary ? buildTransactionSummary(transactions) : {}),
@@ -287,16 +380,25 @@ export async function searchTransactions(ynabClient: YnabClient, input: SearchTr
       category_id: input.categoryId,
       approved: input.approved,
       cleared: input.cleared,
-      min_amount: input.minAmount == null ? undefined : formatAmountMilliunits(input.minAmount),
-      max_amount: input.maxAmount == null ? undefined : formatAmountMilliunits(input.maxAmount),
+      min_amount:
+        input.minAmount == null
+          ? undefined
+          : formatAmountMilliunits(input.minAmount),
+      max_amount:
+        input.maxAmount == null
+          ? undefined
+          : formatAmountMilliunits(input.maxAmount),
       include_transfers: input.includeTransfers ?? false,
       include_summary: input.includeSummary,
-      sort
-    })
+      sort,
+    }),
   });
 }
 
-export async function getTransactionsByMonth(ynabClient: YnabClient, input: GetTransactionsByMonthInput) {
+export async function getTransactionsByMonth(
+  ynabClient: YnabClient,
+  input: GetTransactionsByMonthInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const monthPrefix = input.month.slice(0, 7);
   const transactions = (await ynabClient.listTransactions(planId, input.month))
@@ -304,43 +406,54 @@ export async function getTransactionsByMonth(ynabClient: YnabClient, input: GetT
     .filter((transaction) => transaction.date.startsWith(monthPrefix))
     .sort((left, right) => compareTransactions(left, right, "date_desc"));
 
-  return buildTransactionCollectionResult(transactions, input, "transaction_count");
+  return buildTransactionCollectionResult(
+    transactions,
+    input,
+    "transaction_count",
+  );
 }
 
 async function getTransactionsBySelector(
   ynabClient: YnabClient,
   input: ListTransactionsInput & { planId?: string },
-  loadTransactions: (planId: string) => Promise<YnabTransaction[]>
+  loadTransactions: (planId: string) => Promise<YnabTransaction[]>,
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const transactions = (await loadTransactions(planId))
     .filter((transaction) => !transaction.deleted)
     .sort((left, right) => compareTransactions(left, right, "date_desc"));
 
-  return buildTransactionCollectionResult(transactions, input, "transaction_count");
-}
-
-export async function getTransactionsByAccount(ynabClient: YnabClient, input: GetTransactionsByAccountInput) {
-  return getTransactionsBySelector(
-    ynabClient,
+  return buildTransactionCollectionResult(
+    transactions,
     input,
-    (planId) => ynabClient.listTransactionsByAccount(planId, input.accountId)
+    "transaction_count",
   );
 }
 
-export async function getTransactionsByCategory(ynabClient: YnabClient, input: GetTransactionsByCategoryInput) {
-  return getTransactionsBySelector(
-    ynabClient,
-    input,
-    (planId) => ynabClient.listTransactionsByCategory(planId, input.categoryId)
+export async function getTransactionsByAccount(
+  ynabClient: YnabClient,
+  input: GetTransactionsByAccountInput,
+) {
+  return getTransactionsBySelector(ynabClient, input, (planId) =>
+    ynabClient.listTransactionsByAccount(planId, input.accountId),
   );
 }
 
-export async function getTransactionsByPayee(ynabClient: YnabClient, input: GetTransactionsByPayeeInput) {
-  return getTransactionsBySelector(
-    ynabClient,
-    input,
-    (planId) => ynabClient.listTransactionsByPayee(planId, input.payeeId)
+export async function getTransactionsByCategory(
+  ynabClient: YnabClient,
+  input: GetTransactionsByCategoryInput,
+) {
+  return getTransactionsBySelector(ynabClient, input, (planId) =>
+    ynabClient.listTransactionsByCategory(planId, input.categoryId),
+  );
+}
+
+export async function getTransactionsByPayee(
+  ynabClient: YnabClient,
+  input: GetTransactionsByPayeeInput,
+) {
+  return getTransactionsBySelector(ynabClient, input, (planId) =>
+    ynabClient.listTransactionsByPayee(planId, input.payeeId),
   );
 }
 
@@ -350,12 +463,17 @@ const scheduledTransactionFields = [
   "amount",
   "payee_name",
   "category_name",
-  "account_name"
+  "account_name",
 ] as const;
 
-export async function listScheduledTransactions(ynabClient: YnabClient, input: ListScheduledTransactionsInput) {
+export async function listScheduledTransactions(
+  ynabClient: YnabClient,
+  input: ListScheduledTransactionsInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const scheduledTransactions = (await ynabClient.listScheduledTransactions(planId))
+  const scheduledTransactions = (
+    await ynabClient.listScheduledTransactions(planId)
+  )
     .filter((transaction) => !transaction.deleted)
     .map((transaction) => ({
       id: transaction.id,
@@ -364,7 +482,7 @@ export async function listScheduledTransactions(ynabClient: YnabClient, input: L
       amount: formatAmountMilliunits(transaction.amount),
       payee_name: transaction.payeeName,
       category_name: transaction.categoryName,
-      account_name: transaction.accountName
+      account_name: transaction.accountName,
     }));
 
   const shouldPaginate = shouldPaginateEntries(scheduledTransactions, input);
@@ -372,16 +490,16 @@ export async function listScheduledTransactions(ynabClient: YnabClient, input: L
   if (!shouldPaginate && !hasProjectionControls(input)) {
     return {
       scheduled_transactions: scheduledTransactions,
-      scheduled_transaction_count: scheduledTransactions.length
+      scheduled_transaction_count: scheduledTransactions.length,
     };
   }
 
   if (!shouldPaginate) {
     return {
       scheduled_transactions: scheduledTransactions.map((transaction) =>
-        projectRecord(transaction, scheduledTransactionFields, input)
+        projectRecord(transaction, scheduledTransactionFields, input),
       ),
-      scheduled_transaction_count: scheduledTransactions.length
+      scheduled_transaction_count: scheduledTransactions.length,
     };
   }
 
@@ -389,16 +507,22 @@ export async function listScheduledTransactions(ynabClient: YnabClient, input: L
 
   return {
     scheduled_transactions: pagedTransactions.entries.map((transaction) =>
-      projectRecord(transaction, scheduledTransactionFields, input)
+      projectRecord(transaction, scheduledTransactionFields, input),
     ),
     scheduled_transaction_count: scheduledTransactions.length,
-    ...pagedTransactions.metadata
+    ...pagedTransactions.metadata,
   };
 }
 
-export async function getScheduledTransaction(ynabClient: YnabClient, input: GetScheduledTransactionInput) {
+export async function getScheduledTransaction(
+  ynabClient: YnabClient,
+  input: GetScheduledTransactionInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const transaction = await ynabClient.getScheduledTransaction(planId, input.scheduledTransactionId);
+  const transaction = await ynabClient.getScheduledTransaction(
+    planId,
+    input.scheduledTransactionId,
+  );
 
   return {
     scheduled_transaction: compactObject({
@@ -408,7 +532,7 @@ export async function getScheduledTransaction(ynabClient: YnabClient, input: Get
       amount: formatAmountMilliunits(transaction.amount),
       payee_name: transaction.payeeName,
       category_name: transaction.categoryName,
-      account_name: transaction.accountName
-    })
+      account_name: transaction.accountName,
+    }),
   };
 }

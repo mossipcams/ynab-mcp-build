@@ -8,19 +8,28 @@ import type { AppEnv } from "../shared/env.js";
 import type { SliceToolDefinition } from "../shared/tool-definition.js";
 import { DISCOVERY_TOOL_NAMES } from "./discovery.js";
 
-function executeToolDefinition(definition: SliceToolDefinition | undefined, input: unknown) {
-  return (definition as SliceToolDefinition<unknown> | undefined)?.execute(input);
+function executeToolDefinition(
+  definition: SliceToolDefinition | undefined,
+  input: unknown,
+) {
+  return (definition as SliceToolDefinition<unknown> | undefined)?.execute(
+    input,
+  );
 }
 
 class FakeStatement {
   constructor(
     private readonly db: FakeD1Database,
     private readonly sql: string,
-    private readonly params: unknown[] = []
+    private readonly params: unknown[] = [],
   ) {}
 
   bind(...params: unknown[]) {
-    return new FakeStatement(this.db, this.sql, params) as unknown as D1PreparedStatement;
+    return new FakeStatement(
+      this.db,
+      this.sql,
+      params,
+    ) as unknown as D1PreparedStatement;
   }
 
   all<T>() {
@@ -30,9 +39,11 @@ class FakeStatement {
       return Promise.resolve({
         results: this.params.slice(1).map((endpoint) => ({
           endpoint,
-          health_status: this.db.endpointHealthStatuses.get(String(endpoint)) ?? this.db.healthStatus,
-          last_successful_sync_at: "2026-04-28T12:00:00.000Z"
-        }))
+          health_status:
+            this.db.endpointHealthStatuses.get(String(endpoint)) ??
+            this.db.healthStatus,
+          last_successful_sync_at: "2026-04-28T12:00:00.000Z",
+        })),
       } as D1Result<T>);
     }
 
@@ -51,9 +62,9 @@ class FakeStatement {
             to_category_id: "category-grocery",
             to_category_name: "Groceries",
             amount_milliunits: 12000,
-            deleted: 0
-          }
-        ]
+            deleted: 0,
+          },
+        ],
       } as D1Result<T>);
     }
 
@@ -70,15 +81,15 @@ class FakeStatement {
             account_name: "Checking",
             flag_color: "blue",
             flag_name: "review",
-            deleted: 0
-          }
-        ]
+            deleted: 0,
+          },
+        ],
       } as D1Result<T>);
     }
 
     if (this.sql.includes("COUNT(*) AS count")) {
       return Promise.resolve({
-        results: [{ count: 1 }]
+        results: [{ count: 1 }],
       } as D1Result<T>);
     }
 
@@ -93,9 +104,9 @@ class FakeStatement {
           payee_name: "Market",
           category_name: "Groceries",
           account_name: "Checking",
-          deleted: 0
-        }
-      ]
+          deleted: 0,
+        },
+      ],
     } as D1Result<T>);
   }
 }
@@ -111,7 +122,10 @@ class FakeD1Database {
   }
 }
 
-function createD1Env(database?: D1Database, defaultPlanId: string | null = "plan-1"): AppEnv {
+function createD1Env(
+  database?: D1Database,
+  defaultPlanId: string | null = "plan-1",
+): AppEnv {
   return {
     mcpServerName: "ynab-mcp-build",
     mcpServerVersion: "0.1.0",
@@ -121,55 +135,70 @@ function createD1Env(database?: D1Database, defaultPlanId: string | null = "plan
     ...(defaultPlanId ? { ynabDefaultPlanId: defaultPlanId } : {}),
     ynabReadSource: "d1",
     ynabStaleAfterMinutes: 360,
-    ynabSyncMaxRowsPerRun: 100
+    ynabSyncMaxRowsPerRun: 100,
   };
 }
 
 describe("DB-backed tool registration", () => {
   it("requires a D1 database binding in D1 mode", () => {
-    expect(() =>
-      getRegisteredToolDefinitions(createD1Env(), {})
-    ).toThrowError("YNAB_DB is required when YNAB_READ_SOURCE=d1.");
+    expect(() => getRegisteredToolDefinitions(createD1Env(), {})).toThrowError(
+      "YNAB_DB is required when YNAB_READ_SOURCE=d1.",
+    );
   });
 
   it("registers existing public tool names in D1 mode without direct YNAB dependencies", async () => {
     const database = new FakeD1Database();
-    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {
-      now: () => Date.parse("2026-04-28T12:01:00.000Z")
-    });
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {
+        now: () => Date.parse("2026-04-28T12:01:00.000Z"),
+      },
+    );
     const names = definitions.map((definition) => definition.name).sort();
 
     expect(names).toEqual([...DISCOVERY_TOOL_NAMES].sort());
 
-    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
-    await expect(executeToolDefinition(searchTransactions, {
-      accountId: "account-1",
-      limit: 5,
-      maxAmount: -10000,
-      minAmount: -15000
-    })).resolves.toMatchObject({
+    const searchTransactions = definitions.find(
+      (definition) => definition.name === "ynab_search_transactions",
+    );
+    await expect(
+      executeToolDefinition(searchTransactions, {
+        accountId: "account-1",
+        limit: 5,
+        maxAmount: -10000,
+        minAmount: -15000,
+      }),
+    ).resolves.toMatchObject({
       status: "ok",
       data: {
-        match_count: 1
-      }
+        match_count: 1,
+      },
     });
     expect(database.allCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          params: expect.arrayContaining(["plan-1"])
-        })
-      ])
+          params: expect.arrayContaining(["plan-1"]),
+        }),
+      ]),
     );
-    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_transactions"))).toBe(true);
+    expect(
+      database.allCalls.some((call) =>
+        call.sql.includes("FROM ynab_transactions"),
+      ),
+    ).toBe(true);
     expect(database.transactionSearchParams).toEqual(
-      expect.arrayContaining(["plan-1", "account-1", -15000, -10000, 5])
+      expect.arrayContaining(["plan-1", "account-1", -15000, -10000, 5]),
     );
 
-    const moneyMovements = definitions.find((definition) => definition.name === "ynab_get_money_movements");
-    await expect(executeToolDefinition(moneyMovements, {})).resolves.toMatchObject({
+    const moneyMovements = definitions.find(
+      (definition) => definition.name === "ynab_get_money_movements",
+    );
+    await expect(
+      executeToolDefinition(moneyMovements, {}),
+    ).resolves.toMatchObject({
       status: "ok",
       data_freshness: {
-        required_endpoints: ["money_movements"]
+        required_endpoints: ["money_movements"],
       },
       data: {
         money_movements: [
@@ -177,20 +206,26 @@ describe("DB-backed tool registration", () => {
             id: "move-1",
             amount: "12.00",
             from_category_name: "Ready to Assign",
-            to_category_name: "Groceries"
-          }
-        ]
-      }
+            to_category_name: "Groceries",
+          },
+        ],
+      },
     });
-    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_money_movements"))).toBe(true);
+    expect(
+      database.allCalls.some((call) =>
+        call.sql.includes("FROM ynab_money_movements"),
+      ),
+    ).toBe(true);
 
     const scheduledTransactions = definitions.find(
-      (definition) => definition.name === "ynab_list_scheduled_transactions"
+      (definition) => definition.name === "ynab_list_scheduled_transactions",
     );
-    await expect(executeToolDefinition(scheduledTransactions, {})).resolves.toMatchObject({
+    await expect(
+      executeToolDefinition(scheduledTransactions, {}),
+    ).resolves.toMatchObject({
       status: "ok",
       data_freshness: {
-        required_endpoints: ["scheduled_transactions"]
+        required_endpoints: ["scheduled_transactions"],
       },
       data: {
         scheduled_transactions: [
@@ -198,12 +233,16 @@ describe("DB-backed tool registration", () => {
             id: "scheduled-1",
             amount: "-45.00",
             payee_name: "Rent",
-            flag_color: "blue"
-          }
-        ]
-      }
+            flag_color: "blue",
+          },
+        ],
+      },
     });
-    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_scheduled_transactions"))).toBe(true);
+    expect(
+      database.allCalls.some((call) =>
+        call.sql.includes("FROM ynab_scheduled_transactions"),
+      ),
+    ).toBe(true);
 
     const unavailableMessages = await Promise.all(
       definitions.map(async (definition) => {
@@ -213,19 +252,24 @@ describe("DB-backed tool registration", () => {
         } catch (error) {
           return error instanceof Error ? error.message : String(error);
         }
-      })
+      }),
     );
 
     expect(unavailableMessages.filter(Boolean)).not.toContainEqual(
-      expect.stringContaining("is not available yet in DB-backed read mode.")
+      expect.stringContaining("is not available yet in DB-backed read mode."),
     );
   });
 
   it("keeps tool registration D1-only without alternate read-source branches", () => {
-    const source = readFileSync(join(process.cwd(), "src", "app", "tool-definitions.ts"), "utf8");
+    const source = readFileSync(
+      join(process.cwd(), "src", "app", "tool-definitions.ts"),
+      "utf8",
+    );
     const database = new FakeD1Database();
-    const names = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {})
-      .map((definition) => definition.name);
+    const names = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    ).map((definition) => definition.name);
 
     expect(names).not.toContain("ynab_admin_populate_d1");
     expect(source).not.toContain("resolveYnabClient");
@@ -234,11 +278,14 @@ describe("DB-backed tool registration", () => {
 
   it("does not register the removed temporary D1 population tool even with old dashboard flags", () => {
     const database = new FakeD1Database();
-    const definitions = getRegisteredToolDefinitions({
-      ...createD1Env(database as unknown as D1Database),
-      ynabAccessToken: "token",
-      ynabTempPopulationToolEnabled: true
-    } as AppEnv & { ynabTempPopulationToolEnabled: boolean }, {});
+    const definitions = getRegisteredToolDefinitions(
+      {
+        ...createD1Env(database as unknown as D1Database),
+        ynabAccessToken: "token",
+        ynabTempPopulationToolEnabled: true,
+      } as AppEnv & { ynabTempPopulationToolEnabled: boolean },
+      {},
+    );
     const names = definitions.map((definition) => definition.name);
 
     expect(names).not.toContain("ynab_admin_populate_d1");
@@ -246,107 +293,181 @@ describe("DB-backed tool registration", () => {
 
   it("uses explicit non-blank input plan ids for read-model freshness checks", async () => {
     const database = new FakeD1Database();
-    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
-    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    );
+    const searchTransactions = definitions.find(
+      (definition) => definition.name === "ynab_search_transactions",
+    );
 
-    await expect(executeToolDefinition(searchTransactions, { limit: 5, planId: "plan-explicit" })).resolves.toHaveProperty("data");
+    await expect(
+      executeToolDefinition(searchTransactions, {
+        limit: 5,
+        planId: "plan-explicit",
+      }),
+    ).resolves.toHaveProperty("data");
 
-    expect(database.allCalls[0]?.params).toEqual(expect.arrayContaining(["plan-explicit"]));
+    expect(database.allCalls[0]?.params).toEqual(
+      expect.arrayContaining(["plan-explicit"]),
+    );
   });
 
   it("falls back to the default plan when input plan ids are blank", async () => {
     const database = new FakeD1Database();
-    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
-    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    );
+    const searchTransactions = definitions.find(
+      (definition) => definition.name === "ynab_search_transactions",
+    );
 
-    await expect(executeToolDefinition(searchTransactions, { limit: 5, planId: "   " })).resolves.toHaveProperty("data");
+    await expect(
+      executeToolDefinition(searchTransactions, { limit: 5, planId: "   " }),
+    ).resolves.toHaveProperty("data");
 
-    expect(database.allCalls[0]?.params).toEqual(expect.arrayContaining(["plan-1"]));
+    expect(database.allCalls[0]?.params).toEqual(
+      expect.arrayContaining(["plan-1"]),
+    );
   });
 
   it("requires plan ids for freshness checks when no default plan is configured", async () => {
     const database = new FakeD1Database();
-    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database, null), {});
-    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database, null),
+      {},
+    );
+    const searchTransactions = definitions.find(
+      (definition) => definition.name === "ynab_search_transactions",
+    );
 
-    await expect(executeToolDefinition(searchTransactions, { limit: 5 })).rejects.toThrowError(
-      "planId is required when YNAB_DEFAULT_PLAN_ID is not configured."
+    await expect(
+      executeToolDefinition(searchTransactions, { limit: 5 }),
+    ).rejects.toThrowError(
+      "planId is required when YNAB_DEFAULT_PLAN_ID is not configured.",
     );
   });
 
   it("short-circuits read-model tools when required sync data is unhealthy", async () => {
     const database = new FakeD1Database();
     database.healthStatus = "unhealthy";
-    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
-    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    );
+    const searchTransactions = definitions.find(
+      (definition) => definition.name === "ynab_search_transactions",
+    );
 
-    await expect(executeToolDefinition(searchTransactions, { limit: 5 })).resolves.toMatchObject({
+    await expect(
+      executeToolDefinition(searchTransactions, { limit: 5 }),
+    ).resolves.toMatchObject({
       status: "unhealthy",
       data_freshness: {
         health_status: "unhealthy",
-        required_endpoints: ["transactions"]
+        required_endpoints: ["transactions"],
       },
       next_action: {
         code: "sync_read_model",
-        message: expect.stringContaining("Run the scheduled YNAB read-model sync")
+        message: expect.stringContaining(
+          "Run the scheduled YNAB read-model sync",
+        ),
       },
-      data: null
+      data: null,
     });
 
-    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_transactions"))).toBe(false);
+    expect(
+      database.allCalls.some((call) =>
+        call.sql.includes("FROM ynab_transactions"),
+      ),
+    ).toBe(false);
   });
 
   it("checks transaction freshness for compound monthly review tools before reading data", async () => {
     const database = new FakeD1Database();
     database.endpointHealthStatuses.set("transactions", "unhealthy");
-    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
-    const monthlyReview = definitions.find((definition) => definition.name === "ynab_get_monthly_review");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    );
+    const monthlyReview = definitions.find(
+      (definition) => definition.name === "ynab_get_monthly_review",
+    );
 
-    await expect(executeToolDefinition(monthlyReview, { month: "2026-04-01" })).resolves.toMatchObject({
+    await expect(
+      executeToolDefinition(monthlyReview, { month: "2026-04-01" }),
+    ).resolves.toMatchObject({
       status: "unhealthy",
       data_freshness: {
         health_status: "unhealthy",
-        required_endpoints: expect.arrayContaining(["categories", "months", "transactions"])
+        required_endpoints: expect.arrayContaining([
+          "categories",
+          "months",
+          "transactions",
+        ]),
       },
-      data: null
+      data: null,
     });
 
-    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_months"))).toBe(false);
-    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_transactions"))).toBe(false);
+    expect(
+      database.allCalls.some((call) => call.sql.includes("FROM ynab_months")),
+    ).toBe(false);
+    expect(
+      database.allCalls.some((call) =>
+        call.sql.includes("FROM ynab_transactions"),
+      ),
+    ).toBe(false);
   });
 
   it("requires all count sources before reading plan details", async () => {
     const database = new FakeD1Database();
     database.endpointHealthStatuses.set("accounts", "unhealthy");
-    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
-    const getPlan = definitions.find((definition) => definition.name === "ynab_get_plan");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    );
+    const getPlan = definitions.find(
+      (definition) => definition.name === "ynab_get_plan",
+    );
 
     await expect(executeToolDefinition(getPlan, {})).resolves.toMatchObject({
       status: "unhealthy",
       data_freshness: {
         health_status: "unhealthy",
-        required_endpoints: ["plans", "accounts", "categories", "payees"]
+        required_endpoints: ["plans", "accounts", "categories", "payees"],
       },
-      data: null
+      data: null,
     });
 
-    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_plans"))).toBe(false);
-    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_accounts"))).toBe(false);
+    expect(
+      database.allCalls.some((call) => call.sql.includes("FROM ynab_plans")),
+    ).toBe(false);
+    expect(
+      database.allCalls.some((call) => call.sql.includes("FROM ynab_accounts")),
+    ).toBe(false);
   });
 
   it("does not require month sync for category detail tools", async () => {
     const database = new FakeD1Database();
     database.endpointHealthStatuses.set("months", "unhealthy");
-    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {
-      now: () => Date.parse("2026-04-28T12:01:00.000Z")
-    });
-    const getCategory = definitions.find((definition) => definition.name === "ynab_get_category");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {
+        now: () => Date.parse("2026-04-28T12:01:00.000Z"),
+      },
+    );
+    const getCategory = definitions.find(
+      (definition) => definition.name === "ynab_get_category",
+    );
 
-    await expect(executeToolDefinition(getCategory, { categoryId: "category-1" })).resolves.toMatchObject({
+    await expect(
+      executeToolDefinition(getCategory, { categoryId: "category-1" }),
+    ).resolves.toMatchObject({
       status: "ok",
       data_freshness: {
-        required_endpoints: ["categories"]
-      }
+        required_endpoints: ["categories"],
+      },
     });
   });
 });

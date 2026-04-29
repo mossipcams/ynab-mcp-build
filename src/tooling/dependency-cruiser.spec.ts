@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
-const dependencyCruiserConfigPath = resolve(repoRoot, ".dependency-cruiser.cjs");
+const dependencyCruiserConfigPath = resolve(
+  repoRoot,
+  ".dependency-cruiser.cjs",
+);
 const packageJsonPath = resolve(repoRoot, "package.json");
 const preflightPath = resolve(repoRoot, "scripts/preflight.mjs");
 const ciWorkflowPath = resolve(repoRoot, ".github/workflows/ci.yml");
@@ -38,7 +41,9 @@ const loadConfig = (): DependencyCruiserConfig =>
   require(dependencyCruiserConfigPath) as DependencyCruiserConfig;
 
 const getRule = (name: string): DependencyCruiserRule => {
-  const rule = loadConfig().forbidden?.find((candidate) => candidate.name === name);
+  const rule = loadConfig().forbidden?.find(
+    (candidate) => candidate.name === name,
+  );
 
   expect(rule, `Missing dependency-cruiser rule: ${name}`).toBeDefined();
 
@@ -55,33 +60,41 @@ describe("dependency-cruiser architecture enforcement", () => {
     expect(existsSync(dependencyCruiserConfigPath)).toBe(true);
     expect(packageJson.devDependencies).toHaveProperty("dependency-cruiser");
     expect(packageJson.scripts?.["check:deps"]).toBe(
-      "depcruise --config .dependency-cruiser.cjs src"
+      "depcruise --config .dependency-cruiser.cjs src",
     );
   });
 
   it("can run dependency-cruiser against the source tree", () => {
-    const result = spawnSync("npm", ["run", "check:deps"], {
+    const result = spawnSync("pnpm", ["check:deps"], {
       cwd: repoRoot,
       encoding: "utf8",
-      shell: false
+      shell: false,
     });
 
     expect(
       `${result.stdout}\n${result.stderr}`.trim(),
-      "dependency-cruiser should complete without architecture violations"
+      "dependency-cruiser should complete without architecture violations",
     ).toContain("no dependency violations found");
     expect(result.status).toBe(0);
   });
 
   it("extracts TypeScript import edges instead of scanning modules only", () => {
     const result = spawnSync(
-      "npx",
-      ["depcruise", "--output-type", "json", "--config", ".dependency-cruiser.cjs", "src/index.ts"],
+      "pnpm",
+      [
+        "exec",
+        "depcruise",
+        "--output-type",
+        "json",
+        "--config",
+        ".dependency-cruiser.cjs",
+        "src/index.ts",
+      ],
       {
         cwd: repoRoot,
         encoding: "utf8",
-        shell: false
-      }
+        shell: false,
+      },
     );
     const cruiseResult = JSON.parse(result.stdout) as {
       summary?: {
@@ -112,7 +125,7 @@ describe("dependency-cruiser architecture enforcement", () => {
 
     expect(rule.from?.path).toBe("^src/slices/");
     expect(rule.to?.path).toBe(
-      "^(src/http/|src/mcp/|src/oauth/|src/durable-objects/|hono$|@modelcontextprotocol/)"
+      "^(src/http/|src/mcp/|src/oauth/|src/durable-objects/|hono$|@modelcontextprotocol/)",
     );
   });
 
@@ -120,7 +133,9 @@ describe("dependency-cruiser architecture enforcement", () => {
     const rule = getRule("oauth-core-stays-runtime-agnostic");
 
     expect(rule.from?.path).toBe("^src/oauth/core/");
-    expect(rule.to?.path).toBe("^(src/http/|src/oauth/http/|src/durable-objects/|src/slices/|hono$)");
+    expect(rule.to?.path).toBe(
+      "^(src/http/|src/oauth/http/|src/durable-objects/|src/slices/|hono$)",
+    );
   });
 
   it("keeps Durable Objects away from routes and slices", () => {
@@ -133,24 +148,34 @@ describe("dependency-cruiser architecture enforcement", () => {
   it("keeps YNAB platform access out of transport and protocol layers", () => {
     const rule = getRule("ynab-platform-not-used-by-transport-or-protocol");
 
-    expect(rule.from?.path).toBe("^(src/http/|src/mcp/|src/oauth/|src/durable-objects/)");
+    expect(rule.from?.path).toBe(
+      "^(src/http/|src/mcp/|src/oauth/|src/durable-objects/)",
+    );
     expect(rule.to?.path).toBe("^src/platform/ynab/");
   });
 
   it("keeps D1 read-model access behind its repository layer", () => {
     const rule = getRule("d1-read-model-owned-by-read-model-layer");
 
-    expect(rule.from?.pathNot).toBe("^(src/app/|src/platform/ynab/read-model/|src/slices/db-)");
+    expect(rule.from?.pathNot).toBe(
+      "^(src/app/|src/platform/ynab/read-model/|src/slices/db-)",
+    );
     expect(rule.to?.path).toBe("^src/platform/ynab/read-model/");
   });
 
   it("wires dependency-cruiser into local and GitHub CI gates", async () => {
-    const preflight = await import(`${preflightPath}?cacheBust=${Date.now()}`) as {
+    const preflight = (await import(
+      `${preflightPath}?cacheBust=${Date.now()}`
+    )) as {
       CI_COMMANDS: string[];
     };
     const ciWorkflow = readFileSync(ciWorkflowPath, "utf8");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
 
-    expect(preflight.CI_COMMANDS).toContain("pnpm run check:deps");
-    expect(ciWorkflow).toContain("pnpm run check:deps");
+    expect(preflight.CI_COMMANDS).toContain("pnpm check:pr");
+    expect(packageJson.scripts?.["check:pr"]).toContain("pnpm check:deps");
+    expect(ciWorkflow).toContain("pnpm check:pr");
   });
 });

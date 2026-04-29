@@ -5,7 +5,7 @@ import type {
   OAuthAuthorizationCode,
   OAuthRefreshToken,
   OAuthRegisteredClient,
-  OAuthStore
+  OAuthStore,
 } from "./store.js";
 
 const DEFAULT_ACCESS_TOKEN_TTL_SEC = 24 * 60 * 60;
@@ -67,7 +67,9 @@ function getOrigin(input: string) {
 }
 
 function isLoopbackHost(hostname: string) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+  return (
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+  );
 }
 
 function validateRegisteredRedirectUri(redirectUri: string) {
@@ -81,10 +83,15 @@ function validateRegisteredRedirectUri(redirectUri: string) {
     return;
   }
 
-  throw new Error("redirect_uris must use https unless they target a loopback host over http.");
+  throw new Error(
+    "redirect_uris must use https unless they target a loopback host over http.",
+  );
 }
 
-function getRedirectUriWithParams(redirectUri: string, params: Record<string, string | undefined>) {
+function getRedirectUriWithParams(
+  redirectUri: string,
+  params: Record<string, string | undefined>,
+) {
   const url = new URL(redirectUri);
 
   for (const [key, value] of Object.entries(params)) {
@@ -96,7 +103,10 @@ function getRedirectUriWithParams(redirectUri: string, params: Record<string, st
   return url.href;
 }
 
-function getRequestedScopes(scope: string | undefined, scopesSupported: string[]) {
+function getRequestedScopes(
+  scope: string | undefined,
+  scopesSupported: string[],
+) {
   const requested = scope
     ? scope.split(/\s+/u).filter(Boolean)
     : [...scopesSupported];
@@ -118,11 +128,14 @@ function toClientResponse(record: OAuthRegisteredClient) {
     grant_types: [...record.grantTypes],
     redirect_uris: [...record.redirectUris],
     response_types: [...record.responseTypes],
-    token_endpoint_auth_method: record.tokenEndpointAuthMethod
+    token_endpoint_auth_method: record.tokenEndpointAuthMethod,
   };
 }
 
-function validateResource(resource: string | undefined, protectedResource: string) {
+function validateResource(
+  resource: string | undefined,
+  protectedResource: string,
+) {
   if (!resource) {
     throw new Error("resource is required.");
   }
@@ -134,13 +147,18 @@ function validateResource(resource: string | undefined, protectedResource: strin
   return resource;
 }
 
-async function createAccessTokenRecord(options: CreateOAuthCoreOptions, input: {
-  clientId: string;
-  resource: string;
-  scopes: string[];
-}): Promise<OAuthAccessToken> {
+async function createAccessTokenRecord(
+  options: CreateOAuthCoreOptions,
+  input: {
+    clientId: string;
+    resource: string;
+    scopes: string[];
+  },
+): Promise<OAuthAccessToken> {
   const issuedAt = Math.floor(options.now() / 1000);
-  const expiresAt = options.now() + (options.accessTokenTtlSec ?? DEFAULT_ACCESS_TOKEN_TTL_SEC) * 1000;
+  const expiresAt =
+    options.now() +
+    (options.accessTokenTtlSec ?? DEFAULT_ACCESS_TOKEN_TTL_SEC) * 1000;
   const jti = options.createId();
   const issuer = getIssuer(options.issuer);
   const token = await signJwt(
@@ -151,9 +169,9 @@ async function createAccessTokenRecord(options: CreateOAuthCoreOptions, input: {
       iss: issuer,
       jti,
       scope: input.scopes.join(" "),
-      sub: input.clientId
+      sub: input.clientId,
     },
-    options.jwtSigningKey
+    options.jwtSigningKey,
   );
 
   return {
@@ -164,24 +182,29 @@ async function createAccessTokenRecord(options: CreateOAuthCoreOptions, input: {
     issuer,
     jti,
     scopes: input.scopes,
-    token
+    token,
   };
 }
 
-function createRefreshTokenRecord(options: CreateOAuthCoreOptions, input: {
-  clientId: string;
-  familyId?: string;
-  resource: string;
-  scopes: string[];
-}): OAuthRefreshToken {
+function createRefreshTokenRecord(
+  options: CreateOAuthCoreOptions,
+  input: {
+    clientId: string;
+    familyId?: string;
+    resource: string;
+    scopes: string[];
+  },
+): OAuthRefreshToken {
   return {
     clientId: input.clientId,
-    expiresAt: options.now() + (options.refreshTokenTtlSec ?? DEFAULT_REFRESH_TOKEN_TTL_SEC) * 1000,
+    expiresAt:
+      options.now() +
+      (options.refreshTokenTtlSec ?? DEFAULT_REFRESH_TOKEN_TTL_SEC) * 1000,
     familyId: input.familyId ?? options.createId(),
     resource: input.resource,
     scopes: input.scopes,
     token: options.createId(),
-    used: false
+    used: false,
   };
 }
 
@@ -193,7 +216,7 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
   const tokenEndpoint = new URL("/token", origin).href;
   const protectedResourceMetadataEndpoint = new URL(
     "/.well-known/oauth-protected-resource/mcp",
-    origin
+    origin,
   ).href;
 
   async function registerClient(input: ClientRegistrationInput) {
@@ -223,7 +246,7 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       redirectUris: [...input.redirectUris],
       responseTypes: [...input.responseTypes],
       scopes: [...options.scopesSupported],
-      tokenEndpointAuthMethod: "none"
+      tokenEndpointAuthMethod: "none",
     };
 
     await options.store.registerClient(record);
@@ -254,17 +277,24 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       throw new Error("redirect_uri is not registered for this client.");
     }
 
-    const resource = validateResource(input.resource, options.protectedResource);
+    const resource = validateResource(
+      input.resource,
+      options.protectedResource,
+    );
     const scopes = getRequestedScopes(input.scope, client.scopes);
     const record: OAuthAuthorizationCode = {
       clientId: client.clientId,
       code: options.createId(),
       codeChallenge: input.codeChallenge,
-      expiresAt: options.now() + (options.authorizationCodeTtlSec ?? DEFAULT_AUTHORIZATION_CODE_TTL_SEC) * 1000,
+      expiresAt:
+        options.now() +
+        (options.authorizationCodeTtlSec ??
+          DEFAULT_AUTHORIZATION_CODE_TTL_SEC) *
+          1000,
       resource,
       redirectUri: input.redirectUri,
       scopes,
-      used: false
+      used: false,
     };
 
     await options.store.issueAuthorizationCode(record);
@@ -273,16 +303,20 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       code: record.code,
       redirectTo: getRedirectUriWithParams(input.redirectUri, {
         code: record.code,
-        state: input.state
-      })
+        state: input.state,
+      }),
     };
   }
 
-  async function exchangeAuthorizationCode(input: AuthorizationCodeExchangeInput) {
+  async function exchangeAuthorizationCode(
+    input: AuthorizationCodeExchangeInput,
+  ) {
     const code = await options.store.getAuthorizationCode(input.code);
 
     if (!code || code.used) {
-      throw new Error("Authorization code is invalid or has already been used.");
+      throw new Error(
+        "Authorization code is invalid or has already been used.",
+      );
     }
 
     if (code.expiresAt <= options.now()) {
@@ -297,7 +331,10 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       throw new Error("redirect_uri does not match the authorization request.");
     }
 
-    const resource = validateResource(input.resource, options.protectedResource);
+    const resource = validateResource(
+      input.resource,
+      options.protectedResource,
+    );
 
     if (code.resource !== resource) {
       throw new Error("resource does not match the authorization request.");
@@ -308,18 +345,20 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
     const usedCode = await options.store.useAuthorizationCode(input.code);
 
     if (!usedCode) {
-      throw new Error("Authorization code is invalid or has already been used.");
+      throw new Error(
+        "Authorization code is invalid or has already been used.",
+      );
     }
 
     const accessToken = await createAccessTokenRecord(options, {
       clientId: code.clientId,
       resource,
-      scopes: code.scopes
+      scopes: code.scopes,
     });
     const refreshToken = createRefreshTokenRecord(options, {
       clientId: code.clientId,
       resource,
-      scopes: code.scopes
+      scopes: code.scopes,
     });
 
     await options.store.issueAccessToken(accessToken);
@@ -330,7 +369,7 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       expires_in: Math.floor((accessToken.expiresAt - options.now()) / 1000),
       refresh_token: refreshToken.token,
       scope: code.scopes.join(" "),
-      token_type: "Bearer" as const
+      token_type: "Bearer" as const,
     };
   }
 
@@ -355,7 +394,10 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       throw new Error("Refresh token does not belong to this client.");
     }
 
-    const resource = validateResource(input.resource ?? refreshToken.resource, options.protectedResource);
+    const resource = validateResource(
+      input.resource ?? refreshToken.resource,
+      options.protectedResource,
+    );
 
     if (refreshToken.resource !== resource) {
       throw new Error("resource does not match the refresh token.");
@@ -364,13 +406,13 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
     const accessToken = await createAccessTokenRecord(options, {
       clientId: refreshToken.clientId,
       resource,
-      scopes: refreshToken.scopes
+      scopes: refreshToken.scopes,
     });
     const nextRefreshToken = createRefreshTokenRecord(options, {
       clientId: refreshToken.clientId,
       familyId: refreshToken.familyId,
       resource,
-      scopes: refreshToken.scopes
+      scopes: refreshToken.scopes,
     });
 
     await options.store.issueAccessToken(accessToken);
@@ -381,7 +423,7 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       expires_in: Math.floor((accessToken.expiresAt - options.now()) / 1000),
       refresh_token: nextRefreshToken.token,
       scope: refreshToken.scopes.join(" "),
-      token_type: "Bearer" as const
+      token_type: "Bearer" as const,
     };
   }
 
@@ -399,7 +441,7 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
     return {
       clientId: payload.sub,
       scopes: payload.scope.split(/\s+/u).filter(Boolean),
-      token
+      token,
     };
   }
 
@@ -413,14 +455,14 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
       response_types_supported: ["code"],
       scopes_supported: [...options.scopesSupported],
       token_endpoint: tokenEndpoint,
-      token_endpoint_auth_methods_supported: ["none"]
+      token_endpoint_auth_methods_supported: ["none"],
     };
   }
 
   function getOpenIdConfiguration() {
     return {
       ...getAuthorizationServerMetadata(),
-      subject_types_supported: ["public"]
+      subject_types_supported: ["public"],
     };
   }
 
@@ -428,7 +470,7 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
     return {
       authorization_servers: [issuer],
       bearer_methods_supported: ["header"],
-      resource: options.protectedResource
+      resource: options.protectedResource,
     };
   }
 
@@ -441,6 +483,6 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
     refreshAccessToken,
     registerClient,
     startAuthorization,
-    verifyAccessToken
+    verifyAccessToken,
   };
 }

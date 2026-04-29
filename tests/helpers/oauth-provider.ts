@@ -44,14 +44,14 @@ export function createMemoryKvNamespace(): KVNamespace {
     },
     async list(options?: { prefix?: string }) {
       const keys = [...records.keys()].filter((name) =>
-        options?.prefix ? name.startsWith(options.prefix) : true
+        options?.prefix ? name.startsWith(options.prefix) : true,
       );
 
       return {
         keys: keys.map((name) => ({ name })),
-        list_complete: true
+        list_complete: true,
       };
-    }
+    },
   } as unknown as KVNamespace;
 }
 
@@ -65,7 +65,7 @@ export function createOAuthEnv(overrides: Partial<Env> = {}): Env {
     YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     YNAB_DB: {} as D1Database,
     YNAB_READ_SOURCE: "d1",
-    ...overrides
+    ...overrides,
   } as unknown as Env;
 }
 
@@ -76,7 +76,7 @@ export function createExecutionContext() {
 export async function fetchWorker(
   request: Request,
   env: Env,
-  executionContext = createExecutionContext()
+  executionContext = createExecutionContext(),
 ) {
   return worker.fetch(request, env, executionContext);
 }
@@ -85,28 +85,28 @@ export function createRegisterRequest(redirectUris = [REDIRECT_URI]) {
   return new Request(`${MCP_ORIGIN}/register`, {
     method: "POST",
     headers: {
-      "content-type": "application/json"
+      "content-type": "application/json",
     },
     body: JSON.stringify({
       client_name: "Claude",
       grant_types: ["authorization_code", "refresh_token"],
       redirect_uris: redirectUris,
       response_types: ["code"],
-      token_endpoint_auth_method: "none"
-    })
+      token_endpoint_auth_method: "none",
+    }),
   });
 }
 
 export async function registerClient(env: Env, redirectUris = [REDIRECT_URI]) {
   const response = await fetchWorker(createRegisterRequest(redirectUris), env);
-  const registration = await response.clone().json() as RegisteredClient;
+  const registration = (await response.clone().json()) as RegisteredClient;
 
   return { registration, response };
 }
 
 export function createAuthorizeUrl(
   clientId: string,
-  overrides: Record<string, string | undefined> = {}
+  overrides: Record<string, string | undefined> = {},
 ) {
   const params = new URLSearchParams({
     client_id: clientId,
@@ -115,7 +115,7 @@ export function createAuthorizeUrl(
     redirect_uri: REDIRECT_URI,
     response_type: "code",
     scope: "mcp",
-    state: "client-state-1"
+    state: "client-state-1",
   });
 
   for (const [key, value] of Object.entries(overrides)) {
@@ -132,7 +132,7 @@ export function createAuthorizeUrl(
 export async function requestAuthorization(
   env: Env,
   clientId: string,
-  overrides: Record<string, string | undefined> = {}
+  overrides: Record<string, string | undefined> = {},
 ) {
   return fetchWorker(new Request(createAuthorizeUrl(clientId, overrides)), env);
 }
@@ -140,7 +140,7 @@ export async function requestAuthorization(
 export async function authorizeClient(
   env: Env,
   clientId: string,
-  overrides: Record<string, string | undefined> = {}
+  overrides: Record<string, string | undefined> = {},
 ) {
   const response = await requestAuthorization(env, clientId, overrides);
   const location = response.headers.get("location");
@@ -153,9 +153,9 @@ export function createTokenRequest(params: Record<string, string>) {
   return new Request(`${MCP_ORIGIN}/token`, {
     method: "POST",
     headers: {
-      "content-type": "application/x-www-form-urlencoded"
+      "content-type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams(params).toString()
+    body: new URLSearchParams(params).toString(),
   });
 }
 
@@ -163,7 +163,7 @@ export async function exchangeCode(
   env: Env,
   clientId: string,
   code: string,
-  overrides: Record<string, string> = {}
+  overrides: Record<string, string> = {},
 ) {
   const response = await fetchWorker(
     createTokenRequest({
@@ -172,14 +172,14 @@ export async function exchangeCode(
       code_verifier: CODE_VERIFIER,
       grant_type: "authorization_code",
       redirect_uri: REDIRECT_URI,
-      ...overrides
+      ...overrides,
     }),
-    env
+    env,
   );
 
   return {
-    payload: await response.clone().json() as TokenResponse,
-    response
+    payload: (await response.clone().json()) as TokenResponse,
+    response,
   };
 }
 
@@ -187,30 +187,35 @@ export async function exchangeRefreshToken(
   env: Env,
   clientId: string,
   refreshToken: string,
-  overrides: Record<string, string> = {}
+  overrides: Record<string, string> = {},
 ) {
   const response = await fetchWorker(
     createTokenRequest({
       client_id: clientId,
       grant_type: "refresh_token",
       refresh_token: refreshToken,
-      ...overrides
+      ...overrides,
     }),
-    env
+    env,
   );
 
   return {
-    payload: await response.clone().json() as TokenResponse,
-    response
+    payload: (await response.clone().json()) as TokenResponse,
+    response,
   };
 }
 
 export async function issueToken(env: Env) {
   const { registration } = await registerClient(env);
-  const { code, response: authorizeResponse } = await authorizeClient(env, registration.client_id);
+  const { code, response: authorizeResponse } = await authorizeClient(
+    env,
+    registration.client_id,
+  );
 
   if (!code) {
-    throw new Error(`Authorize did not return a code: ${authorizeResponse.status}`);
+    throw new Error(
+      `Authorize did not return a code: ${authorizeResponse.status}`,
+    );
   }
 
   const token = await exchangeCode(env, registration.client_id, code);
@@ -219,6 +224,6 @@ export async function issueToken(env: Env) {
     accessToken: token.payload.access_token,
     registration,
     tokenPayload: token.payload,
-    tokenResponse: token.response
+    tokenResponse: token.response,
   };
 }

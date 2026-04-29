@@ -7,17 +7,19 @@ import {
   getDbMoneyMovementGroups,
   getDbMoneyMovementGroupsByMonth,
   getDbMoneyMovements,
-  getDbMoneyMovementsByMonth
+  getDbMoneyMovementsByMonth,
 } from "./service.js";
 
 const repository = {
   listMoneyMovementGroups: vi.fn(),
-  listMoneyMovements: vi.fn()
+  listMoneyMovements: vi.fn(),
 };
 
 describe("DB-backed money movement service", () => {
   it("is the only money movement slice because public movement tools are category read-model tools", () => {
-    expect(existsSync(join(process.cwd(), "src", "slices", "money-movements"))).toBe(false);
+    expect(
+      existsSync(join(process.cwd(), "src", "slices", "money-movements")),
+    ).toBe(false);
   });
 
   it("lists category money movements from the read model with pagination", async () => {
@@ -34,7 +36,7 @@ describe("DB-backed money movement service", () => {
         to_category_id: "cat-dining",
         to_category_name: "Dining Out",
         amount_milliunits: 12500,
-        deleted: 0
+        deleted: 0,
       },
       {
         id: "move-2",
@@ -48,21 +50,21 @@ describe("DB-backed money movement service", () => {
         to_category_id: "cat-groceries",
         to_category_name: "Groceries",
         amount_milliunits: 5000,
-        deleted: 0
-      }
+        deleted: 0,
+      },
     ]);
 
     await expect(
       getDbMoneyMovements(
         {
           defaultPlanId: "plan-1",
-          moneyMovementsRepository: repository
+          moneyMovementsRepository: repository,
         },
         {
           limit: 1,
-          offset: 1
-        }
-      )
+          offset: 1,
+        },
+      ),
     ).resolves.toEqual({
       money_movements: [
         {
@@ -75,17 +77,17 @@ describe("DB-backed money movement service", () => {
           from_category_name: "Fun Money",
           to_category_id: "cat-groceries",
           to_category_name: "Groceries",
-          money_movement_group_id: "group-2"
-        }
+          money_movement_group_id: "group-2",
+        },
       ],
       movement_count: 2,
       limit: 1,
       offset: 1,
       returned_count: 1,
-      has_more: false
+      has_more: false,
     });
     expect(repository.listMoneyMovements).toHaveBeenCalledWith({
-      planId: "plan-1"
+      planId: "plan-1",
     });
   });
 
@@ -96,20 +98,20 @@ describe("DB-backed money movement service", () => {
       getDbMoneyMovementsByMonth(
         {
           defaultPlanId: "plan-1",
-          moneyMovementsRepository: repository
+          moneyMovementsRepository: repository,
         },
         {
-          month: "2026-04-01"
-        }
-      )
+          month: "2026-04-01",
+        },
+      ),
     ).resolves.toEqual({
       money_movements: [],
       movement_count: 0,
-      month: "2026-04-01"
+      month: "2026-04-01",
     });
     expect(repository.listMoneyMovements).toHaveBeenCalledWith({
       month: "2026-04-01",
-      planId: "plan-1"
+      planId: "plan-1",
     });
   });
 
@@ -119,15 +121,15 @@ describe("DB-backed money movement service", () => {
     await getDbMoneyMovements(
       {
         defaultPlanId: "plan-1",
-        moneyMovementsRepository: repository
+        moneyMovementsRepository: repository,
       },
       {
-        planId: "   "
-      }
+        planId: "   ",
+      },
     );
 
     expect(repository.listMoneyMovements).toHaveBeenLastCalledWith({
-      planId: "plan-1"
+      planId: "plan-1",
     });
   });
 
@@ -141,18 +143,18 @@ describe("DB-backed money movement service", () => {
         performed_by_user_id: "user-1",
         movement_count: 2,
         total_amount_milliunits: 17500,
-        deleted: 0
-      }
+        deleted: 0,
+      },
     ]);
 
     await expect(
       getDbMoneyMovementGroups(
         {
           defaultPlanId: "plan-1",
-          moneyMovementsRepository: repository
+          moneyMovementsRepository: repository,
         },
-        {}
-      )
+        {},
+      ),
     ).resolves.toEqual({
       money_movement_groups: [
         {
@@ -163,10 +165,10 @@ describe("DB-backed money movement service", () => {
           performed_by_user_id: "user-1",
           movement_count: 2,
           total_amount: "17.50",
-          total_amount_milliunits: 17500
-        }
+          total_amount_milliunits: 17500,
+        },
       ],
-      group_count: 1
+      group_count: 1,
     });
   });
 
@@ -177,20 +179,20 @@ describe("DB-backed money movement service", () => {
       getDbMoneyMovementGroupsByMonth(
         {
           defaultPlanId: "plan-1",
-          moneyMovementsRepository: repository
+          moneyMovementsRepository: repository,
         },
         {
-          month: "2026-04-01"
-        }
-      )
+          month: "2026-04-01",
+        },
+      ),
     ).resolves.toEqual({
       money_movement_groups: [],
       group_count: 0,
-      month: "2026-04-01"
+      month: "2026-04-01",
     });
     expect(repository.listMoneyMovementGroups).toHaveBeenCalledWith({
       month: "2026-04-01",
-      planId: "plan-1"
+      planId: "plan-1",
     });
   });
 });

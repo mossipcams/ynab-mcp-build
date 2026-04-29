@@ -12,7 +12,7 @@ describe("defineTool", () => {
       description: "Example tool",
       inputSchema: {
         accountId: z.string().min(1),
-        includeClosed: z.boolean().optional()
+        includeClosed: z.boolean().optional(),
       },
       execute(input) {
         const accountId: string = input.accountId;
@@ -20,14 +20,16 @@ describe("defineTool", () => {
 
         return {
           accountId,
-          includeClosed
+          includeClosed,
         };
-      }
+      },
     });
 
     expect(tool.name).toBe("ynab_get_example");
-    expect(z.object(tool.inputSchema).parse({ accountId: "account-1" })).toEqual({
-      accountId: "account-1"
+    expect(
+      z.object(tool.inputSchema).parse({ accountId: "account-1" }),
+    ).toEqual({
+      accountId: "account-1",
     });
   });
 
@@ -41,7 +43,7 @@ describe("defineTool", () => {
         expect(input).toEqual({});
 
         return {};
-      }
+      },
     });
 
     expect(z.object(tool.inputSchema).parse({ extra: true })).toEqual({});

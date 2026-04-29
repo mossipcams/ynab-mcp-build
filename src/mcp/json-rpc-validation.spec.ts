@@ -13,8 +13,8 @@ describe("validateToolCallRequest", () => {
         method: "tools/call",
         params: {
           name: "ynab_get_account",
-          arguments: {}
-        }
+          arguments: {},
+        },
       },
       [
         {
@@ -22,11 +22,11 @@ describe("validateToolCallRequest", () => {
           title: "Get Account",
           description: "Gets an account",
           inputSchema: {
-            accountId: z.string().min(1)
+            accountId: z.string().min(1),
           },
-          execute: () => ({})
-        }
-      ]
+          execute: () => ({}),
+        },
+      ],
     );
 
     expect(result.kind).toBe("invalid");
@@ -38,10 +38,11 @@ describe("validateToolCallRequest", () => {
     await expect(result.response.json()).resolves.toMatchObject({
       error: {
         code: -32602,
-        message: "Invalid arguments for tool ynab_get_account: accountId: Invalid input: expected string, received undefined"
+        message:
+          "Invalid arguments for tool ynab_get_account: accountId: Invalid input: expected string, received undefined",
       },
       id: "request-1",
-      jsonrpc: "2.0"
+      jsonrpc: "2.0",
     });
   });
 });

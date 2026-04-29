@@ -4,7 +4,7 @@ import {
   hasProjectionControls,
   paginateEntries,
   projectRecord,
-  shouldPaginateEntries
+  shouldPaginateEntries,
 } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 
@@ -14,7 +14,7 @@ const scheduledTransactionFields = [
   "amount",
   "payee_name",
   "category_name",
-  "account_name"
+  "account_name",
 ] as const;
 
 export type ListDbScheduledTransactionsInput = {
@@ -37,7 +37,9 @@ type DbScheduledTransactionDependencies = {
       planId: string;
       scheduledTransactionId: string;
     }): Promise<ScheduledTransactionRow | null>;
-    listScheduledTransactions(input: { planId: string }): Promise<ScheduledTransactionRow[]>;
+    listScheduledTransactions(input: {
+      planId: string;
+    }): Promise<ScheduledTransactionRow[]>;
   };
 };
 
@@ -51,7 +53,9 @@ function resolvePlanId(input: { planId?: string }, defaultPlanId?: string) {
   const planId = defaultPlanId?.trim();
 
   if (!planId) {
-    throw new Error("planId is required when YNAB_DEFAULT_PLAN_ID is not configured.");
+    throw new Error(
+      "planId is required when YNAB_DEFAULT_PLAN_ID is not configured.",
+    );
   }
 
   return planId;
@@ -73,33 +77,37 @@ function toDisplayScheduledTransaction(row: ScheduledTransactionRow) {
     payee_name: row.payee_name,
     category_id: row.category_id,
     category_name: row.category_name,
-    transfer_account_id: row.transfer_account_id
+    transfer_account_id: row.transfer_account_id,
   });
 }
 
 export async function listDbScheduledTransactions(
   dependencies: DbScheduledTransactionDependencies,
-  input: ListDbScheduledTransactionsInput
+  input: ListDbScheduledTransactionsInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const scheduledTransactions = (await dependencies.scheduledTransactionsRepository.listScheduledTransactions({
-    planId
-  })).map(toDisplayScheduledTransaction);
+  const scheduledTransactions = (
+    await dependencies.scheduledTransactionsRepository.listScheduledTransactions(
+      {
+        planId,
+      },
+    )
+  ).map(toDisplayScheduledTransaction);
   const shouldPaginate = shouldPaginateEntries(scheduledTransactions, input);
 
   if (!shouldPaginate && !hasProjectionControls(input)) {
     return {
       scheduled_transactions: scheduledTransactions,
-      scheduled_transaction_count: scheduledTransactions.length
+      scheduled_transaction_count: scheduledTransactions.length,
     };
   }
 
   if (!shouldPaginate) {
     return {
       scheduled_transactions: scheduledTransactions.map((transaction) =>
-        projectRecord(transaction, scheduledTransactionFields, input)
+        projectRecord(transaction, scheduledTransactionFields, input),
       ),
-      scheduled_transaction_count: scheduledTransactions.length
+      scheduled_transaction_count: scheduledTransactions.length,
     };
   }
 
@@ -109,28 +117,31 @@ export async function listDbScheduledTransactions(
     scheduled_transactions: pagedTransactions.entries.map((transaction) =>
       hasProjectionControls(input)
         ? projectRecord(transaction, scheduledTransactionFields, input)
-        : transaction
+        : transaction,
     ),
     scheduled_transaction_count: scheduledTransactions.length,
-    ...pagedTransactions.metadata
+    ...pagedTransactions.metadata,
   };
 }
 
 export async function getDbScheduledTransaction(
   dependencies: DbScheduledTransactionDependencies,
-  input: GetDbScheduledTransactionInput
+  input: GetDbScheduledTransactionInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const scheduledTransaction = await dependencies.scheduledTransactionsRepository.getScheduledTransaction({
-    planId,
-    scheduledTransactionId: input.scheduledTransactionId
-  });
+  const scheduledTransaction =
+    await dependencies.scheduledTransactionsRepository.getScheduledTransaction({
+      planId,
+      scheduledTransactionId: input.scheduledTransactionId,
+    });
 
   if (!scheduledTransaction) {
-    throw new Error(`YNAB scheduled transaction ${input.scheduledTransactionId} was not found in the read model.`);
+    throw new Error(
+      `YNAB scheduled transaction ${input.scheduledTransactionId} was not found in the read model.`,
+    );
   }
 
   return {
-    scheduled_transaction: toDisplayScheduledTransaction(scheduledTransaction)
+    scheduled_transaction: toDisplayScheduledTransaction(scheduledTransaction),
   };
 }

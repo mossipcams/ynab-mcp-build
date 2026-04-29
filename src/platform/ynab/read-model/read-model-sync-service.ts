@@ -10,9 +10,13 @@ import type {
   YnabPlanMonthDetail,
   YnabPlanSettings,
   YnabUser,
-  YnabScheduledTransaction
+  YnabScheduledTransaction,
 } from "../client.js";
-import type { YnabDeltaClient, YnabDeltaResponse, YnabDeltaTransactionRecord } from "../delta-client.js";
+import type {
+  YnabDeltaClient,
+  YnabDeltaResponse,
+  YnabDeltaTransactionRecord,
+} from "../delta-client.js";
 
 type SyncStateRepository = {
   acquireLease(input: {
@@ -35,10 +39,7 @@ type SyncStateRepository = {
     rowsUpserted: number;
     rowsDeleted: number;
     now: string;
-  }): Promise<
-    | { advanced: true }
-    | { advanced: false; reason: "contention" }
-  >;
+  }): Promise<{ advanced: true } | { advanced: false; reason: "contention" }>;
   recordFailure(input: {
     planId: string;
     endpoint: string;
@@ -165,7 +166,10 @@ type EndpointResult = {
 
 type EndpointConfig<TRecord> = {
   endpoint: string;
-  fetchDelta(planId: string, serverKnowledge: number | undefined): Promise<YnabDeltaResponse<TRecord>>;
+  fetchDelta(
+    planId: string,
+    serverKnowledge: number | undefined,
+  ): Promise<YnabDeltaResponse<TRecord>>;
   write(input: {
     planId: string;
     records: TRecord[];
@@ -187,23 +191,25 @@ function toErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Read-model sync failed.";
 }
 
-export function createReadModelSyncService(options: ReadModelSyncServiceOptions) {
+export function createReadModelSyncService(
+  options: ReadModelSyncServiceOptions,
+) {
   const leaseSeconds = options.leaseSeconds ?? 60;
   const endpointConfigs: Array<EndpointConfig<unknown>> = [
     ...(options.metadataClient
       ? [
           {
             endpoint: "users",
-            async fetchDelta(_planId: string, serverKnowledge: number | undefined) {
+            async fetchDelta(
+              _planId: string,
+              serverKnowledge: number | undefined,
+            ) {
               return {
                 records: [await options.metadataClient!.getUser()],
-                serverKnowledge: serverKnowledge ?? 0
+                serverKnowledge: serverKnowledge ?? 0,
               };
             },
-            async write(input: {
-              records: unknown[];
-              syncedAt: string;
-            }) {
+            async write(input: { records: unknown[]; syncedAt: string }) {
               const [user] = input.records as YnabUser[];
 
               if (!user) {
@@ -211,62 +217,78 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
               }
 
               if (!options.readModelRepository.upsertUser) {
-                throw new Error("Read-model metadata repository is missing upsertUser.");
+                throw new Error(
+                  "Read-model metadata repository is missing upsertUser.",
+                );
               }
 
               return options.readModelRepository.upsertUser({
                 syncedAt: input.syncedAt,
-                user
+                user,
               });
-            }
+            },
           } satisfies EndpointConfig<unknown>,
           {
             endpoint: "plans",
-            async fetchDelta(planId: string, serverKnowledge: number | undefined) {
+            async fetchDelta(
+              planId: string,
+              serverKnowledge: number | undefined,
+            ) {
               const [planList, plan] = await Promise.all([
                 options.metadataClient!.listPlans(),
-                options.metadataClient!.getPlan(planId)
+                options.metadataClient!.getPlan(planId),
               ]);
 
               return {
                 records: [{ plan, plans: planList.plans }],
-                serverKnowledge: serverKnowledge ?? 0
+                serverKnowledge: serverKnowledge ?? 0,
               };
             },
-            async write(input: {
-              records: unknown[];
-              syncedAt: string;
-            }) {
+            async write(input: { records: unknown[]; syncedAt: string }) {
               const [record] = input.records as PlansMetadataRecord[];
 
               if (!record) {
                 return { rowsUpserted: 0 };
               }
 
-              if (!options.readModelRepository.upsertPlans || !options.readModelRepository.upsertPlanDetail) {
-                throw new Error("Read-model metadata repository is missing plan upsert methods.");
+              if (
+                !options.readModelRepository.upsertPlans ||
+                !options.readModelRepository.upsertPlanDetail
+              ) {
+                throw new Error(
+                  "Read-model metadata repository is missing plan upsert methods.",
+                );
               }
 
-              const plansResult = await options.readModelRepository.upsertPlans({
-                plans: record.plans,
-                syncedAt: input.syncedAt
-              });
-              const planResult = await options.readModelRepository.upsertPlanDetail({
-                plan: record.plan,
-                syncedAt: input.syncedAt
-              });
+              const plansResult = await options.readModelRepository.upsertPlans(
+                {
+                  plans: record.plans,
+                  syncedAt: input.syncedAt,
+                },
+              );
+              const planResult =
+                await options.readModelRepository.upsertPlanDetail({
+                  plan: record.plan,
+                  syncedAt: input.syncedAt,
+                });
 
               return {
-                rowsUpserted: plansResult.rowsUpserted + planResult.rowsUpserted
+                rowsUpserted:
+                  plansResult.rowsUpserted + planResult.rowsUpserted,
               };
-            }
+            },
           } satisfies EndpointConfig<unknown>,
           {
             endpoint: "plan_settings",
-            async fetchDelta(planId: string, serverKnowledge: number | undefined) {
+            async fetchDelta(
+              planId: string,
+              serverKnowledge: number | undefined,
+            ) {
               return {
-                records: [await options.metadataClient!.getPlanSettings(planId)],
-                serverKnowledge: serverKnowledge ?? 0
+                records: [
+                  await options.metadataClient!.getPlanSettings(planId),
+                ],
+                serverKnowledge: serverKnowledge ?? 0,
               };
             },
             async write(input: {
@@ -281,16 +303,18 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
               }
 
               if (!options.readModelRepository.upsertPlanSettings) {
-                throw new Error("Read-model metadata repository is missing upsertPlanSettings.");
+                throw new Error(
+                  "Read-model metadata repository is missing upsertPlanSettings.",
+                );
               }
 
               return options.readModelRepository.upsertPlanSettings({
                 planId: input.planId,
                 settings,
-                syncedAt: input.syncedAt
+                syncedAt: input.syncedAt,
               });
-            }
-          } satisfies EndpointConfig<unknown>
+            },
+          } satisfies EndpointConfig<unknown>,
         ]
       : []),
     {
@@ -301,9 +325,9 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
         return options.readModelRepository.upsertAccounts({
           accounts: input.records as YnabAccountSummary[],
           planId: input.planId,
-          syncedAt: input.syncedAt
+          syncedAt: input.syncedAt,
         });
-      }
+      },
     },
     {
       endpoint: "categories",
@@ -314,13 +338,14 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
         const result = await options.readModelRepository.upsertCategoryGroups({
           categoryGroups,
           planId: input.planId,
-          syncedAt: input.syncedAt
+          syncedAt: input.syncedAt,
         });
 
         return {
-          rowsUpserted: result.categoryGroupsUpserted + result.categoriesUpserted
+          rowsUpserted:
+            result.categoryGroupsUpserted + result.categoriesUpserted,
         };
-      }
+      },
     },
     {
       endpoint: "months",
@@ -330,13 +355,13 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
         const result = await options.readModelRepository.upsertMonths({
           months: input.records as YnabPlanMonthDetail[],
           planId: input.planId,
-          syncedAt: input.syncedAt
+          syncedAt: input.syncedAt,
         });
 
         return {
-          rowsUpserted: result.monthsUpserted + result.monthCategoriesUpserted
+          rowsUpserted: result.monthsUpserted + result.monthCategoriesUpserted,
         };
-      }
+      },
     },
     ...(options.moneyMovementClient
       ? [
@@ -345,17 +370,20 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
             async fetchDelta(planId: string) {
               const [movements, groups] = await Promise.all([
                 options.moneyMovementClient!.listMoneyMovements(planId),
-                options.moneyMovementClient!.listMoneyMovementGroups(planId)
+                options.moneyMovementClient!.listMoneyMovementGroups(planId),
               ]);
 
               return {
                 records: [
                   {
                     moneyMovementGroups: groups.moneyMovementGroups,
-                    moneyMovements: movements.moneyMovements
-                  }
+                    moneyMovements: movements.moneyMovements,
+                  },
                 ],
-                serverKnowledge: Math.max(movements.serverKnowledge, groups.serverKnowledge)
+                serverKnowledge: Math.max(
+                  movements.serverKnowledge,
+                  groups.serverKnowledge,
+                ),
               };
             },
             async write(input: {
@@ -369,22 +397,26 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
                 return { rowsUpserted: 0 };
               }
 
-              const movementGroupsResult = await options.readModelRepository.upsertMoneyMovementGroups({
-                moneyMovementGroups: record.moneyMovementGroups,
-                planId: input.planId,
-                syncedAt: input.syncedAt
-              });
-              const movementsResult = await options.readModelRepository.upsertMoneyMovements({
-                moneyMovements: record.moneyMovements,
-                planId: input.planId,
-                syncedAt: input.syncedAt
-              });
+              const movementGroupsResult =
+                await options.readModelRepository.upsertMoneyMovementGroups({
+                  moneyMovementGroups: record.moneyMovementGroups,
+                  planId: input.planId,
+                  syncedAt: input.syncedAt,
+                });
+              const movementsResult =
+                await options.readModelRepository.upsertMoneyMovements({
+                  moneyMovements: record.moneyMovements,
+                  planId: input.planId,
+                  syncedAt: input.syncedAt,
+                });
 
               return {
-                rowsUpserted: movementGroupsResult.rowsUpserted + movementsResult.rowsUpserted
+                rowsUpserted:
+                  movementGroupsResult.rowsUpserted +
+                  movementsResult.rowsUpserted,
               };
-            }
-          } satisfies EndpointConfig<unknown>
+            },
+          } satisfies EndpointConfig<unknown>,
         ]
       : []),
     {
@@ -395,9 +427,9 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
         return options.readModelRepository.upsertPayees({
           payees: input.records as YnabPayee[],
           planId: input.planId,
-          syncedAt: input.syncedAt
+          syncedAt: input.syncedAt,
         });
-      }
+      },
     },
     {
       endpoint: "payee_locations",
@@ -407,21 +439,24 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
         return options.readModelRepository.upsertPayeeLocations({
           locations: input.records as YnabPayeeLocation[],
           planId: input.planId,
-          syncedAt: input.syncedAt
+          syncedAt: input.syncedAt,
         });
-      }
+      },
     },
     {
       endpoint: "scheduled_transactions",
       fetchDelta: (planId, serverKnowledge) =>
-        options.deltaClient.listScheduledTransactionsDelta(planId, serverKnowledge),
+        options.deltaClient.listScheduledTransactionsDelta(
+          planId,
+          serverKnowledge,
+        ),
       async write(input) {
         return options.readModelRepository.upsertScheduledTransactions({
           planId: input.planId,
           scheduledTransactions: input.records as YnabScheduledTransaction[],
-          syncedAt: input.syncedAt
+          syncedAt: input.syncedAt,
         });
-      }
+      },
     },
     {
       endpoint: "transactions",
@@ -431,37 +466,47 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
         return options.transactionsRepository.upsertTransactions({
           planId: input.planId,
           syncedAt: input.syncedAt,
-          transactions: input.records as YnabDeltaTransactionRecord[]
+          transactions: input.records as YnabDeltaTransactionRecord[],
         });
-      }
-    }
+      },
+    },
   ];
 
-  async function syncEndpoint(input: SyncReadModelInput, config: EndpointConfig<unknown>): Promise<EndpointResult> {
+  async function syncEndpoint(
+    input: SyncReadModelInput,
+    config: EndpointConfig<unknown>,
+  ): Promise<EndpointResult> {
     const lease = await options.syncStateRepository.acquireLease({
       endpoint: config.endpoint,
       leaseOwner: input.leaseOwner,
       leaseSeconds,
       now: input.now,
-      planId: input.planId
+      planId: input.planId,
     });
 
     if (!lease.acquired) {
       return {
         endpoint: config.endpoint,
         reason: lease.reason,
-        status: "skipped"
+        status: "skipped",
       };
     }
 
-    const previousServerKnowledge = await options.syncStateRepository.getServerKnowledge(input.planId, config.endpoint);
+    const previousServerKnowledge =
+      await options.syncStateRepository.getServerKnowledge(
+        input.planId,
+        config.endpoint,
+      );
 
     try {
-      const delta = await config.fetchDelta(input.planId, previousServerKnowledge ?? undefined);
+      const delta = await config.fetchDelta(
+        input.planId,
+        previousServerKnowledge ?? undefined,
+      );
       const writeResult = await config.write({
         planId: input.planId,
         records: delta.records,
-        syncedAt: input.now
+        syncedAt: input.now,
       });
       const rowsDeleted = writeResult.rowsDeleted ?? 0;
       const cursorResult = await options.syncStateRepository.advanceCursor({
@@ -472,14 +517,14 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
         previousServerKnowledge,
         rowsDeleted,
         rowsUpserted: writeResult.rowsUpserted,
-        serverKnowledge: delta.serverKnowledge
+        serverKnowledge: delta.serverKnowledge,
       });
 
       if (!cursorResult.advanced) {
         return {
           endpoint: config.endpoint,
           reason: cursorResult.reason,
-          status: "failed"
+          status: "failed",
         };
       }
 
@@ -488,7 +533,7 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
         rowsDeleted,
         rowsUpserted: writeResult.rowsUpserted,
         serverKnowledge: delta.serverKnowledge,
-        status: "ok"
+        status: "ok",
       };
     } catch (error) {
       const message = toErrorMessage(error);
@@ -499,7 +544,7 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
           error: message,
           leaseOwner: input.leaseOwner,
           now: input.now,
-          planId: input.planId
+          planId: input.planId,
         });
       } catch {
         // Preserve the primary endpoint failure result even when failure bookkeeping is unavailable.
@@ -508,7 +553,7 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
       return {
         endpoint: config.endpoint,
         reason: message,
-        status: "failed"
+        status: "failed",
       };
     }
   }
@@ -523,8 +568,10 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
 
       return {
         endpointResults,
-        status: endpointResults.some((result) => result.status === "failed") ? "failed" as const : "ok" as const
+        status: endpointResults.some((result) => result.status === "failed")
+          ? ("failed" as const)
+          : ("ok" as const),
       };
-    }
+    },
   };
 }

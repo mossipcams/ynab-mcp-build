@@ -1,4 +1,7 @@
-import type { YnabDeltaClient, YnabDeltaTransactionRecord } from "../delta-client.js";
+import type {
+  YnabDeltaClient,
+  YnabDeltaTransactionRecord,
+} from "../delta-client.js";
 
 type SyncStateRepository = {
   acquireLease(input: {
@@ -21,10 +24,7 @@ type SyncStateRepository = {
     rowsUpserted: number;
     rowsDeleted: number;
     now: string;
-  }): Promise<
-    | { advanced: true }
-    | { advanced: false; reason: "contention" }
-  >;
+  }): Promise<{ advanced: true } | { advanced: false; reason: "contention" }>;
   recordFailure(input: {
     planId: string;
     endpoint: string;
@@ -65,7 +65,9 @@ function toErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Transaction sync failed.";
 }
 
-export function createTransactionSyncService(options: TransactionSyncServiceOptions) {
+export function createTransactionSyncService(
+  options: TransactionSyncServiceOptions,
+) {
   const leaseSeconds = options.leaseSeconds ?? 60;
 
   return {
@@ -75,25 +77,26 @@ export function createTransactionSyncService(options: TransactionSyncServiceOpti
         leaseOwner: input.leaseOwner,
         leaseSeconds,
         now: input.now,
-        planId: input.planId
+        planId: input.planId,
       });
 
       if (!lease.acquired) {
         return {
           status: "skipped" as const,
-          reason: lease.reason
+          reason: lease.reason,
         };
       }
 
-      const previousServerKnowledge = await options.syncStateRepository.getServerKnowledge(
-        input.planId,
-        TRANSACTIONS_ENDPOINT
-      );
+      const previousServerKnowledge =
+        await options.syncStateRepository.getServerKnowledge(
+          input.planId,
+          TRANSACTIONS_ENDPOINT,
+        );
 
       try {
         const delta = await options.deltaClient.listTransactionsDelta(
           input.planId,
-          previousServerKnowledge ?? undefined
+          previousServerKnowledge ?? undefined,
         );
 
         if (delta.records.length > options.maxRowsPerRun) {
@@ -103,20 +106,21 @@ export function createTransactionSyncService(options: TransactionSyncServiceOpti
             error,
             leaseOwner: input.leaseOwner,
             now: input.now,
-            planId: input.planId
+            planId: input.planId,
           });
 
           return {
             status: "failed" as const,
-            reason: "row_limit_exceeded" as const
+            reason: "row_limit_exceeded" as const,
           };
         }
 
-        const writeResult = await options.transactionsRepository.upsertTransactions({
-          planId: input.planId,
-          syncedAt: input.now,
-          transactions: delta.records
-        });
+        const writeResult =
+          await options.transactionsRepository.upsertTransactions({
+            planId: input.planId,
+            syncedAt: input.now,
+            transactions: delta.records,
+          });
 
         const cursorResult = await options.syncStateRepository.advanceCursor({
           endpoint: TRANSACTIONS_ENDPOINT,
@@ -126,13 +130,13 @@ export function createTransactionSyncService(options: TransactionSyncServiceOpti
           previousServerKnowledge,
           rowsDeleted: writeResult.rowsDeleted,
           rowsUpserted: writeResult.rowsUpserted,
-          serverKnowledge: delta.serverKnowledge
+          serverKnowledge: delta.serverKnowledge,
         });
 
         if (!cursorResult.advanced) {
           return {
             status: "failed" as const,
-            reason: cursorResult.reason
+            reason: cursorResult.reason,
           };
         }
 
@@ -140,7 +144,7 @@ export function createTransactionSyncService(options: TransactionSyncServiceOpti
           status: "ok" as const,
           rowsDeleted: writeResult.rowsDeleted,
           rowsUpserted: writeResult.rowsUpserted,
-          serverKnowledge: delta.serverKnowledge
+          serverKnowledge: delta.serverKnowledge,
         };
       } catch (error) {
         const message = toErrorMessage(error);
@@ -149,14 +153,14 @@ export function createTransactionSyncService(options: TransactionSyncServiceOpti
           error: message,
           leaseOwner: input.leaseOwner,
           now: input.now,
-          planId: input.planId
+          planId: input.planId,
         });
 
         return {
           status: "failed" as const,
-          reason: message
+          reason: message,
         };
       }
-    }
+    },
   };
 }

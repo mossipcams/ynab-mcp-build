@@ -48,19 +48,27 @@ export function milliunitsToDollars(amount: number) {
   return amount / 1000;
 }
 
-export function sumSubtransactionAmounts(subtransactions: YnabSubtransactionRecord[]) {
-  return subtransactions.reduce((sum, subtransaction) => sum + subtransaction.amount, 0);
+export function sumSubtransactionAmounts(
+  subtransactions: YnabSubtransactionRecord[],
+) {
+  return subtransactions.reduce(
+    (sum, subtransaction) => sum + subtransaction.amount,
+    0,
+  );
 }
 
 type Compact<T extends Record<string, unknown>> = {
   [K in keyof T as undefined extends T[K] ? never : K]: T[K];
 } & {
-  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<
+    T[K],
+    undefined
+  >;
 };
 
 function compact<T extends Record<string, unknown>>(entry: T): Compact<T> {
   return Object.fromEntries(
-    Object.entries(entry).filter(([, value]) => value !== undefined)
+    Object.entries(entry).filter(([, value]) => value !== undefined),
   ) as Compact<T>;
 }
 
@@ -88,23 +96,27 @@ export function mapTransactionRecord(transaction: YnabTransactionRecordInput) {
     importPayeeName: transaction.import_payee_name,
     importPayeeNameOriginal: transaction.import_payee_name_original,
     debtTransactionType: transaction.debt_transaction_type,
-    subtransactions: transaction.subtransactions?.map((subtransaction) => compact({
-      id: subtransaction.id,
-      transactionId: subtransaction.transaction_id,
-      amount: subtransaction.amount,
-      memo: subtransaction.memo,
-      payeeId: subtransaction.payee_id,
-      payeeName: subtransaction.payee_name,
-      categoryId: subtransaction.category_id,
-      categoryName: subtransaction.category_name,
-      transferAccountId: subtransaction.transfer_account_id,
-      transferTransactionId: subtransaction.transfer_transaction_id,
-      deleted: subtransaction.deleted
-    })),
-    isTransfer: Boolean(transaction.transfer_account_id)
+    subtransactions: transaction.subtransactions?.map((subtransaction) =>
+      compact({
+        id: subtransaction.id,
+        transactionId: subtransaction.transaction_id,
+        amount: subtransaction.amount,
+        memo: subtransaction.memo,
+        payeeId: subtransaction.payee_id,
+        payeeName: subtransaction.payee_name,
+        categoryId: subtransaction.category_id,
+        categoryName: subtransaction.category_name,
+        transferAccountId: subtransaction.transfer_account_id,
+        transferTransactionId: subtransaction.transfer_transaction_id,
+        deleted: subtransaction.deleted,
+      }),
+    ),
+    isTransfer: Boolean(transaction.transfer_account_id),
   });
 }
 
-export function filterActiveTransactions<T extends { deleted?: boolean }>(transactions: T[]) {
+export function filterActiveTransactions<T extends { deleted?: boolean }>(
+  transactions: T[],
+) {
   return transactions.filter((transaction) => !transaction.deleted);
 }

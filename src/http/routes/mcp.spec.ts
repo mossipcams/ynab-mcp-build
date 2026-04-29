@@ -8,7 +8,7 @@ function createEnv(): Env {
     MCP_SERVER_VERSION: "0.1.0",
     YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     YNAB_DB: {} as D1Database,
-    YNAB_READ_SOURCE: "d1"
+    YNAB_READ_SOURCE: "d1",
   } as unknown as Env;
 }
 
@@ -26,16 +26,16 @@ describe("http mcp route optimization", () => {
           method: "tools/call",
           params: {
             arguments: {},
-            name: "ynab_get_mcp_version"
-          }
+            name: "ynab_get_mcp_version",
+          },
         }),
         headers: {
           accept: "application/json, text/event-stream",
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
-        method: "POST"
+        method: "POST",
       },
-      createEnv()
+      createEnv(),
     );
 
     expect(response.status).toBe(200);
@@ -53,20 +53,20 @@ describe("http mcp route optimization", () => {
           jsonrpc: "2.0",
           method: "tools/list",
           padding: "x".repeat(1024 * 1024 + 1),
-          params: {}
+          params: {},
         }),
         headers: {
           accept: "application/json, text/event-stream",
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
-        method: "POST"
+        method: "POST",
       },
-      createEnv()
+      createEnv(),
     );
 
     expect(response.status).toBe(413);
     await expect(response.json()).resolves.toMatchObject({
-      error: "request_too_large"
+      error: "request_too_large",
     });
     expect(now).not.toHaveBeenCalled();
   });

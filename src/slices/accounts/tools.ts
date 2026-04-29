@@ -1,18 +1,28 @@
 import type { YnabClient } from "../../platform/ynab/client.js";
-import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
-import { paginatedProjectionSchema, planIdSchema, requiredIdSchema } from "../../shared/tool-inputs.js";
+import {
+  defineTool,
+  type SliceToolDefinition,
+} from "../../shared/tool-definition.js";
+import {
+  paginatedProjectionSchema,
+  planIdSchema,
+  requiredIdSchema,
+} from "../../shared/tool-inputs.js";
 import { getAccount, listAccounts } from "./service.js";
 
 const accountFields = ["name", "type", "closed", "balance"] as const;
 
-export function getAccountToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
+export function getAccountToolDefinitions(
+  ynabClient: YnabClient,
+): SliceToolDefinition[] {
   return [
     defineTool({
       name: "ynab_list_accounts",
       title: "List YNAB Accounts",
-      description: "Lists YNAB accounts with optional pagination and compact field projection.",
+      description:
+        "Lists YNAB accounts with optional pagination and compact field projection.",
       inputSchema: paginatedProjectionSchema(accountFields),
-      execute: async (input) => listAccounts(ynabClient, input)
+      execute: async (input) => listAccounts(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_account",
@@ -20,9 +30,9 @@ export function getAccountToolDefinitions(ynabClient: YnabClient): SliceToolDefi
       description: "Returns a compact summary for a single YNAB account.",
       inputSchema: {
         ...planIdSchema,
-        accountId: requiredIdSchema
+        accountId: requiredIdSchema,
       },
-      execute: async (input) => getAccount(ynabClient, input)
-    })
+      execute: async (input) => getAccount(ynabClient, input),
+    }),
   ];
 }

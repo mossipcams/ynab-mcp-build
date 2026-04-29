@@ -13,7 +13,9 @@ const fail = (message) => {
 };
 
 if (!/^pnpm@\d+\.\d+\.\d+/.test(packageJson.packageManager ?? "")) {
-  fail('package.json must declare a pinned pnpm packageManager, for example "pnpm@10.0.0".');
+  fail(
+    'package.json must declare a pinned pnpm packageManager, for example "pnpm@10.0.0".',
+  );
 }
 
 if (!existsSync(new URL("pnpm-lock.yaml", repoRoot))) {
@@ -43,7 +45,7 @@ const checkedFiles = [
   ".husky/pre-push",
   "AGENTS.md",
   "README.md",
-  "scripts/preflight.mjs"
+  "scripts/preflight.mjs",
 ];
 
 const staleCommandPattern = /\b(?:npm\s+(?:ci|install|test|run)|npx)\b/;

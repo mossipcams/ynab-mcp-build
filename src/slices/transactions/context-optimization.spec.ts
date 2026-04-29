@@ -4,7 +4,7 @@ import {
   getTransactionsByAccount,
   getTransactionsByCategory,
   getTransactionsByPayee,
-  searchTransactions
+  searchTransactions,
 } from "./service.js";
 
 function transaction(index: number) {
@@ -21,7 +21,7 @@ function transaction(index: number) {
     approved: true,
     cleared: "cleared",
     deleted: false,
-    transferAccountId: null
+    transferAccountId: null,
   };
 }
 
@@ -33,26 +33,50 @@ describe("transaction context optimization", () => {
       listTransactions: vi.fn().mockResolvedValue([]),
       listTransactionsByAccount: vi.fn().mockResolvedValue(transactions),
       listTransactionsByCategory: vi.fn().mockResolvedValue(transactions),
-      listTransactionsByPayee: vi.fn().mockResolvedValue(transactions)
+      listTransactionsByPayee: vi.fn().mockResolvedValue(transactions),
     };
 
-    await getTransactionsByAccount(ynabClient as never, { planId: "plan-1", accountId: "account-1" });
-    await getTransactionsByCategory(ynabClient as never, { planId: "plan-1", categoryId: "category-1" });
-    await getTransactionsByPayee(ynabClient as never, { planId: "plan-1", payeeId: "payee-1" });
+    await getTransactionsByAccount(ynabClient as never, {
+      planId: "plan-1",
+      accountId: "account-1",
+    });
+    await getTransactionsByCategory(ynabClient as never, {
+      planId: "plan-1",
+      categoryId: "category-1",
+    });
+    await getTransactionsByPayee(ynabClient as never, {
+      planId: "plan-1",
+      payeeId: "payee-1",
+    });
 
-    expect(ynabClient.listTransactionsByAccount).toHaveBeenCalledWith("plan-1", "account-1");
-    expect(ynabClient.listTransactionsByCategory).toHaveBeenCalledWith("plan-1", "category-1");
-    expect(ynabClient.listTransactionsByPayee).toHaveBeenCalledWith("plan-1", "payee-1");
+    expect(ynabClient.listTransactionsByAccount).toHaveBeenCalledWith(
+      "plan-1",
+      "account-1",
+    );
+    expect(ynabClient.listTransactionsByCategory).toHaveBeenCalledWith(
+      "plan-1",
+      "category-1",
+    );
+    expect(ynabClient.listTransactionsByPayee).toHaveBeenCalledWith(
+      "plan-1",
+      "payee-1",
+    );
     expect(ynabClient.listTransactions).not.toHaveBeenCalled();
   });
 
   it("caps uncapped transaction search results at 65 rows and includes compact rollups", async () => {
     const ynabClient = {
       listPlans: vi.fn(),
-      listTransactions: vi.fn().mockResolvedValue(Array.from({ length: 70 }, (_, index) => transaction(index)))
+      listTransactions: vi
+        .fn()
+        .mockResolvedValue(
+          Array.from({ length: 70 }, (_, index) => transaction(index)),
+        ),
     };
 
-    await expect(searchTransactions(ynabClient as never, { planId: "plan-1" })).resolves.toMatchObject({
+    await expect(
+      searchTransactions(ynabClient as never, { planId: "plan-1" }),
+    ).resolves.toMatchObject({
       match_count: 70,
       limit: 65,
       offset: 0,
@@ -61,10 +85,10 @@ describe("transaction context optimization", () => {
       totals: {
         total_inflow: expect.any(String),
         total_outflow: expect.any(String),
-        net: expect.any(String)
+        net: expect.any(String),
       },
       top_categories: expect.any(Array),
-      top_payees: expect.any(Array)
+      top_payees: expect.any(Array),
     });
   });
 });

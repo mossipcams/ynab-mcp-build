@@ -8,7 +8,7 @@ function createEnv(): Env {
     MCP_SERVER_VERSION: "0.1.0",
     YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     YNAB_DB: {} as D1Database,
-    YNAB_READ_SOURCE: "d1"
+    YNAB_READ_SOURCE: "d1",
   } as unknown as Env;
 }
 
@@ -16,7 +16,9 @@ function parseSseDataMessages(body: string) {
   return body
     .split("\n")
     .filter((line) => line.startsWith("data: "))
-    .map((line) => JSON.parse(line.slice("data: ".length)) as { jsonrpc?: string });
+    .map(
+      (line) => JSON.parse(line.slice("data: ".length)) as { jsonrpc?: string },
+    );
 }
 
 describe("http mcp route", () => {
@@ -28,11 +30,11 @@ describe("http mcp route", () => {
       "http://localhost/mcp",
       {
         headers: {
-          accept: "text/event-stream"
+          accept: "text/event-stream",
         },
-        method: "GET"
+        method: "GET",
       },
-      createEnv()
+      createEnv(),
     );
 
     expect(response.status).toBe(200);
@@ -49,16 +51,16 @@ describe("http mcp route", () => {
         method: "POST",
         headers: {
           accept: "application/json, text/event-stream",
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           id: "route-check-1",
           jsonrpc: "2.0",
           method: "tools/list",
-          params: {}
-        })
+          params: {},
+        }),
       },
-      createEnv()
+      createEnv(),
     );
     const body = await response.text();
 
@@ -79,16 +81,16 @@ describe("http mcp route", () => {
         method: "POST",
         headers: {
           accept: "application/json, text/event-stream",
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           id: "route-check-2",
           jsonrpc: "2.0",
           method: "tools/list",
-          params: {}
-        })
+          params: {},
+        }),
       },
-      createEnv()
+      createEnv(),
     );
     const body = await response.text();
     const messages = parseSseDataMessages(body);
@@ -108,20 +110,20 @@ describe("http mcp route", () => {
         method: "POST",
         headers: {
           accept: "application/json, text/event-stream",
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
-        body: "{not-json"
+        body: "{not-json",
       },
-      createEnv()
+      createEnv(),
     );
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
       error: {
-        code: -32700
+        code: -32700,
       },
       id: null,
-      jsonrpc: "2.0"
+      jsonrpc: "2.0",
     });
   });
 
@@ -133,20 +135,20 @@ describe("http mcp route", () => {
       "http://localhost/mcp",
       {
         headers: {
-          accept: "application/json"
+          accept: "application/json",
         },
-        method: "GET"
+        method: "GET",
       },
-      createEnv()
+      createEnv(),
     );
 
     expect(response.status).toBe(406);
     await expect(response.json()).resolves.toMatchObject({
       error: {
-        code: -32000
+        code: -32000,
       },
       id: null,
-      jsonrpc: "2.0"
+      jsonrpc: "2.0",
     });
   });
 });

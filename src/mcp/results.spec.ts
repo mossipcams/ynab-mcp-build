@@ -7,14 +7,14 @@ describe("mcp result helpers", () => {
     expect(toTextResult({ hello: "world" })).toEqual({
       isError: false,
       structuredContent: {
-        hello: "world"
+        hello: "world",
       },
       content: [
         {
           type: "text",
-          text: JSON.stringify({ hello: "world" })
-        }
-      ]
+          text: JSON.stringify({ hello: "world" }),
+        },
+      ],
     });
   });
 
@@ -23,17 +23,17 @@ describe("mcp result helpers", () => {
       isError: true,
       structuredContent: {
         success: false,
-        error: "boom"
+        error: "boom",
       },
       content: [
         {
           type: "text",
           text: JSON.stringify({
             success: false,
-            error: "boom"
-          })
-        }
-      ]
+            error: "boom",
+          }),
+        },
+      ],
     });
   });
 });

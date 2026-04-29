@@ -3,7 +3,7 @@ import {
   hasProjectionControls,
   paginateEntries,
   projectRecord,
-  shouldPaginateEntries
+  shouldPaginateEntries,
 } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 import { resolvePlanId } from "../../shared/plans.js";
@@ -37,36 +37,41 @@ export type GetPayeeLocationsByPayeeInput = {
   payeeId: string;
 };
 
-export async function listPayees(ynabClient: YnabClient, input: ListPayeesInput) {
+export async function listPayees(
+  ynabClient: YnabClient,
+  input: ListPayeesInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const payees = (await ynabClient.listPayees(planId))
     .filter((payee) => !payee.deleted)
     .map((payee) => ({
       id: payee.id,
       name: payee.name,
-      transfer_account_id: payee.transferAccountId
+      transfer_account_id: payee.transferAccountId,
     }));
 
   if (!shouldPaginateEntries(payees, input) && !hasProjectionControls(input)) {
     return {
       payees,
-      payee_count: payees.length
+      payee_count: payees.length,
     };
   }
 
   if (!shouldPaginateEntries(payees, input)) {
     return {
       payees: payees.map((payee) => projectRecord(payee, payeeFields, input)),
-      payee_count: payees.length
+      payee_count: payees.length,
     };
   }
 
   const pagedPayees = paginateEntries(payees, input);
 
   return {
-    payees: pagedPayees.entries.map((payee) => projectRecord(payee, payeeFields, input)),
+    payees: pagedPayees.entries.map((payee) =>
+      projectRecord(payee, payeeFields, input),
+    ),
     payee_count: payees.length,
-    ...pagedPayees.metadata
+    ...pagedPayees.metadata,
   };
 }
 
@@ -78,12 +83,15 @@ export async function getPayee(ynabClient: YnabClient, input: GetPayeeInput) {
     payee: compactObject({
       id: payee.id,
       name: payee.name,
-      transfer_account_id: payee.transferAccountId
-    })
+      transfer_account_id: payee.transferAccountId,
+    }),
   };
 }
 
-export async function listPayeeLocations(ynabClient: YnabClient, input: ListPayeeLocationsInput) {
+export async function listPayeeLocations(
+  ynabClient: YnabClient,
+  input: ListPayeeLocationsInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const payeeLocations = (await ynabClient.listPayeeLocations(planId))
     .filter((location) => !location.deleted)
@@ -91,42 +99,53 @@ export async function listPayeeLocations(ynabClient: YnabClient, input: ListPaye
       id: location.id,
       payee_id: location.payeeId,
       latitude: location.latitude,
-      longitude: location.longitude
+      longitude: location.longitude,
     }));
 
   return {
     payee_locations: payeeLocations,
-    payee_location_count: payeeLocations.length
+    payee_location_count: payeeLocations.length,
   };
 }
 
-export async function getPayeeLocation(ynabClient: YnabClient, input: GetPayeeLocationInput) {
+export async function getPayeeLocation(
+  ynabClient: YnabClient,
+  input: GetPayeeLocationInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const payeeLocation = await ynabClient.getPayeeLocation(planId, input.payeeLocationId);
+  const payeeLocation = await ynabClient.getPayeeLocation(
+    planId,
+    input.payeeLocationId,
+  );
 
   return {
     payee_location: compactObject({
       id: payeeLocation.id,
       payee_id: payeeLocation.payeeId,
       latitude: payeeLocation.latitude,
-      longitude: payeeLocation.longitude
-    })
+      longitude: payeeLocation.longitude,
+    }),
   };
 }
 
-export async function getPayeeLocationsByPayee(ynabClient: YnabClient, input: GetPayeeLocationsByPayeeInput) {
+export async function getPayeeLocationsByPayee(
+  ynabClient: YnabClient,
+  input: GetPayeeLocationsByPayeeInput,
+) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const payeeLocations = (await ynabClient.getPayeeLocationsByPayee(planId, input.payeeId))
+  const payeeLocations = (
+    await ynabClient.getPayeeLocationsByPayee(planId, input.payeeId)
+  )
     .filter((location) => !location.deleted)
     .map((location) => ({
       id: location.id,
       payee_id: location.payeeId,
       latitude: location.latitude,
-      longitude: location.longitude
+      longitude: location.longitude,
     }));
 
   return {
     payee_locations: payeeLocations,
-    payee_location_count: payeeLocations.length
+    payee_location_count: payeeLocations.length,
   };
 }

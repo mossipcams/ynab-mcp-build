@@ -8,8 +8,10 @@ describe("resolveAppEnv", () => {
     expect(() =>
       resolveAppEnv({
         CF_ACCESS_TEAM_DOMAIN: "https://access-team.example.com",
-        YNAB_API_BASE_URL: "https://api.ynab.com/v1"
-      } as Partial<Env> & { CF_ACCESS_TEAM_DOMAIN: string })
-    ).toThrowError("CF_ACCESS_AUD is required when CF_ACCESS_TEAM_DOMAIN is set.");
+        YNAB_API_BASE_URL: "https://api.ynab.com/v1",
+      } as Partial<Env> & { CF_ACCESS_TEAM_DOMAIN: string }),
+    ).toThrowError(
+      "CF_ACCESS_AUD is required when CF_ACCESS_TEAM_DOMAIN is set.",
+    );
   });
 });

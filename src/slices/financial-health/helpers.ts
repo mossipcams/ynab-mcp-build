@@ -26,37 +26,64 @@ export function toSpentMilliunits(activityMilliunits: number) {
   return activityMilliunits < 0 ? Math.abs(activityMilliunits) : 0;
 }
 
-export function buildAssignedSpentSummary(assignedMilliunits: number, spentMilliunits: number) {
+export function buildAssignedSpentSummary(
+  assignedMilliunits: number,
+  spentMilliunits: number,
+) {
   return {
     assigned: formatMilliunits(assignedMilliunits),
     spent: formatMilliunits(spentMilliunits),
-    assigned_vs_spent: formatMilliunits(assignedMilliunits - spentMilliunits)
+    assigned_vs_spent: formatMilliunits(assignedMilliunits - spentMilliunits),
   };
 }
 
-export function buildAccountSnapshotSummary<TAccount extends AccountLike>(accounts: TAccount[]) {
-  const activeAccounts = accounts.filter((account) => !account.deleted && !account.closed);
-  const positiveAccounts = activeAccounts.filter((account) => (account.balance ?? 0) >= 0);
-  const negativeAccounts = activeAccounts.filter((account) => (account.balance ?? 0) < 0);
+export function buildAccountSnapshotSummary<TAccount extends AccountLike>(
+  accounts: TAccount[],
+) {
+  const activeAccounts = accounts.filter(
+    (account) => !account.deleted && !account.closed,
+  );
+  const positiveAccounts = activeAccounts.filter(
+    (account) => (account.balance ?? 0) >= 0,
+  );
+  const negativeAccounts = activeAccounts.filter(
+    (account) => (account.balance ?? 0) < 0,
+  );
 
   return {
     activeAccounts,
     positiveAccounts,
     negativeAccounts,
-    netWorthMilliunits: activeAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0),
-    liquidCashMilliunits: positiveAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0),
-    onBudgetAccountCount: activeAccounts.filter((account) => account.onBudget !== false).length
+    netWorthMilliunits: activeAccounts.reduce(
+      (sum, account) => sum + (account.balance ?? 0),
+      0,
+    ),
+    liquidCashMilliunits: positiveAccounts.reduce(
+      (sum, account) => sum + (account.balance ?? 0),
+      0,
+    ),
+    onBudgetAccountCount: activeAccounts.filter(
+      (account) => account.onBudget !== false,
+    ).length,
   };
 }
 
-export function buildVisibleCategoryHealthSummary<TCategory extends CategoryLike>(categories: TCategory[]) {
-  const visibleCategories = categories.filter((category) => !category.deleted && !category.hidden);
+export function buildVisibleCategoryHealthSummary<
+  TCategory extends CategoryLike,
+>(categories: TCategory[]) {
+  const visibleCategories = categories.filter(
+    (category) => !category.deleted && !category.hidden,
+  );
 
   return {
     availableTotalMilliunits: visibleCategories
       .filter((category) => category.balance > 0)
       .reduce((sum, category) => sum + category.balance, 0),
-    overspentCategories: visibleCategories.filter((category) => category.balance < 0),
-    underfundedCategories: visibleCategories.filter((category) => (category.goalUnderFunded ?? 0) > 0)
+    overspentCategories: visibleCategories.filter(
+      (category) => category.balance < 0,
+    ),
+    underfundedCategories: visibleCategories.filter(
+      (category) => (category.goalUnderFunded ?? 0) > 0,
+    ),
   };
 }

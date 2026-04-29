@@ -7,6 +7,9 @@ const rootUrl = new URL("../../", import.meta.url);
 const readRootFile = (path: string) =>
   readFileSync(new URL(path, rootUrl), "utf8");
 
+const parseRootJsonc = <T>(path: string) =>
+  JSON.parse(readRootFile(path).replace(/,\s*([}\]])/g, "$1")) as T;
+
 const importRootModule = async <T>(path: string) =>
   import(pathToFileURL(new URL(path, rootUrl).pathname).href) as Promise<T>;
 
@@ -17,18 +20,7 @@ describe("repository preflight tooling", () => {
       CI_COMMANDS: readonly string[];
     }>("scripts/preflight.mjs");
 
-    expect(CI_COMMANDS).toEqual([
-      "pnpm run cf-typegen",
-      "pnpm run typecheck:tsgo",
-      "pnpm run lint:fast",
-      "pnpm run typecheck:tsc",
-      "pnpm run typecheck:spec",
-      "pnpm run lint",
-      "pnpm run check:deps",
-      "pnpm run check:duplication",
-      "pnpm run check:knip",
-      "pnpm test"
-    ]);
+    expect(CI_COMMANDS).toEqual(["pnpm check:pr"]);
   });
 
   it("declares Node ambient types for tooling tests", () => {
@@ -53,7 +45,7 @@ describe("repository preflight tooling", () => {
       noImplicitOverride: true,
       noImplicitReturns: true,
       noUncheckedIndexedAccess: true,
-      strict: true
+      strict: true,
     });
   });
 
@@ -75,7 +67,7 @@ describe("repository preflight tooling", () => {
 
     expect(packageJson.devDependencies).toHaveProperty("knip");
     expect(packageJson.scripts).toMatchObject({
-      "check:knip": "knip"
+      "check:knip": "knip",
     });
   });
 
@@ -96,7 +88,9 @@ describe("repository preflight tooling", () => {
       devDependencies?: Record<string, string>;
     };
 
-    expect(packageJson.devDependencies).toHaveProperty("@typescript/native-preview");
+    expect(packageJson.devDependencies).toHaveProperty(
+      "@typescript/native-preview",
+    );
     expect(packageJson.devDependencies).toHaveProperty("oxlint");
     expect(packageJson.devDependencies).toHaveProperty("oxlint-tsgolint");
   });
@@ -113,7 +107,7 @@ describe("repository preflight tooling", () => {
       ci: "node scripts/run-ci.mjs",
       "hooks:install": "husky",
       prepare: "husky",
-      pr: "node scripts/pre-pr.mjs"
+      pr: "node scripts/pre-pr.mjs",
     });
   });
 
@@ -124,7 +118,7 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      "check:duplication": "jscpd"
+      "check:duplication": "jscpd",
     });
   });
 
@@ -135,9 +129,9 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      lint: "pnpm run lint:fast && pnpm run lint:eslint",
-      "lint:eslint": "eslint .",
-      "lint:fast": "oxlint --type-aware"
+      lint: "pnpm lint:types",
+      "lint:fast": "oxlint .",
+      "lint:types": "eslint . --cache --max-warnings=0",
     });
   });
 
@@ -148,10 +142,10 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      "pretypecheck:tsgo": "pnpm run cf-typegen",
-      typecheck: "pnpm run typecheck:tsgo",
+      "pretypecheck:tsgo": "pnpm run typegen",
+      typecheck: "tsc --noEmit",
       "typecheck:tsc": "tsc --noEmit -p tsconfig.json",
-      "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json"
+      "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json",
     });
   });
 
@@ -167,21 +161,30 @@ describe("repository preflight tooling", () => {
 
   it("configures the required type-aware ESLint rules", async () => {
     // DEFECT: unsafe any usage, floating promises, and non-exhaustive switches can slip through generated code.
-    const config = await importRootModule<{ default: Array<{ rules?: Record<string, unknown> }> }>("eslint.config.mjs");
-    const mergedRules = Object.assign({}, ...config.default.map((entry) => entry.rules ?? {}));
+    const config = await importRootModule<{
+      default: Array<{ rules?: Record<string, unknown> }>;
+    }>("eslint.config.mjs");
+    const mergedRules = Object.assign(
+      {},
+      ...config.default.map((entry) => entry.rules ?? {}),
+    );
 
     expect(mergedRules).toMatchObject({
       "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/ban-ts-comment": "error",
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/no-unnecessary-condition": "error",
       "@typescript-eslint/no-unsafe-assignment": "error",
       "@typescript-eslint/no-unsafe-call": "error",
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/only-throw-error": "error",
       "@typescript-eslint/require-await": "error",
-      "@typescript-eslint/switch-exhaustiveness-check": "error"
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+      "@typescript-eslint/use-unknown-in-catch-callback-variable": "error",
     });
   });
 
@@ -195,7 +198,7 @@ describe("repository preflight tooling", () => {
 
     expect(jscpdConfig).toMatchObject({
       format: ["typescript"],
-      path: ["src"]
+      path: ["src"],
     });
     expect(jscpdConfig.ignore).toContain("**/*.spec.ts");
   });
@@ -219,23 +222,16 @@ describe("repository preflight tooling", () => {
 
   it("runs the shared CI command before pushing through Husky", () => {
     // DEFECT: local git hooks can bypass the shared preflight suite before code reaches the remote branch.
-    expect(readRootFile(".husky/pre-push")).toContain("pnpm run ci");
+    expect(readRootFile(".husky/pre-push")).toContain("pnpm check:prepr");
   });
 
-  it("activates Corepack before GitHub Actions configures the pnpm cache", () => {
+  it("sets up pnpm before GitHub Actions configures the pnpm cache", () => {
     // DEFECT: GitHub-hosted runners cannot restore a pnpm cache before the pnpm executable is available.
     const workflow = readRootFile(".github/workflows/ci.yml");
-    const jobBlocks = workflow
-      .split(/\n(?=  [a-z-]+:\n    name: )/)
-      .filter((block) => block.includes("cache: pnpm"));
 
-    expect(jobBlocks.length).toBeGreaterThan(0);
-
-    for (const block of jobBlocks) {
-      expect(block.indexOf("- run: corepack enable")).toBeLessThan(
-        block.indexOf("- uses: actions/setup-node@v4")
-      );
-    }
+    expect(workflow.indexOf("- uses: pnpm/action-setup@v4")).toBeLessThan(
+      workflow.indexOf("cache: pnpm"),
+    );
   });
 
   it("runs CI before creating a GitHub pull request", () => {
@@ -243,17 +239,17 @@ describe("repository preflight tooling", () => {
     const prePrScript = readRootFile("scripts/pre-pr.mjs");
 
     expect(prePrScript.indexOf("const ciStatus = runCi();")).toBeLessThan(
-      prePrScript.indexOf("gh pr create")
+      prePrScript.indexOf("gh pr create"),
     );
   });
 
   it("configures the Worker cron that refreshes the D1 read model", () => {
     // DEFECT: scheduled read-model freshness can be lost if the Worker cron trigger is removed or changed unexpectedly.
-    const wranglerConfig = JSON.parse(readRootFile("wrangler.jsonc")) as {
+    const wranglerConfig = parseRootJsonc<{
       triggers?: {
         crons?: string[];
       };
-    };
+    }>("wrangler.jsonc");
 
     expect(wranglerConfig.triggers?.crons).toEqual(["0 * * * *"]);
   });
@@ -262,9 +258,15 @@ describe("repository preflight tooling", () => {
     // DEFECT: stale DB-backed documentation can tell operators that production tools are unavailable.
     const readme = readRootFile("README.md");
 
-    expect(readme).toContain("All advertised normal MCP tools are registered in D1 mode");
-    expect(readme).not.toContain("Only `ynab_search_transactions` is rebuilt against D1 so far.");
-    expect(readme).not.toContain("return a clear “not available yet in DB-backed read mode” error");
+    expect(readme).toContain(
+      "All advertised normal MCP tools are registered in D1 mode",
+    );
+    expect(readme).not.toContain(
+      "Only `ynab_search_transactions` is rebuilt against D1 so far.",
+    );
+    expect(readme).not.toContain(
+      "return a clear “not available yet in DB-backed read mode” error",
+    );
   });
 
   it("keeps JSON-RPC tool-call validation in the MCP layer", () => {
@@ -272,18 +274,26 @@ describe("repository preflight tooling", () => {
     const httpMcpRoute = readRootFile("src/http/routes/mcp.ts");
 
     expect(httpMcpRoute).not.toContain('from "zod"');
-    expect(readRootFile("src/mcp/json-rpc-validation.ts")).toContain("validateToolCallRequest");
+    expect(readRootFile("src/mcp/json-rpc-validation.ts")).toContain(
+      "validateToolCallRequest",
+    );
   });
 
   it("keeps a single MCP tool registration implementation", () => {
     // DEFECT: duplicate MCP registration modules can diverge on result formatting and schema handling.
     expect(() => readRootFile("src/mcp/tools.ts")).toThrow();
-    expect(readRootFile("src/mcp/tool-registry.ts")).toContain("registerToolDefinitions");
+    expect(readRootFile("src/mcp/tool-registry.ts")).toContain(
+      "registerToolDefinitions",
+    );
   });
 
   it("validates OAuth JSON token payloads with Zod", () => {
     // DEFECT: JWT and JWKS payload casts can trust malformed external JSON before signature and claim checks.
-    for (const path of ["src/oauth/core/jwt.ts", "src/oauth/core/oidc.ts", "src/oauth/core/cf-access-jwt.ts"]) {
+    for (const path of [
+      "src/oauth/core/jwt.ts",
+      "src/oauth/core/oidc.ts",
+      "src/oauth/core/cf-access-jwt.ts",
+    ]) {
       const source = readRootFile(path);
 
       expect(source).toContain('from "zod"');
@@ -292,10 +302,10 @@ describe("repository preflight tooling", () => {
   });
 
   it("disables non-custom Worker URLs", () => {
-    const wranglerConfig = JSON.parse(readRootFile("wrangler.jsonc")) as {
+    const wranglerConfig = parseRootJsonc<{
       preview_urls?: boolean;
       workers_dev?: boolean;
-    };
+    }>("wrangler.jsonc");
 
     expect(wranglerConfig.workers_dev).toBe(false);
     expect(wranglerConfig.preview_urls).toBe(false);

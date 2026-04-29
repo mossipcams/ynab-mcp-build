@@ -10,16 +10,16 @@ describe("OAuth state chaos", () => {
         throw new Error("Durable Object storage unavailable");
       },
       list: async () => new Map(),
-      put: async () => undefined
+      put: async () => undefined,
     };
     const response = await handleOAuthStateRequest(
       failingStorage,
-      new Request("https://state.example.test/clients/client-1")
+      new Request("https://state.example.test/clients/client-1"),
     );
 
     await expect(response.json()).resolves.toEqual({
       error: "oauth_state_store_unavailable",
-      error_description: "Durable Object storage unavailable"
+      error_description: "Durable Object storage unavailable",
     });
     expect(response.status).toBe(500);
   });

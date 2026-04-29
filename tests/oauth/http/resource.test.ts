@@ -4,14 +4,14 @@ import {
   createOAuthEnv,
   fetchWorker,
   MCP_ORIGIN,
-  MCP_RESOURCE
+  MCP_RESOURCE,
 } from "../../helpers/oauth-provider.js";
 
 describe("oauth http resource metadata", () => {
   it("describes /mcp as the protected resource guarded by the provider", async () => {
     const response = await fetchWorker(
       new Request(`${MCP_ORIGIN}/.well-known/oauth-protected-resource/mcp`),
-      createOAuthEnv()
+      createOAuthEnv(),
     );
 
     expect(response.status).toBe(200);
@@ -19,7 +19,7 @@ describe("oauth http resource metadata", () => {
       authorization_servers: [MCP_ORIGIN],
       bearer_methods_supported: ["header"],
       resource: MCP_RESOURCE,
-      scopes_supported: ["mcp"]
+      scopes_supported: ["mcp"],
     });
   });
 
@@ -28,21 +28,21 @@ describe("oauth http resource metadata", () => {
       new Request(MCP_RESOURCE, {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           id: 1,
           jsonrpc: "2.0",
           method: "tools/list",
-          params: {}
-        })
+          params: {},
+        }),
       }),
-      createOAuthEnv()
+      createOAuthEnv(),
     );
 
     expect(response.status).toBe(401);
     expect(response.headers.get("www-authenticate")).toContain(
-      `resource_metadata="${MCP_ORIGIN}/.well-known/oauth-protected-resource/mcp"`
+      `resource_metadata="${MCP_ORIGIN}/.well-known/oauth-protected-resource/mcp"`,
     );
   });
 });

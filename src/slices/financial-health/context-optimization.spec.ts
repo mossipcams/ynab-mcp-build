@@ -6,7 +6,7 @@ import {
   getFinancialSnapshot,
   getGoalProgressSummary,
   getMonthlyReview,
-  getNetWorthTrajectory
+  getNetWorthTrajectory,
 } from "./service.js";
 
 function spendingTransaction(index: number) {
@@ -23,7 +23,7 @@ function spendingTransaction(index: number) {
     approved: true,
     cleared: "cleared",
     deleted: false,
-    transferAccountId: null
+    transferAccountId: null,
   };
 }
 
@@ -31,19 +31,33 @@ describe("financial health context optimization", () => {
   it("passes both range bounds to transaction reads for range summaries", async () => {
     const ynabClient = {
       listPlanMonths: vi.fn().mockResolvedValue([
-        { month: "2026-01-01", budgeted: 100000, activity: -50000, deleted: false },
-        { month: "2026-02-01", budgeted: 100000, activity: -60000, deleted: false }
+        {
+          month: "2026-01-01",
+          budgeted: 100000,
+          activity: -50000,
+          deleted: false,
+        },
+        {
+          month: "2026-02-01",
+          budgeted: 100000,
+          activity: -60000,
+          deleted: false,
+        },
       ]),
-      listTransactions: vi.fn().mockResolvedValue([])
+      listTransactions: vi.fn().mockResolvedValue([]),
     };
 
     await getCashFlowSummary(ynabClient as never, {
       planId: "plan-1",
       fromMonth: "2026-01-01",
-      toMonth: "2026-02-01"
+      toMonth: "2026-02-01",
     });
 
-    expect(ynabClient.listTransactions).toHaveBeenCalledWith("plan-1", "2026-01-01", "2026-02-28");
+    expect(ynabClient.listTransactions).toHaveBeenCalledWith(
+      "plan-1",
+      "2026-01-01",
+      "2026-02-28",
+    );
   });
 
   it("reconstructs net worth trajectories without rescanning every transaction for every month", async () => {
@@ -56,7 +70,7 @@ describe("financial health context optimization", () => {
       },
       amount: -1000,
       accountId: "account-1",
-      deleted: false
+      deleted: false,
     }));
     const ynabClient = {
       listAccounts: vi.fn().mockResolvedValue([
@@ -66,25 +80,25 @@ describe("financial health context optimization", () => {
           type: "checking",
           closed: false,
           deleted: false,
-          balance: 100000
-        }
+          balance: 100000,
+        },
       ]),
-      listTransactions: vi.fn().mockResolvedValue(transactions)
+      listTransactions: vi.fn().mockResolvedValue(transactions),
     };
 
     await expect(
       getNetWorthTrajectory(ynabClient as never, {
         planId: "plan-1",
         fromMonth: "2026-01-01",
-        toMonth: "2026-12-01"
-      })
+        toMonth: "2026-12-01",
+      }),
     ).resolves.toMatchObject({
       from_month: "2026-01-01",
       to_month: "2026-12-01",
       months: expect.arrayContaining([
         expect.objectContaining({ month: "2026-01-01" }),
-        expect.objectContaining({ month: "2026-12-01" })
-      ])
+        expect.objectContaining({ month: "2026-12-01" }),
+      ]),
     });
     expect(dateReadCount).toBeLessThan(200);
   });
@@ -97,19 +111,19 @@ describe("financial health context optimization", () => {
         toBeBudgeted: 10000,
         budgeted: 120000,
         activity: -95000,
-        categories: []
+        categories: [],
       }),
       listAccounts: vi.fn().mockResolvedValue([]),
-      listTransactions: vi.fn().mockResolvedValue([])
+      listTransactions: vi.fn().mockResolvedValue([]),
     };
 
     await getBudgetHealthSummary(ynabClient as never, {
       planId: "plan-1",
-      month: "2026-04-01"
+      month: "2026-04-01",
     });
     await getGoalProgressSummary(ynabClient as never, {
       planId: "plan-1",
-      month: "2026-04-01"
+      month: "2026-04-01",
     });
 
     expect(ynabClient.getPlanMonth).toHaveBeenCalledTimes(2);
@@ -125,15 +139,15 @@ describe("financial health context optimization", () => {
         budgeted: 200000,
         activity: -150000,
         toBeBudgeted: 25000,
-        categories: []
+        categories: [],
       }),
       listAccounts: vi.fn().mockResolvedValue([]),
-      listTransactions: vi.fn().mockResolvedValue([])
+      listTransactions: vi.fn().mockResolvedValue([]),
     };
 
     await getFinancialSnapshot(ynabClient as never, {
       planId: "plan-1",
-      month: "2026-04-01"
+      month: "2026-04-01",
     });
 
     expect(ynabClient.getPlanMonth).toHaveBeenCalledTimes(1);
@@ -142,7 +156,9 @@ describe("financial health context optimization", () => {
   });
 
   it("uses detailLevel to cap rollups and representative transaction evidence", async () => {
-    const transactions = Array.from({ length: 12 }, (_, index) => spendingTransaction(index));
+    const transactions = Array.from({ length: 12 }, (_, index) =>
+      spendingTransaction(index),
+    );
     const ynabClient = {
       listPlans: vi.fn(),
       getPlanMonth: vi.fn().mockResolvedValue({
@@ -151,27 +167,27 @@ describe("financial health context optimization", () => {
         budgeted: 120000,
         activity: -78000,
         toBeBudgeted: 0,
-        categories: []
+        categories: [],
       }),
       listAccounts: vi.fn().mockResolvedValue([]),
-      listTransactions: vi.fn().mockResolvedValue(transactions)
+      listTransactions: vi.fn().mockResolvedValue(transactions),
     };
 
     await expect(
       getMonthlyReview(ynabClient as never, {
         planId: "plan-1",
         month: "2026-04-01",
-        detailLevel: "detailed"
-      })
+        detailLevel: "detailed",
+      }),
     ).resolves.toMatchObject({
       top_spending_categories: expect.arrayContaining([
         expect.objectContaining({ name: "Category 11" }),
-        expect.objectContaining({ name: "Category 2" })
+        expect.objectContaining({ name: "Category 2" }),
       ]),
       example_transactions: expect.arrayContaining([
         expect.objectContaining({ id: "txn-11" }),
-        expect.objectContaining({ id: "txn-2" })
-      ])
+        expect.objectContaining({ id: "txn-2" }),
+      ]),
     });
   });
 });

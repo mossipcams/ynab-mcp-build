@@ -29,6 +29,8 @@ export type ListMoneyMovementsInput = {
   month?: string;
 };
 
+const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
+
 export function createMoneyMovementsRepository(database: D1Database) {
   return {
     async listMoneyMovements(input: ListMoneyMovementsInput) {
@@ -62,16 +64,19 @@ export function createMoneyMovementsRepository(database: D1Database) {
              ON to_category.plan_id = movement.plan_id
             AND to_category.id = movement.to_category_id
            WHERE ${where.join(" AND ")}
-           ORDER BY movement.moved_at DESC, movement.id`
+           ORDER BY movement.moved_at DESC, movement.id`,
         )
         .bind(...params)
         .all<MoneyMovementRow>();
 
-      return result.results ?? [];
+      return rowsOrEmpty(result);
     },
 
     async listMoneyMovementGroups(input: ListMoneyMovementsInput) {
-      const where = ["movement_group.plan_id = ?", "movement_group.deleted = 0"];
+      const where = [
+        "movement_group.plan_id = ?",
+        "movement_group.deleted = 0",
+      ];
       const params: string[] = [input.planId];
 
       if (input.month) {
@@ -96,12 +101,12 @@ export function createMoneyMovementsRepository(database: D1Database) {
             AND movement.deleted = 0
            WHERE ${where.join(" AND ")}
            GROUP BY movement_group.plan_id, movement_group.id
-           ORDER BY movement_group.group_created_at DESC, movement_group.id`
+           ORDER BY movement_group.group_created_at DESC, movement_group.id`,
         )
         .bind(...params)
         .all<MoneyMovementGroupRow>();
 
-      return result.results ?? [];
-    }
+      return rowsOrEmpty(result);
+    },
   };
 }
