@@ -77,4 +77,14 @@ describe("resolveAppEnv", () => {
     expect(env.ynabSyncMaxRowsPerRun).toBe(50);
     expect(env.ynabAccessToken).toBeUndefined();
   });
+
+  it("defaults to D1 and rejects unsupported read sources", () => {
+    expect(resolveAppEnv({}).ynabReadSource).toBe("d1");
+
+    expect(() =>
+      resolveAppEnv({
+        YNAB_READ_SOURCE: "direct"
+      } as Partial<Env> & { YNAB_READ_SOURCE: string })
+    ).toThrowError("YNAB_READ_SOURCE must be d1.");
+  });
 });

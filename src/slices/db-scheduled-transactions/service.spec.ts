@@ -112,4 +112,22 @@ describe("DB-backed scheduled transaction service", () => {
       scheduledTransactionId: "scheduled-1"
     });
   });
+
+  it("falls back to the default plan when input plan ids are blank", async () => {
+    repository.listScheduledTransactions.mockResolvedValueOnce([]);
+
+    await listDbScheduledTransactions(
+      {
+        defaultPlanId: "plan-1",
+        scheduledTransactionsRepository: repository
+      },
+      {
+        planId: "   "
+      }
+    );
+
+    expect(repository.listScheduledTransactions).toHaveBeenLastCalledWith({
+      planId: "plan-1"
+    });
+  });
 });

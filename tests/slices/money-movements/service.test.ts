@@ -2,150 +2,117 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import {
-  getMoneyMovementGroups,
-  getMoneyMovements
-} from "../../../src/slices/money-movements/service.js";
-import { getMoneyMovementToolDefinitions } from "../../../src/slices/money-movements/tools.js";
+  getDbMoneyMovementGroups,
+  getDbMoneyMovements
+} from "../../../src/slices/db-money-movements/service.js";
+import { getDbMoneyMovementToolDefinitions } from "../../../src/slices/db-money-movements/tools.js";
 
 describe("money movements service", () => {
-  it("returns only outgoing transfer movements with resolved destination account names", async () => {
-    // DEFECT: money movement listings can double-count transfers or include non-transfer spending when deriving movement rows.
-    const ynabClient = {
-      listAccounts: vi.fn().mockResolvedValue([
+  it("returns category money movements from the D1 read model", async () => {
+    const repository = {
+      listMoneyMovementGroups: vi.fn(),
+      listMoneyMovements: vi.fn().mockResolvedValue([
         {
-          id: "account-1",
-          name: "Checking",
-          deleted: false
-        },
-        {
-          id: "account-2",
-          name: "Savings",
-          deleted: false
+          id: "move-1",
+          moved_at: "2026-04-12T10:00:00.000Z",
+          month: "2026-04-01",
+          note: "Cover dining",
+          amount_milliunits: 12500,
+          from_category_id: "cat-ready",
+          from_category_name: "Ready to Assign",
+          to_category_id: "cat-dining",
+          to_category_name: "Dining Out",
+          money_movement_group_id: "group-1",
+          performed_by_user_id: "user-1"
         }
-      ]),
-      listTransactions: vi.fn().mockResolvedValue([
-        {
-          id: "txn-transfer-out",
-          date: "2026-04-12",
-          amount: -5000,
-          accountId: "account-1",
-          accountName: "Checking",
-          transferAccountId: "account-2",
-          payeeName: "Transfer to Savings",
-          deleted: false
-        },
-        {
-          id: "txn-transfer-in",
-          date: "2026-04-12",
-          amount: 5000,
-          accountId: "account-2",
-          accountName: "Savings",
-          transferAccountId: "account-1",
-          payeeName: "Transfer from Checking",
-          deleted: false
-        },
-        {
-          id: "txn-spend",
-          date: "2026-04-11",
-          amount: -2500,
-          accountId: "account-1",
-          accountName: "Checking",
-          transferAccountId: null,
-          payeeName: "Grocer",
-          deleted: false
-        }
-      ]),
-      listPlans: vi.fn().mockResolvedValue({
-        plans: [{ id: "plan-1", name: "Household" }],
-        defaultPlan: { id: "plan-1", name: "Household" }
-      })
+      ])
     };
 
-    await expect(getMoneyMovements(ynabClient as never, {})).resolves.toEqual({
+    await expect(
+      getDbMoneyMovements(
+        {
+          defaultPlanId: "plan-1",
+          moneyMovementsRepository: repository
+        },
+        {}
+      )
+    ).resolves.toEqual({
       money_movements: [
         {
-          id: "txn-transfer-out",
-          date: "2026-04-12",
-          amount: "5.00",
-          from_account_id: "account-1",
-          from_account_name: "Checking",
-          to_account_id: "account-2",
-          to_account_name: "Savings",
-          payee_name: "Transfer to Savings"
+          id: "move-1",
+          moved_at: "2026-04-12T10:00:00.000Z",
+          month: "2026-04-01",
+          note: "Cover dining",
+          amount: "12.50",
+          amount_milliunits: 12500,
+          from_category_id: "cat-ready",
+          from_category_name: "Ready to Assign",
+          to_category_id: "cat-dining",
+          to_category_name: "Dining Out",
+          money_movement_group_id: "group-1",
+          performed_by_user_id: "user-1"
         }
       ],
       movement_count: 1
     });
+    expect(repository.listMoneyMovements).toHaveBeenCalledWith({
+      planId: "plan-1"
+    });
   });
 
-  it("groups movements by account pair and sums total transferred amount", async () => {
-    // DEFECT: grouped money movement totals can undercount or split a single transfer lane across multiple buckets.
-    const ynabClient = {
-      listAccounts: vi.fn().mockResolvedValue([
+  it("returns stored movement groups without deriving account transfers", async () => {
+    const repository = {
+      listMoneyMovementGroups: vi.fn().mockResolvedValue([
         {
-          id: "account-1",
-          name: "Checking",
-          deleted: false
-        },
-        {
-          id: "account-2",
-          name: "Savings",
-          deleted: false
+          id: "group-1",
+          group_created_at: "2026-04-12T10:00:00.000Z",
+          month: "2026-04-01",
+          note: "Cover dining",
+          performed_by_user_id: "user-1",
+          movement_count: 2,
+          total_amount_milliunits: 17500
         }
       ]),
-      listTransactions: vi.fn().mockResolvedValue([
-        {
-          id: "txn-1",
-          date: "2026-04-12",
-          amount: -5000,
-          accountId: "account-1",
-          accountName: "Checking",
-          transferAccountId: "account-2",
-          payeeName: "Transfer",
-          deleted: false
-        },
-        {
-          id: "txn-2",
-          date: "2026-04-10",
-          amount: -7000,
-          accountId: "account-1",
-          accountName: "Checking",
-          transferAccountId: "account-2",
-          payeeName: "Transfer",
-          deleted: false
-        }
-      ]),
-      listPlans: vi.fn().mockResolvedValue({
-        plans: [{ id: "plan-1", name: "Household" }],
-        defaultPlan: { id: "plan-1", name: "Household" }
-      })
+      listMoneyMovements: vi.fn()
     };
 
-    await expect(getMoneyMovementGroups(ynabClient as never, {})).resolves.toEqual({
+    await expect(
+      getDbMoneyMovementGroups(
+        {
+          defaultPlanId: "plan-1",
+          moneyMovementsRepository: repository
+        },
+        {}
+      )
+    ).resolves.toEqual({
       money_movement_groups: [
         {
-          id: "account-1:account-2",
-          from_account_id: "account-1",
-          from_account_name: "Checking",
-          to_account_id: "account-2",
-          to_account_name: "Savings",
-          total_amount: "12.00",
+          id: "group-1",
+          group_created_at: "2026-04-12T10:00:00.000Z",
+          month: "2026-04-01",
+          note: "Cover dining",
+          performed_by_user_id: "user-1",
           movement_count: 2,
-          latest_date: "2026-04-12"
+          total_amount: "17.50",
+          total_amount_milliunits: 17500
         }
       ],
       group_count: 1
     });
+    expect(repository.listMoneyMovementGroups).toHaveBeenCalledWith({
+      planId: "plan-1"
+    });
   });
 
   it("requires month in the month-scoped money movement tool schema", () => {
-    // DEFECT: month-scoped money movement tools can stop requiring the month selector and accept ambiguous period requests.
-    const ynabClient = {
-      listAccounts: vi.fn(),
-      listTransactions: vi.fn(),
-      listPlans: vi.fn()
+    const repository = {
+      listMoneyMovementGroups: vi.fn(),
+      listMoneyMovements: vi.fn()
     };
-    const definitions = getMoneyMovementToolDefinitions(ynabClient as never);
+    const definitions = getDbMoneyMovementToolDefinitions({
+      defaultPlanId: "plan-1",
+      moneyMovementsRepository: repository
+    });
     const monthlyTool = definitions.find(
       (definition) => definition.name === "ynab_get_money_movements_by_month"
     );

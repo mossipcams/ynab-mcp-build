@@ -4,13 +4,13 @@ Cloudflare Workers-native MCP server for YNAB.
 
 ## DB-Backed Rebuild
 
-The DB-backed read model is a new feature path, not an in-place migration of the existing live YNAB slices.
+The DB-backed read model is the runtime read path for normal MCP tools.
 
-In `YNAB_READ_SOURCE=d1` mode:
+With the D1 read model enabled:
 
 - normal MCP tools read from Cloudflare D1 only
 - YNAB API calls are limited to sync/admin code
-- tools do not fall back to live YNAB reads
+- tools do not fall back to direct YNAB API reads
 - public tool registration matches the advertised MCP discovery surface
 - read tools include freshness metadata for the synced endpoints they require
 
@@ -60,7 +60,7 @@ Money movements are modeled as category movements from the API:
 The official money movement SDK methods do not currently expose a
 `lastKnowledgeOfServer` argument, so those endpoints should be treated as
 bounded refreshes rather than normal delta cursor sync until confirmed against a
-live YNAB account.
+real YNAB account.
 
 ## Configuration
 

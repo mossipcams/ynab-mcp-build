@@ -4,7 +4,7 @@
 
 The v1 product surface is streamable HTTP MCP. The codebase is organized to keep HTTP transport, MCP protocol wiring, YNAB access, and OAuth state management separate.
 
-The DB-backed read model is a rebuild/new feature path, not an in-place migration of the existing live YNAB slices. In DB-backed mode, normal MCP tools read from Cloudflare D1 only. YNAB API calls belong to sync/admin code, and tools must not silently fall back to live YNAB reads.
+The DB-backed read model is the runtime read path for normal MCP tools. Normal MCP tools read from Cloudflare D1 only. YNAB API calls belong to sync/admin code, and tools must not silently fall back to direct YNAB API reads.
 
 The D1 schema is a normalized read model based on official YNAB API response
 shapes, not a lossy cache of the old slice outputs. Store API money values as
@@ -88,7 +88,7 @@ Do not create placeholder files just to satisfy the pattern.
 - `src/platform/ynab/**` is the only layer allowed to call YNAB APIs.
 - `src/platform/ynab/read-model/**` is the only layer allowed to issue YNAB read-model D1 queries.
 - DB-backed slices in `src/slices/db-*/**` expose normal `ynab_*` tool names but must read from D1 through read-model repositories/services only.
-- In DB-backed mode, unrebuilt tools must return clear DB-mode errors rather than calling live YNAB as a fallback.
+- Unrebuilt tools must return clear DB read-model errors rather than calling the YNAB API as a fallback.
 - `src/oauth/core/**` must not import Hono, Durable Object classes, or slice modules.
 - `src/oauth/http/**` must remain thin adapters over `src/oauth/core/**`.
 - `src/durable-objects/**` must not import Hono routes or slice modules.
