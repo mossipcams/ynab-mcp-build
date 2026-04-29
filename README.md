@@ -11,14 +11,12 @@ In `YNAB_READ_SOURCE=d1` mode:
 - normal MCP tools read from Cloudflare D1 only
 - YNAB API calls are limited to sync/admin code
 - tools do not fall back to live YNAB reads
-- unrebuilt tools return clear DB-mode errors
-- every rebuilt read tool includes freshness metadata
+- public tool registration matches the advertised MCP discovery surface
+- read tools include freshness metadata for the synced endpoints they require
 
-Current rebuilt DB-backed tool:
-
-- `ynab_search_transactions`
-
-The remaining public tool names are still registered in D1 mode, but they return a clear “not available yet in DB-backed read mode” error until their DB-backed slices are implemented.
+All advertised normal MCP tools are registered in D1 mode. Core plan, account,
+category, month, payee, transaction, scheduled transaction, money movement, and
+financial summary tools read through the D1 read model.
 
 ## Architecture
 
@@ -30,7 +28,7 @@ YNAB API
   -> MCP tool responses
 ```
 
-Durable state lives in D1. The MCP server remains stateless.
+The YNAB read model lives in D1. The MCP server remains stateless.
 
 OAuth state remains separate and uses the existing Durable Object-backed OAuth state store.
 
@@ -109,7 +107,7 @@ Apply the D1 schema with Wrangler once a real database is created and `database_
 
 ## Sync Flow
 
-The scheduled Worker sync runs from the Wrangler cron trigger every 15 minutes.
+The scheduled Worker sync runs from the Wrangler cron trigger every hour.
 It uses `YNAB_DEFAULT_PLAN_ID` when configured; otherwise it discovers YNAB's
 default plan from `GET /plans`, falling back to the first returned plan. The
 read-model sync service then:
@@ -127,6 +125,6 @@ not currently expose a delta cursor argument.
 
 ## Known Limitations
 
-- Only `ynab_search_transactions` is rebuilt against D1 so far.
 - Scheduled sync refreshes one configured or discovered default plan; multi-plan cron fan-out is not enabled by default.
 - Initial bootstrap for large budgets should be handled carefully because Worker/D1 limits make unbounded imports unsafe.
+- Money movements are refreshed as bounded reads until delta cursor support is confirmed for those endpoints.

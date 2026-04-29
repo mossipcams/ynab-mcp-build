@@ -27,7 +27,7 @@ class FakeStatement {
       return Promise.resolve({
         results: this.params.slice(1).map((endpoint) => ({
           endpoint,
-          health_status: this.db.healthStatus,
+          health_status: this.db.endpointHealthStatuses.get(String(endpoint)) ?? this.db.healthStatus,
           last_successful_sync_at: "2026-04-28T12:00:00.000Z"
         }))
       } as D1Result<T>);
@@ -94,6 +94,7 @@ class FakeStatement {
 
 class FakeD1Database {
   allCalls: Array<{ sql: string; params: unknown[] }> = [];
+  endpointHealthStatuses = new Map<string, string>();
   healthStatus = "ok";
   transactionSearchParams: unknown[] = [];
 
@@ -284,6 +285,25 @@ describe("DB-backed tool registration", () => {
       data: null
     });
 
+    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_transactions"))).toBe(false);
+  });
+
+  it("checks transaction freshness for compound monthly review tools before reading data", async () => {
+    const database = new FakeD1Database();
+    database.endpointHealthStatuses.set("transactions", "unhealthy");
+    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
+    const monthlyReview = definitions.find((definition) => definition.name === "ynab_get_monthly_review");
+
+    await expect(executeToolDefinition(monthlyReview, { month: "2026-04-01" })).resolves.toMatchObject({
+      status: "unhealthy",
+      data_freshness: {
+        health_status: "unhealthy",
+        required_endpoints: expect.arrayContaining(["categories", "months", "transactions"])
+      },
+      data: null
+    });
+
+    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_months"))).toBe(false);
     expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_transactions"))).toBe(false);
   });
 });
