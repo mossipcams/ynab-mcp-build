@@ -7,6 +7,9 @@ const rootUrl = new URL("../../", import.meta.url);
 const readRootFile = (path: string) =>
   readFileSync(new URL(path, rootUrl), "utf8");
 
+const parseRootJsonc = <T>(path: string) =>
+  JSON.parse(readRootFile(path).replace(/,\s*([}\]])/g, "$1")) as T;
+
 const importRootModule = async <T>(path: string) =>
   import(pathToFileURL(new URL(path, rootUrl).pathname).href) as Promise<T>;
 
@@ -17,18 +20,7 @@ describe("repository preflight tooling", () => {
       CI_COMMANDS: readonly string[];
     }>("scripts/preflight.mjs");
 
-    expect(CI_COMMANDS).toEqual([
-      "npm run cf-typegen",
-      "npm run typecheck:tsgo",
-      "npm run lint:fast",
-      "npm run typecheck:tsc",
-      "npm run typecheck:spec",
-      "npm run lint",
-      "npm run check:deps",
-      "npm run check:duplication",
-      "npm run check:knip",
-      "npm test",
-    ]);
+    expect(CI_COMMANDS).toEqual(["pnpm check:pr"]);
   });
 
   it("declares Node ambient types for tooling tests", () => {
@@ -137,9 +129,9 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      lint: "npm run lint:fast && npm run lint:eslint",
-      "lint:eslint": "eslint .",
-      "lint:fast": "oxlint --type-aware",
+      lint: "pnpm lint:types",
+      "lint:fast": "oxlint .",
+      "lint:types": "eslint . --cache --max-warnings=0",
     });
   });
 
@@ -150,8 +142,8 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      "pretypecheck:tsgo": "npm run cf-typegen",
-      typecheck: "npm run typecheck:tsgo",
+      "pretypecheck:tsgo": "pnpm run typegen",
+      typecheck: "tsc --noEmit",
       "typecheck:tsc": "tsc --noEmit -p tsconfig.json",
       "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json",
     });
@@ -162,9 +154,9 @@ describe("repository preflight tooling", () => {
     const agents = readRootFile("AGENTS.md");
 
     expect(agents).toContain("test often, fail fast, fix fast");
-    expect(agents).toContain("npm run typecheck:tsgo");
-    expect(agents).toContain("npm run lint:fast");
-    expect(agents).toContain("npm run typecheck:tsc");
+    expect(agents).toContain("pnpm run typecheck:tsgo");
+    expect(agents).toContain("pnpm run lint:fast");
+    expect(agents).toContain("pnpm run typecheck:tsc");
   });
 
   it("configures the required type-aware ESLint rules", async () => {
@@ -220,13 +212,22 @@ describe("repository preflight tooling", () => {
     // DEFECT: local git hooks can allow commits that fail the agreed fast typecheck and lint loop.
     const preCommitHook = readRootFile(".husky/pre-commit");
 
-    expect(preCommitHook).toContain("npm run typecheck:tsgo");
-    expect(preCommitHook).toContain("npm run lint:fast");
+    expect(preCommitHook).toContain("pnpm run typecheck:tsgo");
+    expect(preCommitHook).toContain("pnpm run lint:fast");
   });
 
   it("runs the shared CI command before pushing through Husky", () => {
     // DEFECT: local git hooks can bypass the shared preflight suite before code reaches the remote branch.
-    expect(readRootFile(".husky/pre-push")).toContain("npm run ci");
+    expect(readRootFile(".husky/pre-push")).toContain("pnpm check:prepr");
+  });
+
+  it("sets up pnpm before GitHub Actions configures the pnpm cache", () => {
+    // DEFECT: GitHub-hosted runners cannot restore a pnpm cache before the pnpm executable is available.
+    const workflow = readRootFile(".github/workflows/ci.yml");
+
+    expect(workflow.indexOf("- uses: pnpm/action-setup@v4")).toBeLessThan(
+      workflow.indexOf("cache: pnpm"),
+    );
   });
 
   it("runs CI before creating a GitHub pull request", () => {
@@ -240,11 +241,11 @@ describe("repository preflight tooling", () => {
 
   it("configures the Worker cron that refreshes the D1 read model", () => {
     // DEFECT: scheduled read-model freshness can be lost if the Worker cron trigger is removed or changed unexpectedly.
-    const wranglerConfig = JSON.parse(readRootFile("wrangler.jsonc")) as {
+    const wranglerConfig = parseRootJsonc<{
       triggers?: {
         crons?: string[];
       };
-    };
+    }>("wrangler.jsonc");
 
     expect(wranglerConfig.triggers?.crons).toEqual(["0 * * * *"]);
   });
@@ -297,10 +298,10 @@ describe("repository preflight tooling", () => {
   });
 
   it("disables non-custom Worker URLs", () => {
-    const wranglerConfig = JSON.parse(readRootFile("wrangler.jsonc")) as {
+    const wranglerConfig = parseRootJsonc<{
       preview_urls?: boolean;
       workers_dev?: boolean;
-    };
+    }>("wrangler.jsonc");
 
     expect(wranglerConfig.workers_dev).toBe(false);
     expect(wranglerConfig.preview_urls).toBe(false);

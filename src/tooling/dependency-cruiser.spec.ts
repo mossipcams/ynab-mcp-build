@@ -65,7 +65,7 @@ describe("dependency-cruiser architecture enforcement", () => {
   });
 
   it("can run dependency-cruiser against the source tree", () => {
-    const result = spawnSync("npm", ["run", "check:deps"], {
+    const result = spawnSync("pnpm", ["check:deps"], {
       cwd: repoRoot,
       encoding: "utf8",
       shell: false,
@@ -80,8 +80,9 @@ describe("dependency-cruiser architecture enforcement", () => {
 
   it("extracts TypeScript import edges instead of scanning modules only", () => {
     const result = spawnSync(
-      "npx",
+      "pnpm",
       [
+        "exec",
         "depcruise",
         "--output-type",
         "json",
@@ -169,8 +170,12 @@ describe("dependency-cruiser architecture enforcement", () => {
       CI_COMMANDS: string[];
     };
     const ciWorkflow = readFileSync(ciWorkflowPath, "utf8");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
 
-    expect(preflight.CI_COMMANDS).toContain("npm run check:deps");
-    expect(ciWorkflow).toContain("npm run check:deps");
+    expect(preflight.CI_COMMANDS).toContain("pnpm check:pr");
+    expect(packageJson.scripts?.["check:pr"]).toContain("pnpm check:deps");
+    expect(ciWorkflow).toContain("pnpm check:pr");
   });
 });

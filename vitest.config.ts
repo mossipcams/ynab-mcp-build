@@ -32,6 +32,9 @@ const workersIncludes = [
 
 export default defineConfig({
   test: {
+    coverage: {
+      provider: "istanbul",
+    },
     globals: true,
     projects: [
       defineProject({
