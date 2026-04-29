@@ -1,7 +1,6 @@
 import type {
   OAuthAccessToken,
   OAuthAuthorizationCode,
-  OAuthRefreshToken,
   OAuthRefreshTokenRotationResult,
   OAuthRegisteredClient,
   OAuthStore
@@ -130,14 +129,17 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
       return value;
     },
     async put(key: string, value: string, options?: { expirationTtl?: number }) {
+      const requestInit: RequestInit = {
+        body: value,
+        method: "PUT"
+      };
+
+      if (options?.expirationTtl) {
+        requestInit.headers = { "x-expiration-ttl": String(options.expirationTtl) };
+      }
+
       expectOk(
-        await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`, {
-          body: value,
-          headers: {
-            ...(options?.expirationTtl ? { "x-expiration-ttl": String(options.expirationTtl) } : {})
-          },
-          method: "PUT"
-        })
+        await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`, requestInit)
       );
     },
     async delete(key: string) {

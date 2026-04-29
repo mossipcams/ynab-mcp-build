@@ -308,6 +308,10 @@ describe("DB-backed transaction service", () => {
         stale: true,
         warning: "Required endpoint transactions has never synced."
       },
+      next_action: {
+        code: "sync_read_model",
+        message: "Run the scheduled YNAB read-model sync for plan-1, then retry after endpoints are healthy: transactions."
+      },
       data: null
     });
   });

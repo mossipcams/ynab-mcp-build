@@ -287,6 +287,10 @@ describe("DB-backed tool registration", () => {
         health_status: "unhealthy",
         required_endpoints: ["transactions"]
       },
+      next_action: {
+        code: "sync_read_model",
+        message: expect.stringContaining("Run the scheduled YNAB read-model sync")
+      },
       data: null
     });
 

@@ -6,6 +6,9 @@ describe("mcp result helpers", () => {
   it("serializes payloads as MCP text content", () => {
     expect(toMcpTextResult({ hello: "world" })).toEqual({
       isError: false,
+      structuredContent: {
+        hello: "world"
+      },
       content: [
         {
           type: "text",
@@ -18,6 +21,10 @@ describe("mcp result helpers", () => {
   it("marks error payloads with MCP error metadata", () => {
     expect(toMcpErrorResult(new Error("boom"))).toEqual({
       isError: true,
+      structuredContent: {
+        success: false,
+        error: "boom"
+      },
       content: [
         {
           type: "text",

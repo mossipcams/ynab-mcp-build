@@ -1,10 +1,9 @@
-import { createCodeChallenge, verifyPkceCodeVerifier } from "./pkce.js";
+import { verifyPkceCodeVerifier } from "./pkce.js";
 import { signJwt, verifyJwt } from "./jwt.js";
 import type {
   OAuthAccessToken,
   OAuthAuthorizationCode,
   OAuthRefreshToken,
-  OAuthRefreshTokenRotationResult,
   OAuthRegisteredClient,
   OAuthStore
 } from "./store.js";

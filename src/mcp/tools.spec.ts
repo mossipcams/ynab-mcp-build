@@ -35,6 +35,9 @@ describe("registerToolDefinitions", () => {
     });
     await expect(handler({ query: "hello" })).resolves.toEqual({
       isError: false,
+      structuredContent: {
+        echoed: "hello"
+      },
       content: [
         {
           type: "text",
@@ -64,6 +67,10 @@ describe("registerToolDefinitions", () => {
     const [, , handler] = registerTool.mock.calls[0]!;
     await expect(handler({})).resolves.toEqual({
       isError: true,
+      structuredContent: {
+        success: false,
+        error: "broken"
+      },
       content: [
         {
           type: "text",

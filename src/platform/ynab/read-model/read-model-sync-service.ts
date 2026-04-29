@@ -295,7 +295,8 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
       : []),
     {
       endpoint: "accounts",
-      fetchDelta: options.deltaClient.listAccountsDelta,
+      fetchDelta: (planId, serverKnowledge) =>
+        options.deltaClient.listAccountsDelta(planId, serverKnowledge),
       async write(input) {
         return options.readModelRepository.upsertAccounts({
           accounts: input.records as YnabAccountSummary[],
@@ -306,7 +307,8 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
     },
     {
       endpoint: "categories",
-      fetchDelta: options.deltaClient.listCategoriesDelta,
+      fetchDelta: (planId, serverKnowledge) =>
+        options.deltaClient.listCategoriesDelta(planId, serverKnowledge),
       async write(input) {
         const categoryGroups = input.records as YnabCategoryGroupSummary[];
         const result = await options.readModelRepository.upsertCategoryGroups({
@@ -322,7 +324,8 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
     },
     {
       endpoint: "months",
-      fetchDelta: options.deltaClient.listMonthsDelta,
+      fetchDelta: (planId, serverKnowledge) =>
+        options.deltaClient.listMonthsDelta(planId, serverKnowledge),
       async write(input) {
         const result = await options.readModelRepository.upsertMonths({
           months: input.records as YnabPlanMonthDetail[],
@@ -386,7 +389,8 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
       : []),
     {
       endpoint: "payees",
-      fetchDelta: options.deltaClient.listPayeesDelta,
+      fetchDelta: (planId, serverKnowledge) =>
+        options.deltaClient.listPayeesDelta(planId, serverKnowledge),
       async write(input) {
         return options.readModelRepository.upsertPayees({
           payees: input.records as YnabPayee[],
@@ -397,7 +401,8 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
     },
     {
       endpoint: "payee_locations",
-      fetchDelta: options.deltaClient.listPayeeLocationsDelta,
+      fetchDelta: (planId, serverKnowledge) =>
+        options.deltaClient.listPayeeLocationsDelta(planId, serverKnowledge),
       async write(input) {
         return options.readModelRepository.upsertPayeeLocations({
           locations: input.records as YnabPayeeLocation[],
@@ -408,7 +413,8 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
     },
     {
       endpoint: "scheduled_transactions",
-      fetchDelta: options.deltaClient.listScheduledTransactionsDelta,
+      fetchDelta: (planId, serverKnowledge) =>
+        options.deltaClient.listScheduledTransactionsDelta(planId, serverKnowledge),
       async write(input) {
         return options.readModelRepository.upsertScheduledTransactions({
           planId: input.planId,
@@ -419,7 +425,8 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
     },
     {
       endpoint: "transactions",
-      fetchDelta: options.deltaClient.listTransactionsDelta,
+      fetchDelta: (planId, serverKnowledge) =>
+        options.deltaClient.listTransactionsDelta(planId, serverKnowledge),
       async write(input) {
         return options.transactionsRepository.upsertTransactions({
           planId: input.planId,
