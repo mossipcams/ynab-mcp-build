@@ -114,19 +114,22 @@ describe("transactions repository", () => {
       rowsUpserted: 2
     });
     expect(db.batchStatements).toHaveLength(3);
-    expect(db.batchStatements[0].sql).toContain("ON CONFLICT(plan_id, id) DO UPDATE");
-    expect(db.batchStatements[0].params).toContain("plan-1");
-    expect(db.batchStatements[0].params).toContain("txn-1");
-    expect(db.batchStatements[0].params).toContain(-12000);
-    expect(db.batchStatements[0].params).toContain("blue");
-    expect(db.batchStatements[0].params).toContain("transfer-txn-1");
-    expect(db.batchStatements[0].params).toContain("matched-txn-1");
-    expect(db.batchStatements[0].params).toContain("YNAB:-12000:2026-04-12:1");
-    expect(db.batchStatements[0].params).toContain("payment");
-    expect(db.batchStatements[1].sql).toContain("INSERT INTO ynab_subtransactions");
-    expect(db.batchStatements[1].params).toContain("subtxn-1");
-    expect(db.batchStatements[1].params).toContain("transfer-subtxn-1");
-    expect(db.batchStatements[2].params).toContain(1);
+    const transactionStatement = db.batchStatements[0]!;
+    const subtransactionStatement = db.batchStatements[1]!;
+    const deletedTransactionStatement = db.batchStatements[2]!;
+    expect(transactionStatement.sql).toContain("ON CONFLICT(plan_id, id) DO UPDATE");
+    expect(transactionStatement.params).toContain("plan-1");
+    expect(transactionStatement.params).toContain("txn-1");
+    expect(transactionStatement.params).toContain(-12000);
+    expect(transactionStatement.params).toContain("blue");
+    expect(transactionStatement.params).toContain("transfer-txn-1");
+    expect(transactionStatement.params).toContain("matched-txn-1");
+    expect(transactionStatement.params).toContain("YNAB:-12000:2026-04-12:1");
+    expect(transactionStatement.params).toContain("payment");
+    expect(subtransactionStatement.sql).toContain("INSERT INTO ynab_subtransactions");
+    expect(subtransactionStatement.params).toContain("subtxn-1");
+    expect(subtransactionStatement.params).toContain("transfer-subtxn-1");
+    expect(deletedTransactionStatement.params).toContain(1);
   });
 
   it("searches with parameterized filters and excludes deleted transactions by default", async () => {
@@ -158,12 +161,13 @@ describe("transactions repository", () => {
 
     expect(result).toEqual(db.allResults);
     expect(db.allCalls).toHaveLength(1);
-    expect(db.allCalls[0].sql).toContain("deleted = 0");
-    expect(db.allCalls[0].sql).toContain("account_id IN (?)");
-    expect(db.allCalls[0].sql).toContain("category_id IN (?, ?)");
-    expect(db.allCalls[0].sql).toContain("payee_name LIKE ?");
-    expect(db.allCalls[0].sql).toContain("LIMIT ?");
-    expect(db.allCalls[0].params).toEqual([
+    const call = db.allCalls[0]!;
+    expect(call.sql).toContain("deleted = 0");
+    expect(call.sql).toContain("account_id IN (?)");
+    expect(call.sql).toContain("category_id IN (?, ?)");
+    expect(call.sql).toContain("payee_name LIKE ?");
+    expect(call.sql).toContain("LIMIT ?");
+    expect(call.params).toEqual([
       "plan-1",
       "2026-04-01",
       "2026-04-30",

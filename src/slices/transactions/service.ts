@@ -100,11 +100,11 @@ function toDisplayTransaction(transaction: YnabTransaction): DisplayTransaction 
     id: transaction.id,
     date: transaction.date,
     amount: formatAmountMilliunits(transaction.amount),
-    payee_name: transaction.payeeName,
-    category_name: transaction.categoryName,
-    account_name: transaction.accountName,
-    approved: transaction.approved,
-    cleared: transaction.cleared
+    ...(transaction.payeeName !== undefined ? { payee_name: transaction.payeeName } : {}),
+    ...(transaction.categoryName !== undefined ? { category_name: transaction.categoryName } : {}),
+    ...(transaction.accountName !== undefined ? { account_name: transaction.accountName } : {}),
+    ...(transaction.approved !== undefined ? { approved: transaction.approved } : {}),
+    ...(transaction.cleared !== undefined ? { cleared: transaction.cleared } : {})
   };
 }
 
@@ -192,7 +192,7 @@ function buildTransactionSummary(transactions: YnabTransaction[], topN = 5) {
         existingCategory.transactionCount += 1;
       } else {
         categoryRollups.set(categoryKey, {
-          id: transaction.categoryId ?? undefined,
+          ...(transaction.categoryId ? { id: transaction.categoryId } : {}),
           name: transaction.categoryName ?? "Uncategorized",
           amountMilliunits,
           transactionCount: 1
@@ -206,7 +206,7 @@ function buildTransactionSummary(transactions: YnabTransaction[], topN = 5) {
         existingPayee.transactionCount += 1;
       } else {
         payeeRollups.set(payeeKey, {
-          id: transaction.payeeId ?? undefined,
+          ...(transaction.payeeId ? { id: transaction.payeeId } : {}),
           name: transaction.payeeName ?? "Unknown Payee",
           amountMilliunits,
           transactionCount: 1

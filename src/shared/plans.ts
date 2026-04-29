@@ -9,7 +9,11 @@ export function getKnownDefaultPlan(plans: YnabPlanList): YnabDefaultPlan | null
   }
 
   if (plans.plans.length === 1) {
-    const onlyPlan = plans.plans[0];
+    const [onlyPlan] = plans.plans;
+
+    if (!onlyPlan) {
+      return null;
+    }
 
     return {
       id: onlyPlan.id,

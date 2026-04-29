@@ -343,7 +343,7 @@ describe("oauth routes", () => {
       await client.close();
     });
 
-    await client.connect(transport);
+    await client.connect(transport as unknown as Parameters<typeof client.connect>[0]);
 
     const result = await client.callTool({
       name: "ynab_get_mcp_version",

@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { describe, expect, it, vi } from "vitest";
 
-import { registerMcpToolDefinitions, type McpToolDefinition } from "./tools.js";
+import type { SliceToolDefinition } from "../shared/tool-definition.js";
+import { registerToolDefinitions } from "./tool-registry.js";
 
-describe("registerMcpToolDefinitions", () => {
+describe("registerToolDefinitions", () => {
   it("registers tool definitions with MCP handlers", async () => {
     const registerTool = vi.fn();
     const server = { registerTool };
-    const definitions: McpToolDefinition[] = [
+    const definitions: SliceToolDefinition[] = [
       {
         name: "demo_tool",
         title: "Demo Tool",
@@ -19,7 +20,7 @@ describe("registerMcpToolDefinitions", () => {
       }
     ];
 
-    registerMcpToolDefinitions(server, definitions);
+    registerToolDefinitions(server as never, definitions);
 
     expect(registerTool).toHaveBeenCalledTimes(1);
 
@@ -46,7 +47,7 @@ describe("registerMcpToolDefinitions", () => {
   it("wraps handler failures as MCP errors", async () => {
     const registerTool = vi.fn();
     const server = { registerTool };
-    const definitions: McpToolDefinition[] = [
+    const definitions: SliceToolDefinition[] = [
       {
         name: "failing_tool",
         title: "Failing Tool",
@@ -58,7 +59,7 @@ describe("registerMcpToolDefinitions", () => {
       }
     ];
 
-    registerMcpToolDefinitions(server, definitions);
+    registerToolDefinitions(server as never, definitions);
 
     const [, , handler] = registerTool.mock.calls[0]!;
     await expect(handler({})).resolves.toEqual({

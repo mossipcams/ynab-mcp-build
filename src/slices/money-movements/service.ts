@@ -122,10 +122,10 @@ function groupMoneyMovements(movements: DisplayMoneyMovement[]) {
 
     groups.set(groupId, {
       id: groupId,
-      from_account_id: movement.from_account_id,
-      from_account_name: movement.from_account_name,
-      to_account_id: movement.to_account_id,
-      to_account_name: movement.to_account_name,
+      ...(movement.from_account_id !== undefined ? { from_account_id: movement.from_account_id } : {}),
+      ...(movement.from_account_name !== undefined ? { from_account_name: movement.from_account_name } : {}),
+      ...(movement.to_account_id !== undefined ? { to_account_id: movement.to_account_id } : {}),
+      ...(movement.to_account_name !== undefined ? { to_account_name: movement.to_account_name } : {}),
       movement_count: 1,
       latest_date: movement.date,
       totalAmountMilliunits: amountMilliunits

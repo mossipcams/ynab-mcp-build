@@ -133,8 +133,8 @@ export async function runScheduledReadModelSync(
   const planId = await resolveScheduledPlanId({
     accessToken: appEnv.ynabAccessToken,
     baseUrl: appEnv.ynabApiBaseUrl,
-    configuredPlanId: appEnv.ynabDefaultPlanId,
-    ynabClient: dependencies.ynabClient
+    ...(appEnv.ynabDefaultPlanId ? { configuredPlanId: appEnv.ynabDefaultPlanId } : {}),
+    ...(dependencies.ynabClient ? { ynabClient: dependencies.ynabClient } : {})
   });
 
   if (!planId) {

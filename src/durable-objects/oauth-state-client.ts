@@ -15,7 +15,7 @@ export type AtomicOAuthKvNamespace = KVNamespace & {
   consume<T = unknown>(key: string, options?: { type?: string }): Promise<T | null>;
 };
 
-async function expectOk(response: Response) {
+function expectOk(response: Response) {
   if (response.ok) {
     return response;
   }
@@ -37,13 +37,17 @@ async function postJson(fetcher: FetchLike, path: string, payload: unknown) {
 }
 
 async function getJson<T>(fetcher: FetchLike, path: string): Promise<T | undefined> {
-  const response = await expectOk(await fetcher.fetch(`https://oauth-state${path}`));
+  const response = expectOk(await fetcher.fetch(`https://oauth-state${path}`));
 
   if (response.status === 404) {
     return undefined;
   }
 
   return response.json() as Promise<T>;
+}
+
+function parseJson(value: string): unknown {
+  return JSON.parse(value) as unknown;
 }
 
 export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
@@ -89,7 +93,7 @@ export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
 export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNamespace {
   return {
     async consume(key: string, options?: { type?: string }) {
-      const response = await expectOk(
+      const response = expectOk(
         await fetcher.fetch("https://oauth-state/kv/consume", {
           body: JSON.stringify({ key }),
           method: "POST"
@@ -103,13 +107,13 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
       const value = await response.text();
 
       if (options?.type === "json") {
-        return JSON.parse(value);
+        return parseJson(value);
       }
 
       return value;
     },
     async get(key: string, options?: { type?: string }) {
-      const response = await expectOk(
+      const response = expectOk(
         await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`)
       );
 
@@ -120,13 +124,13 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
       const value = await response.text();
 
       if (options?.type === "json") {
-        return JSON.parse(value);
+        return parseJson(value);
       }
 
       return value;
     },
     async put(key: string, value: string, options?: { expirationTtl?: number }) {
-      await expectOk(
+      expectOk(
         await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`, {
           body: value,
           headers: {
@@ -137,7 +141,7 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
       );
     },
     async delete(key: string) {
-      await expectOk(
+      expectOk(
         await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`, {
           method: "DELETE"
         })
@@ -151,7 +155,7 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
       }
 
       const query = params.toString();
-      const response = await expectOk(
+      const response = expectOk(
         await fetcher.fetch(`https://oauth-state/kv${query ? `?${query}` : ""}`)
       );
 

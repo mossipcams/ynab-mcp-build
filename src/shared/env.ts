@@ -61,6 +61,18 @@ function getAccessOidcDiscoveryUrl(teamDomain: string, clientId: string) {
   return `https://${teamDomain}/cdn-cgi/access/sso/oidc/${encodeURIComponent(clientId)}/.well-known/openid-configuration`;
 }
 
+type Compact<T extends Record<string, unknown>> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
+};
+
+function compact<T extends Record<string, unknown>>(entry: T): Compact<T> {
+  return Object.fromEntries(
+    Object.entries(entry).filter(([, value]) => value !== undefined)
+  ) as Compact<T>;
+}
+
 export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request): AppEnv {
   const runtimeEnv = env as {
     ACCESS_AUTHORIZATION_URL?: string;
@@ -111,7 +123,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
   const derivedPublicUrl = request
     ? `${new URL(request.url).origin}/mcp`
     : undefined;
-  const resolvedEnv = {
+  const resolvedEnv = compact({
     ...(accessOidcRequiredValueCount === 3
       ? {
           accessOidc: {
@@ -146,7 +158,7 @@ export function resolveAppEnv(env: Partial<Env> | undefined, request?: Request):
       runtimeEnv?.YNAB_SYNC_MAX_ROWS_PER_RUN,
       DEFAULT_APP_ENV.ynabSyncMaxRowsPerRun
     )
-  };
+  });
 
   if (resolvedEnv.oauthEnabled && !resolvedEnv.publicUrl) {
     throw new Error("MCP_PUBLIC_URL is required when MCP_OAUTH_ENABLED is true.");

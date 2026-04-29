@@ -56,7 +56,10 @@ describe("Worker OAuth provider", () => {
     );
 
     expect(waitUntil).toHaveBeenCalledTimes(1);
-    await expect(waitUntil.mock.calls[0][0]).resolves.toEqual({
+    const [scheduledPromise] = waitUntil.mock.calls[0] ?? [];
+
+    expect(scheduledPromise).toBeDefined();
+    await expect(scheduledPromise).resolves.toEqual({
       reason: "YNAB_READ_SOURCE is not d1.",
       status: "skipped"
     });

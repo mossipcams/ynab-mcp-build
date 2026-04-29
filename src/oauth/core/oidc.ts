@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 type OidcJwtHeader = {
   alg?: string;
   kid?: string;
@@ -14,6 +16,18 @@ type OidcJwks = {
   keys?: (JsonWebKey & { kid?: string })[];
 };
 
+const OidcJwtHeaderSchema = z.object({
+  alg: z.string().optional(),
+  kid: z.string().optional()
+}).passthrough();
+
+const OidcJwtPayloadSchema = z.object({
+  aud: z.union([z.string(), z.array(z.string())]).optional(),
+  email: z.string().optional(),
+  exp: z.number().optional(),
+  sub: z.string().optional()
+}).passthrough();
+
 function base64urlDecode(input: string): Uint8Array {
   const base64 = input.replace(/-/g, "+").replace(/_/g, "/").padEnd(
     input.length + (4 - (input.length % 4)) % 4,
@@ -29,8 +43,10 @@ function base64urlDecode(input: string): Uint8Array {
   return bytes;
 }
 
-function parseJsonFromBase64url<T>(input: string): T {
-  return JSON.parse(new TextDecoder().decode(base64urlDecode(input))) as T;
+async function parseJsonFromBase64url<T>(input: string, schema: z.ZodType<unknown>): Promise<T> {
+  const rawPayload: unknown = await new Response(new TextDecoder().decode(base64urlDecode(input))).json();
+
+  return schema.parse(rawPayload) as T;
 }
 
 async function importRsaKey(jwk: JsonWebKey) {
@@ -86,8 +102,8 @@ export async function verifyOidcIdToken(input: {
   }
 
   const [headerSegment, payloadSegment, signatureSegment] = parts as [string, string, string];
-  const header = parseJsonFromBase64url<OidcJwtHeader>(headerSegment);
-  const payload = parseJsonFromBase64url<OidcJwtPayload>(payloadSegment);
+  const header = await parseJsonFromBase64url<OidcJwtHeader>(headerSegment, OidcJwtHeaderSchema);
+  const payload = await parseJsonFromBase64url<OidcJwtPayload>(payloadSegment, OidcJwtPayloadSchema);
 
   if (!header.alg) {
     throw new Error("Access OIDC ID token is missing an algorithm.");

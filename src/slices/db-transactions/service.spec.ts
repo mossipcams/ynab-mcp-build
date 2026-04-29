@@ -58,9 +58,9 @@ describe("DB-backed transaction service", () => {
       categoryIds: ["category-1"],
       endDate: "2026-04-30",
       includeDeleted: false,
+      includeTransfers: false,
       limit: 500,
       payeeIds: ["payee-1"],
-      payeeSearch: undefined,
       planId: "plan-1",
       startDate: "2026-04-01"
     });
@@ -75,7 +75,20 @@ describe("DB-backed transaction service", () => {
         warning: null
       },
       data: {
+        filters: {
+          account_id: "account-1",
+          category_id: "category-1",
+          from_date: "2026-04-01",
+          include_transfers: false,
+          payee_id: "payee-1",
+          sort: "date_desc",
+          to_date: "2026-04-30"
+        },
+        has_more: false,
+        limit: 999,
         match_count: 1,
+        offset: 0,
+        returned_count: 1,
         transactions: [
           {
             account_id: "account-1",
@@ -104,6 +117,134 @@ describe("DB-backed transaction service", () => {
         ]
       }
     });
+  });
+
+  it("preserves public search filters, projection, pagination, sorting, and summaries", async () => {
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => [
+        {
+          id: "txn-transfer",
+          date: "2026-04-14",
+          amount_milliunits: -1000,
+          cleared: "cleared",
+          approved: 1,
+          account_id: "account-1",
+          account_name: "Checking",
+          payee_id: "payee-transfer",
+          payee_name: "Transfer",
+          category_id: "category-1",
+          category_name: "Groceries",
+          transfer_account_id: "account-2",
+          deleted: 0
+        },
+        {
+          id: "txn-approved-large",
+          date: "2026-04-13",
+          amount_milliunits: -9000,
+          cleared: "cleared",
+          approved: 1,
+          account_id: "account-1",
+          account_name: "Checking",
+          payee_id: "payee-2",
+          payee_name: "Bakery",
+          category_id: "category-1",
+          category_name: "Groceries",
+          transfer_account_id: null,
+          deleted: 0
+        },
+        {
+          id: "txn-approved-small",
+          date: "2026-04-12",
+          amount_milliunits: -3000,
+          cleared: "cleared",
+          approved: 1,
+          account_id: "account-1",
+          account_name: "Checking",
+          payee_id: "payee-1",
+          payee_name: "Market",
+          category_id: "category-1",
+          category_name: "Groceries",
+          transfer_account_id: null,
+          deleted: 0
+        },
+        {
+          id: "txn-uncleared",
+          date: "2026-04-11",
+          amount_milliunits: -2000,
+          cleared: "uncleared",
+          approved: 1,
+          account_id: "account-1",
+          account_name: "Checking",
+          payee_id: "payee-3",
+          payee_name: "Cafe",
+          category_id: "category-1",
+          category_name: "Groceries",
+          transfer_account_id: null,
+          deleted: 0
+        }
+      ])
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-04-28T12:00:00.000Z",
+        stale: false,
+        warning: null
+      }))
+    };
+
+    const result = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      {
+        approved: true,
+        cleared: "cleared",
+        fields: ["date", "amount", "payee_name"],
+        includeIds: false,
+        includeSummary: true,
+        limit: 1,
+        offset: 1,
+        sort: "amount_asc"
+      }
+    );
+
+    expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approved: true,
+        cleared: "cleared",
+        includeTransfers: false,
+        limit: 2,
+        sort: "amount_asc"
+      })
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      data: {
+        filters: {
+          approved: true,
+          cleared: "cleared",
+          include_transfers: false,
+          include_summary: true,
+          sort: "amount_asc"
+        },
+        limit: 1,
+        offset: 1,
+        match_count: 2,
+        returned_count: 1,
+        transactions: [
+          {
+            amount: "-3.00",
+            date: "2026-04-12",
+            payee_name: "Market"
+          }
+        ],
+        totals: {
+          total_inflow: "0.00",
+          total_outflow: "12.00",
+          net: "-12.00"
+        }
+      }
+    });
+    expect(result.data?.transactions[0]).not.toHaveProperty("id");
   });
 
   it("returns an unhealthy error without querying transactions when required sync never completed", async () => {

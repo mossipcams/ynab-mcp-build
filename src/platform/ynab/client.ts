@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { mapTransactionRecord } from "./mappers.js";
 
 export type YnabClientErrorCategory = "internal" | "rate_limit" | "upstream";
@@ -50,7 +52,7 @@ export type YnabCategorySummary = {
   id: string;
   name: string;
   hidden: boolean;
-  deleted: boolean;
+  deleted?: boolean;
   categoryGroupId?: string | null;
   categoryGroupName?: string;
   originalCategoryGroupId?: string | null;
@@ -337,6 +339,18 @@ type CreateYnabClientOptions = {
   baseUrl: string;
   fetchFn?: typeof fetch;
 };
+
+type Compact<T extends Record<string, unknown>> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
+};
+
+function compact<T extends Record<string, unknown>>(entry: T): Compact<T> {
+  return Object.fromEntries(
+    Object.entries(entry).filter(([, value]) => value !== undefined)
+  ) as Compact<T>;
+}
 
 type YnabPlansResponse = {
   data: {
@@ -715,16 +729,337 @@ type YnabMoneyMovementGroupsResponse = {
   };
 };
 
-async function getJson<T>(response: Response): Promise<T> {
+const YnabErrorResponseSchema = z.object({
+  error: z.object({
+    detail: z.string().optional()
+  }).optional()
+}).passthrough();
+
+const optionalNullableString = z.string().nullable().optional();
+const optionalNullableNumber = z.number().nullable().optional();
+const optionalNullableBoolean = z.boolean().nullable().optional();
+
+const YnabAccountRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+  closed: z.boolean(),
+  balance: z.number(),
+  on_budget: optionalNullableBoolean,
+  note: optionalNullableString,
+  cleared_balance: z.number().optional(),
+  uncleared_balance: z.number().optional(),
+  transfer_payee_id: optionalNullableString,
+  direct_import_linked: optionalNullableBoolean,
+  direct_import_in_error: optionalNullableBoolean,
+  last_reconciled_at: optionalNullableString,
+  deleted: z.boolean().optional()
+}).passthrough();
+
+const YnabCategoryRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  hidden: z.boolean(),
+  deleted: z.boolean().optional(),
+  category_group_id: optionalNullableString,
+  category_group_name: z.string().optional(),
+  original_category_group_id: optionalNullableString,
+  note: optionalNullableString,
+  budgeted: z.number().optional(),
+  activity: z.number().optional(),
+  balance: z.number().optional(),
+  goal_type: optionalNullableString,
+  goal_target: optionalNullableNumber,
+  goal_target_date: optionalNullableString,
+  goal_target_month: optionalNullableString,
+  goal_needs_whole_amount: optionalNullableBoolean,
+  goal_day: optionalNullableNumber,
+  goal_cadence: optionalNullableNumber,
+  goal_cadence_frequency: optionalNullableNumber,
+  goal_creation_month: optionalNullableString,
+  goal_percentage_complete: optionalNullableNumber,
+  goal_months_to_budget: optionalNullableNumber,
+  goal_under_funded: optionalNullableNumber,
+  goal_overall_funded: optionalNullableNumber,
+  goal_overall_left: optionalNullableNumber,
+  goal_snoozed_at: optionalNullableString
+}).passthrough();
+
+const YnabCategoryGroupRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  hidden: z.boolean(),
+  deleted: z.boolean(),
+  categories: z.array(YnabCategoryRecordSchema).optional()
+}).passthrough();
+
+const YnabPlanMonthRecordSchema = z.object({
+  month: z.string(),
+  note: optionalNullableString,
+  income: z.number().optional(),
+  budgeted: z.number().optional(),
+  activity: z.number().optional(),
+  to_be_budgeted: z.number().optional(),
+  age_of_money: optionalNullableNumber,
+  categories: z.array(YnabCategoryRecordSchema).optional(),
+  deleted: z.boolean().optional()
+}).passthrough();
+
+const YnabSubtransactionRecordSchema = z.object({
+  id: z.string(),
+  transaction_id: optionalNullableString,
+  amount: z.number(),
+  memo: optionalNullableString,
+  payee_id: optionalNullableString,
+  payee_name: optionalNullableString,
+  category_id: optionalNullableString,
+  category_name: optionalNullableString,
+  transfer_account_id: optionalNullableString,
+  transfer_transaction_id: optionalNullableString,
+  deleted: z.boolean().optional()
+}).passthrough();
+
+const YnabTransactionRecordSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  amount: z.number(),
+  memo: optionalNullableString,
+  payee_id: optionalNullableString,
+  payee_name: optionalNullableString,
+  category_id: optionalNullableString,
+  category_name: optionalNullableString,
+  account_id: optionalNullableString,
+  account_name: optionalNullableString,
+  approved: optionalNullableBoolean,
+  cleared: optionalNullableString,
+  flag_color: optionalNullableString,
+  flag_name: optionalNullableString,
+  deleted: z.boolean().optional(),
+  transfer_account_id: optionalNullableString,
+  transfer_transaction_id: optionalNullableString,
+  matched_transaction_id: optionalNullableString,
+  import_id: optionalNullableString,
+  import_payee_name: optionalNullableString,
+  import_payee_name_original: optionalNullableString,
+  debt_transaction_type: optionalNullableString,
+  subtransactions: z.array(YnabSubtransactionRecordSchema).optional()
+}).passthrough();
+
+const YnabScheduledSubtransactionRecordSchema = z.object({
+  id: z.string(),
+  scheduled_transaction_id: optionalNullableString,
+  amount: z.number(),
+  memo: optionalNullableString,
+  payee_id: optionalNullableString,
+  payee_name: optionalNullableString,
+  category_id: optionalNullableString,
+  category_name: optionalNullableString,
+  transfer_account_id: optionalNullableString,
+  deleted: z.boolean().optional()
+}).passthrough();
+
+const YnabScheduledTransactionRecordSchema = z.object({
+  id: z.string(),
+  date_first: z.string(),
+  date_next: optionalNullableString,
+  frequency: optionalNullableString,
+  amount: z.number(),
+  memo: optionalNullableString,
+  flag_color: optionalNullableString,
+  flag_name: optionalNullableString,
+  account_id: optionalNullableString,
+  payee_name: optionalNullableString,
+  payee_id: optionalNullableString,
+  category_name: optionalNullableString,
+  category_id: optionalNullableString,
+  account_name: optionalNullableString,
+  transfer_account_id: optionalNullableString,
+  deleted: z.boolean().optional(),
+  subtransactions: z.array(YnabScheduledSubtransactionRecordSchema).optional()
+}).passthrough();
+
+const YnabPayeeRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  transfer_account_id: optionalNullableString,
+  deleted: z.boolean().optional()
+}).passthrough();
+
+const YnabPayeeLocationRecordSchema = z.object({
+  id: z.string(),
+  payee_id: optionalNullableString,
+  latitude: z.union([z.number(), z.string()]).nullable().optional(),
+  longitude: z.union([z.number(), z.string()]).nullable().optional(),
+  deleted: z.boolean().optional()
+}).passthrough();
+
+const YnabMoneyMovementRecordSchema = z.object({
+  id: z.string(),
+  month: optionalNullableString,
+  moved_at: optionalNullableString,
+  note: optionalNullableString,
+  money_movement_group_id: optionalNullableString,
+  performed_by_user_id: optionalNullableString,
+  from_category_id: optionalNullableString,
+  to_category_id: optionalNullableString,
+  amount: z.number(),
+  deleted: z.boolean().optional()
+}).passthrough();
+
+const YnabMoneyMovementGroupRecordSchema = z.object({
+  id: z.string(),
+  group_created_at: z.string(),
+  month: z.string(),
+  note: optionalNullableString,
+  performed_by_user_id: optionalNullableString,
+  deleted: z.boolean().optional()
+}).passthrough();
+
+const YnabUserResponseSchema = z.object({
+  data: z.object({
+    user: z.object({
+      id: z.string(),
+      name: z.string()
+    }).passthrough()
+  }).passthrough()
+}).passthrough();
+
+const YnabPlansResponseSchema = z.object({
+  data: z.object({
+    plans: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      last_modified_on: z.string().optional()
+    }).passthrough()),
+    default_plan: z.object({
+      id: z.string(),
+      name: z.string()
+    }).passthrough().optional()
+  }).passthrough()
+}).passthrough();
+
+const YnabPlanResponseSchema = z.object({
+  data: z.object({
+    plan: z.object({
+      id: z.string(),
+      name: z.string(),
+      last_modified_on: z.string().optional(),
+      first_month: z.string().optional(),
+      last_month: z.string().optional(),
+      accounts: z.array(z.unknown()).optional(),
+      category_groups: z.array(z.unknown()).optional(),
+      payees: z.array(z.unknown()).optional()
+    }).passthrough()
+  }).passthrough()
+}).passthrough();
+
+const YnabAccountsResponseSchema = z.object({
+  data: z.object({ accounts: z.array(YnabAccountRecordSchema) }).passthrough()
+}).passthrough();
+
+const YnabCategoriesResponseSchema = z.object({
+  data: z.object({
+    category_groups: z.array(YnabCategoryGroupRecordSchema.extend({
+      categories: z.array(YnabCategoryRecordSchema)
+    }))
+  }).passthrough()
+}).passthrough();
+
+const YnabAccountResponseSchema = z.object({
+  data: z.object({
+    account: YnabAccountRecordSchema.extend({
+      balance: z.number().optional()
+    })
+  }).passthrough()
+}).passthrough();
+
+const YnabCategoryResponseSchema = z.object({
+  data: z.object({
+    category: YnabCategoryRecordSchema.extend({
+      deleted: z.boolean().optional()
+    })
+  }).passthrough()
+}).passthrough();
+
+const YnabPlanSettingsResponseSchema = z.object({
+  data: z.object({
+    settings: z.object({
+      date_format: z.object({ format: z.string() }).passthrough().optional(),
+      currency_format: z.object({
+        iso_code: z.string().optional(),
+        example_format: z.string().optional(),
+        decimal_digits: z.number().optional(),
+        decimal_separator: z.string().optional(),
+        symbol_first: z.boolean().optional(),
+        group_separator: z.string().optional(),
+        currency_symbol: z.string().optional(),
+        display_symbol: z.boolean().optional()
+      }).passthrough().optional()
+    }).passthrough()
+  }).passthrough()
+}).passthrough();
+
+const YnabPlanMonthsResponseSchema = z.object({
+  data: z.object({ months: z.array(YnabPlanMonthRecordSchema) }).passthrough()
+}).passthrough();
+
+const YnabPlanMonthResponseSchema = z.object({
+  data: z.object({ month: YnabPlanMonthRecordSchema }).passthrough()
+}).passthrough();
+
+const YnabTransactionsResponseSchema = z.object({
+  data: z.object({ transactions: z.array(YnabTransactionRecordSchema) }).passthrough()
+}).passthrough();
+
+const YnabTransactionResponseSchema = z.object({
+  data: z.object({ transaction: YnabTransactionRecordSchema }).passthrough()
+}).passthrough();
+
+const YnabScheduledTransactionsResponseSchema = z.object({
+  data: z.object({ scheduled_transactions: z.array(YnabScheduledTransactionRecordSchema) }).passthrough()
+}).passthrough();
+
+const YnabScheduledTransactionResponseSchema = z.object({
+  data: z.object({ scheduled_transaction: YnabScheduledTransactionRecordSchema }).passthrough()
+}).passthrough();
+
+const YnabPayeesResponseSchema = z.object({
+  data: z.object({ payees: z.array(YnabPayeeRecordSchema) }).passthrough()
+}).passthrough();
+
+const YnabPayeeResponseSchema = z.object({
+  data: z.object({ payee: YnabPayeeRecordSchema }).passthrough()
+}).passthrough();
+
+const YnabPayeeLocationsResponseSchema = z.object({
+  data: z.object({ payee_locations: z.array(YnabPayeeLocationRecordSchema) }).passthrough()
+}).passthrough();
+
+const YnabPayeeLocationResponseSchema = z.object({
+  data: z.object({ payee_location: YnabPayeeLocationRecordSchema }).passthrough()
+}).passthrough();
+
+const YnabMoneyMovementsResponseSchema = z.object({
+  data: z.object({
+    money_movements: z.array(YnabMoneyMovementRecordSchema),
+    server_knowledge: z.number()
+  }).passthrough()
+}).passthrough();
+
+const YnabMoneyMovementGroupsResponseSchema = z.object({
+  data: z.object({
+    money_movement_groups: z.array(YnabMoneyMovementGroupRecordSchema),
+    server_knowledge: z.number()
+  }).passthrough()
+}).passthrough();
+
+async function getJson<T>(response: Response, schema: z.ZodType<unknown>): Promise<T> {
   if (!response.ok) {
     let detail = response.statusText;
 
     try {
-      const payload = await response.json() as {
-        error?: {
-          detail?: string;
-        };
-      };
+      const rawPayload: unknown = await response.json();
+      const payload = YnabErrorResponseSchema.parse(rawPayload);
 
       if (typeof payload.error?.detail === "string" && payload.error.detail.length > 0) {
         detail = payload.error.detail;
@@ -753,8 +1088,19 @@ async function getJson<T>(response: Response): Promise<T> {
   }
 
   try {
-    return await response.json() as T;
+    const rawPayload: unknown = await response.json();
+    const result = schema.safeParse(rawPayload);
+
+    if (!result.success) {
+      throw new YnabClientError("YNAB API response did not match expected schema.", "upstream", true);
+    }
+
+    return result.data as T;
   } catch (error) {
+    if (error instanceof YnabClientError) {
+      throw error;
+    }
+
     throw new YnabClientError(
       error instanceof Error ? error.message : "YNAB API returned malformed JSON.",
       "upstream",
@@ -764,11 +1110,11 @@ async function getJson<T>(response: Response): Promise<T> {
 }
 
 function toYnabTransaction(transaction: YnabTransactionRecord): YnabTransaction {
-  return mapTransactionRecord(transaction);
+  return mapTransactionRecord(transaction) as YnabTransaction;
 }
 
 export function toYnabAccount(account: YnabAccountRecord): YnabAccountSummary {
-  return {
+  return compact({
     balance: account.balance,
     clearedBalance: account.cleared_balance,
     closed: account.closed,
@@ -783,11 +1129,11 @@ export function toYnabAccount(account: YnabAccountRecord): YnabAccountSummary {
     transferPayeeId: account.transfer_payee_id,
     type: account.type,
     unclearedBalance: account.uncleared_balance
-  };
+  });
 }
 
 export function toYnabCategory(category: YnabCategoryRecord): YnabCategorySummary {
-  return {
+  return compact({
     activity: category.activity,
     balance: category.balance,
     budgeted: category.budgeted,
@@ -814,7 +1160,7 @@ export function toYnabCategory(category: YnabCategoryRecord): YnabCategorySummar
     name: category.name,
     note: category.note,
     originalCategoryGroupId: category.original_category_group_id
-  };
+  });
 }
 
 export function toYnabCategoryGroup(
@@ -848,7 +1194,7 @@ export function groupCategoriesByGroupId(categories: YnabCategorySummary[]) {
 }
 
 export function toYnabMonth(month: YnabPlanMonthRecord): YnabPlanMonthDetail {
-  return {
+  return compact({
     activity: month.activity,
     ageOfMoney: month.age_of_money ?? undefined,
     budgeted: month.budgeted,
@@ -860,11 +1206,11 @@ export function toYnabMonth(month: YnabPlanMonthRecord): YnabPlanMonthDetail {
     income: month.income,
     month: month.month,
     toBeBudgeted: month.to_be_budgeted
-  };
+  });
 }
 
 export function toYnabScheduledTransaction(transaction: YnabScheduledTransactionRecord): YnabScheduledTransaction {
-  return {
+  return compact({
     id: transaction.id,
     dateFirst: transaction.date_first,
     dateNext: transaction.date_next,
@@ -881,7 +1227,7 @@ export function toYnabScheduledTransaction(transaction: YnabScheduledTransaction
     accountName: transaction.account_name,
     transferAccountId: transaction.transfer_account_id,
     deleted: transaction.deleted,
-    subtransactions: transaction.subtransactions?.map((subtransaction) => ({
+    subtransactions: transaction.subtransactions?.map((subtransaction) => compact({
       amount: subtransaction.amount,
       categoryId: subtransaction.category_id,
       categoryName: subtransaction.category_name,
@@ -893,30 +1239,30 @@ export function toYnabScheduledTransaction(transaction: YnabScheduledTransaction
       scheduledTransactionId: subtransaction.scheduled_transaction_id,
       transferAccountId: subtransaction.transfer_account_id
     }))
-  };
+  });
 }
 
 export function toYnabPayee(payee: YnabPayeeRecord): YnabPayee {
-  return {
+  return compact({
     id: payee.id,
     name: payee.name,
     transferAccountId: payee.transfer_account_id,
     deleted: payee.deleted
-  };
+  });
 }
 
 export function toYnabPayeeLocation(location: YnabPayeeLocationRecord): YnabPayeeLocation {
-  return {
+  return compact({
     id: location.id,
     payeeId: location.payee_id,
     latitude: location.latitude,
     longitude: location.longitude,
     deleted: location.deleted
-  };
+  });
 }
 
 function toYnabMoneyMovement(movement: YnabMoneyMovementRecord): YnabMoneyMovement {
-  return {
+  return compact({
     amount: movement.amount,
     deleted: movement.deleted ?? false,
     fromCategoryId: movement.from_category_id,
@@ -927,18 +1273,18 @@ function toYnabMoneyMovement(movement: YnabMoneyMovementRecord): YnabMoneyMoveme
     note: movement.note,
     performedByUserId: movement.performed_by_user_id,
     toCategoryId: movement.to_category_id
-  };
+  });
 }
 
 function toYnabMoneyMovementGroup(group: YnabMoneyMovementGroupRecord): YnabMoneyMovementGroup {
-  return {
+  return compact({
     deleted: group.deleted ?? false,
     groupCreatedAt: group.group_created_at,
     id: group.id,
     month: group.month,
     note: group.note,
     performedByUserId: group.performed_by_user_id
-  };
+  });
 }
 
 export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
@@ -965,7 +1311,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
   return {
     async getUser() {
       const response = await authorizedFetch(`${baseUrl}/user`);
-      const payload = await getJson<YnabUserResponse>(response);
+      const payload = await getJson<YnabUserResponse>(response, YnabUserResponseSchema);
 
       return {
         id: payload.data.user.id,
@@ -974,14 +1320,14 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async listPlans() {
       const response = await authorizedFetch(`${baseUrl}/plans`);
-      const payload = await getJson<YnabPlansResponse>(response);
+      const payload = await getJson<YnabPlansResponse>(response, YnabPlansResponseSchema);
 
-      return {
-        plans: payload.data.plans.map((plan) => ({
-          id: plan.id,
-          name: plan.name,
-          lastModifiedOn: plan.last_modified_on
-        })),
+	      return {
+	        plans: payload.data.plans.map((plan) => compact({
+	          id: plan.id,
+	          name: plan.name,
+	          lastModifiedOn: plan.last_modified_on
+	        })),
         defaultPlan: payload.data.default_plan
           ? {
               id: payload.data.default_plan.id,
@@ -992,23 +1338,23 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async getPlan(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}`);
-      const payload = await getJson<YnabPlanResponse>(response);
+      const payload = await getJson<YnabPlanResponse>(response, YnabPlanResponseSchema);
       const plan = payload.data.plan;
 
-      return {
-        id: plan.id,
-        name: plan.name,
+	      return compact({
+	        id: plan.id,
+	        name: plan.name,
         lastModifiedOn: plan.last_modified_on,
         firstMonth: plan.first_month,
         lastMonth: plan.last_month,
-        accountCount: Array.isArray(plan.accounts) ? plan.accounts.length : undefined,
-        categoryGroupCount: Array.isArray(plan.category_groups) ? plan.category_groups.length : undefined,
-        payeeCount: Array.isArray(plan.payees) ? plan.payees.length : undefined
-      };
+	        accountCount: Array.isArray(plan.accounts) ? plan.accounts.length : undefined,
+	        categoryGroupCount: Array.isArray(plan.category_groups) ? plan.category_groups.length : undefined,
+	        payeeCount: Array.isArray(plan.payees) ? plan.payees.length : undefined
+	      });
     },
     async listCategories(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/categories`);
-      const payload = await getJson<YnabCategoriesResponse>(response);
+      const payload = await getJson<YnabCategoriesResponse>(response, YnabCategoriesResponseSchema);
 
       return payload.data.category_groups.map((group) => ({
         id: group.id,
@@ -1022,108 +1368,108 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}`
       );
-      const payload = await getJson<YnabCategoryResponse>(response);
+      const payload = await getJson<YnabCategoryResponse>(response, YnabCategoryResponseSchema);
       const category = payload.data.category;
 
-      return {
-        id: category.id,
-        name: category.name,
+	      return compact({
+	        id: category.id,
+	        name: category.name,
         hidden: category.hidden,
         categoryGroupName: category.category_group_name,
-        balance: category.balance,
-        goalType: category.goal_type,
-        goalTarget: category.goal_target
-      };
+	        balance: category.balance,
+	        goalType: category.goal_type,
+	        goalTarget: category.goal_target
+	      });
     },
     async getMonthCategory(planId: string, month: string, categoryId: string) {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}/categories/${encodeURIComponent(categoryId)}`
       );
-      const payload = await getJson<YnabCategoryResponse>(response);
+      const payload = await getJson<YnabCategoryResponse>(response, YnabCategoryResponseSchema);
       const category = payload.data.category;
 
-      return {
-        id: category.id,
-        name: category.name,
+	      return compact({
+	        id: category.id,
+	        name: category.name,
         hidden: category.hidden,
         categoryGroupName: category.category_group_name,
         budgeted: category.budgeted,
         activity: category.activity,
         balance: category.balance,
-        goalType: category.goal_type,
-        goalTarget: category.goal_target,
-        goalUnderFunded: category.goal_under_funded
-      };
+	        goalType: category.goal_type,
+	        goalTarget: category.goal_target,
+	        goalUnderFunded: category.goal_under_funded
+	      });
     },
     async getPlanSettings(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/settings`);
-      const payload = await getJson<YnabPlanSettingsResponse>(response);
+      const payload = await getJson<YnabPlanSettingsResponse>(response, YnabPlanSettingsResponseSchema);
       const settings = payload.data.settings;
 
-      return {
-        dateFormat: settings.date_format
-          ? {
-              format: settings.date_format.format
-            }
-          : undefined,
-        currencyFormat: settings.currency_format
-          ? {
-              isoCode: settings.currency_format.iso_code,
-              exampleFormat: settings.currency_format.example_format,
+	      return compact({
+	        dateFormat: settings.date_format
+	          ? {
+	              format: settings.date_format.format
+	            }
+	          : undefined,
+	        currencyFormat: settings.currency_format
+	          ? compact({
+	              isoCode: settings.currency_format.iso_code,
+	              exampleFormat: settings.currency_format.example_format,
               decimalDigits: settings.currency_format.decimal_digits,
               decimalSeparator: settings.currency_format.decimal_separator,
               symbolFirst: settings.currency_format.symbol_first,
-              groupSeparator: settings.currency_format.group_separator,
-              currencySymbol: settings.currency_format.currency_symbol,
-              displaySymbol: settings.currency_format.display_symbol
-            }
-          : undefined
-      };
+	              groupSeparator: settings.currency_format.group_separator,
+	              currencySymbol: settings.currency_format.currency_symbol,
+	              displaySymbol: settings.currency_format.display_symbol
+	            })
+	          : undefined
+	      });
     },
     async listPlanMonths(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/months`);
-      const payload = await getJson<YnabPlanMonthsResponse>(response);
+      const payload = await getJson<YnabPlanMonthsResponse>(response, YnabPlanMonthsResponseSchema);
 
-      return payload.data.months.map((month) => ({
-        month: month.month,
-        income: month.income,
+	      return payload.data.months.map((month) => compact({
+	        month: month.month,
+	        income: month.income,
         budgeted: month.budgeted,
-        activity: month.activity,
-        toBeBudgeted: month.to_be_budgeted,
-        deleted: month.deleted
-      }));
+	        activity: month.activity,
+	        toBeBudgeted: month.to_be_budgeted,
+	        deleted: month.deleted
+	      }));
     },
     async getPlanMonth(planId: string, month: string) {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}`
       );
-      const payload = await getJson<YnabPlanMonthResponse>(response);
+      const payload = await getJson<YnabPlanMonthResponse>(response, YnabPlanMonthResponseSchema);
       const monthDetail = payload.data.month;
 
-      return {
-        month: monthDetail.month,
-        income: monthDetail.income,
+	      return compact({
+	        month: monthDetail.month,
+	        income: monthDetail.income,
         budgeted: monthDetail.budgeted,
         activity: monthDetail.activity,
         toBeBudgeted: monthDetail.to_be_budgeted,
         ageOfMoney: monthDetail.age_of_money,
         categoryCount: Array.isArray(monthDetail.categories) ? monthDetail.categories.length : undefined,
-        categories: monthDetail.categories?.map((category) => ({
-          id: category.id,
-          name: category.name,
+	        categories: monthDetail.categories?.map((category) => compact({
+	          id: category.id,
+	          name: category.name,
           budgeted: category.budgeted,
           activity: category.activity,
           balance: category.balance,
           deleted: category.deleted,
-          hidden: category.hidden,
-          goalUnderFunded: category.goal_under_funded,
-          categoryGroupName: category.category_group_name
-        }))
-      };
+	          hidden: category.hidden,
+	          goalUnderFunded: category.goal_under_funded,
+	          categoryGroupName: category.category_group_name
+	        }))
+	      });
     },
     async listAccounts(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/accounts`);
-      const payload = await getJson<YnabAccountsResponse>(response);
+      const payload = await getJson<YnabAccountsResponse>(response, YnabAccountsResponseSchema);
 
       return payload.data.accounts.map(toYnabAccount);
     },
@@ -1131,17 +1477,17 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}`
       );
-      const payload = await getJson<YnabAccountResponse>(response);
+      const payload = await getJson<YnabAccountResponse>(response, YnabAccountResponseSchema);
       const account = payload.data.account;
 
-      return {
-        id: account.id,
-        name: account.name,
+	      return compact({
+	        id: account.id,
+	        name: account.name,
         type: account.type,
-        onBudget: account.on_budget,
-        closed: account.closed,
-        balance: account.balance
-      };
+	        onBudget: account.on_budget,
+	        closed: account.closed,
+	        balance: account.balance
+	      });
     },
     async listTransactions(planId: string, fromDate?: string) {
       const url = new URL(`${baseUrl}/plans/${encodeURIComponent(planId)}/transactions`);
@@ -1151,7 +1497,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       }
 
       const response = await authorizedFetch(url.toString());
-      const payload = await getJson<YnabTransactionsResponse>(response);
+      const payload = await getJson<YnabTransactionsResponse>(response, YnabTransactionsResponseSchema);
 
       return payload.data.transactions.map(toYnabTransaction);
     },
@@ -1159,7 +1505,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}/transactions`
       );
-      const payload = await getJson<YnabTransactionsResponse>(response);
+      const payload = await getJson<YnabTransactionsResponse>(response, YnabTransactionsResponseSchema);
 
       return payload.data.transactions.map(toYnabTransaction);
     },
@@ -1167,7 +1513,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}/transactions`
       );
-      const payload = await getJson<YnabTransactionsResponse>(response);
+      const payload = await getJson<YnabTransactionsResponse>(response, YnabTransactionsResponseSchema);
 
       return payload.data.transactions.map(toYnabTransaction);
     },
@@ -1175,7 +1521,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/transactions`
       );
-      const payload = await getJson<YnabTransactionsResponse>(response);
+      const payload = await getJson<YnabTransactionsResponse>(response, YnabTransactionsResponseSchema);
 
       return payload.data.transactions.map(toYnabTransaction);
     },
@@ -1183,13 +1529,13 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/transactions/${encodeURIComponent(transactionId)}`
       );
-      const payload = await getJson<YnabTransactionResponse>(response);
+      const payload = await getJson<YnabTransactionResponse>(response, YnabTransactionResponseSchema);
 
       return toYnabTransaction(payload.data.transaction);
     },
     async listScheduledTransactions(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions`);
-      const payload = await getJson<YnabScheduledTransactionsResponse>(response);
+      const payload = await getJson<YnabScheduledTransactionsResponse>(response, YnabScheduledTransactionsResponseSchema);
 
       return payload.data.scheduled_transactions.map(toYnabScheduledTransaction);
     },
@@ -1197,25 +1543,25 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/scheduled_transactions/${encodeURIComponent(scheduledTransactionId)}`
       );
-      const payload = await getJson<YnabScheduledTransactionResponse>(response);
+      const payload = await getJson<YnabScheduledTransactionResponse>(response, YnabScheduledTransactionResponseSchema);
 
       return toYnabScheduledTransaction(payload.data.scheduled_transaction);
     },
     async listPayees(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/payees`);
-      const payload = await getJson<YnabPayeesResponse>(response);
+      const payload = await getJson<YnabPayeesResponse>(response, YnabPayeesResponseSchema);
 
       return payload.data.payees.map(toYnabPayee);
     },
     async getPayee(planId: string, payeeId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}`);
-      const payload = await getJson<YnabPayeeResponse>(response);
+      const payload = await getJson<YnabPayeeResponse>(response, YnabPayeeResponseSchema);
 
       return toYnabPayee(payload.data.payee);
     },
     async listPayeeLocations(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/payee_locations`);
-      const payload = await getJson<YnabPayeeLocationsResponse>(response);
+      const payload = await getJson<YnabPayeeLocationsResponse>(response, YnabPayeeLocationsResponseSchema);
 
       return payload.data.payee_locations.map(toYnabPayeeLocation);
     },
@@ -1223,7 +1569,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/payee_locations/${encodeURIComponent(payeeLocationId)}`
       );
-      const payload = await getJson<YnabPayeeLocationResponse>(response);
+      const payload = await getJson<YnabPayeeLocationResponse>(response, YnabPayeeLocationResponseSchema);
 
       return toYnabPayeeLocation(payload.data.payee_location);
     },
@@ -1231,13 +1577,13 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/payee_locations`
       );
-      const payload = await getJson<YnabPayeeLocationsResponse>(response);
+      const payload = await getJson<YnabPayeeLocationsResponse>(response, YnabPayeeLocationsResponseSchema);
 
       return payload.data.payee_locations.map(toYnabPayeeLocation);
     },
     async listMoneyMovements(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/money_movements`);
-      const payload = await getJson<YnabMoneyMovementsResponse>(response);
+      const payload = await getJson<YnabMoneyMovementsResponse>(response, YnabMoneyMovementsResponseSchema);
 
       return {
         moneyMovements: payload.data.money_movements.map(toYnabMoneyMovement),
@@ -1246,7 +1592,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     },
     async listMoneyMovementGroups(planId: string) {
       const response = await authorizedFetch(`${baseUrl}/plans/${encodeURIComponent(planId)}/money_movement_groups`);
-      const payload = await getJson<YnabMoneyMovementGroupsResponse>(response);
+      const payload = await getJson<YnabMoneyMovementGroupsResponse>(response, YnabMoneyMovementGroupsResponseSchema);
 
       return {
         moneyMovementGroups: payload.data.money_movement_groups.map(toYnabMoneyMovementGroup),

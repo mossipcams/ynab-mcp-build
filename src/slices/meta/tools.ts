@@ -10,7 +10,7 @@ export function getMetaToolDefinitions(env: AppEnv, ynabClient: YnabClient): Sli
       title: "YNAB MCP Version",
       description: "Returns the MCP server name and version for this deployment.",
       inputSchema: {},
-      execute: async () => getMcpVersion(env)
+      execute: () => Promise.resolve(getMcpVersion(env))
     },
     {
       name: "ynab_get_user",

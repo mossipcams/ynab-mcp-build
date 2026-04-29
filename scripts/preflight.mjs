@@ -4,6 +4,7 @@ export const CI_COMMANDS = [
   "npm run cf-typegen",
   "npm run typecheck",
   "npm run typecheck:spec",
+  "npm run lint",
   "npm run check:duplication",
   "npm test"
 ];

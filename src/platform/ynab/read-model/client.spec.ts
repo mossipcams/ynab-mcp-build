@@ -54,7 +54,7 @@ class FakeD1Database {
     const tableName = Object.keys(this.rows)
       .sort((left, right) => right.length - left.length)
       .find((name) => sql.includes(`FROM ${name}`));
-    const rows = tableName ? this.rows[tableName] : [];
+    const rows = tableName ? this.rows[tableName] ?? [] : [];
 
     if (sql.includes("COUNT(*)")) {
       return [{ count: rows.filter((row) => this.matches(row, sql, params)).length }];
