@@ -222,6 +222,22 @@ describe("repository preflight tooling", () => {
     expect(readRootFile(".husky/pre-push")).toContain("pnpm run ci");
   });
 
+  it("activates Corepack before GitHub Actions configures the pnpm cache", () => {
+    // DEFECT: GitHub-hosted runners cannot restore a pnpm cache before the pnpm executable is available.
+    const workflow = readRootFile(".github/workflows/ci.yml");
+    const jobBlocks = workflow
+      .split(/\n(?=  [a-z-]+:\n    name: )/)
+      .filter((block) => block.includes("cache: pnpm"));
+
+    expect(jobBlocks.length).toBeGreaterThan(0);
+
+    for (const block of jobBlocks) {
+      expect(block.indexOf("- run: corepack enable")).toBeLessThan(
+        block.indexOf("- uses: actions/setup-node@v4")
+      );
+    }
+  });
+
   it("runs CI before creating a GitHub pull request", () => {
     // DEFECT: PR creation can bypass the shared preflight suite and open a branch with known local failures.
     const prePrScript = readRootFile("scripts/pre-pr.mjs");
