@@ -8,6 +8,9 @@ import { createMcpServer } from "../../mcp/server.js";
 import { resolveAppEnv } from "../../shared/env.js";
 
 const MCP_JSON_BODY_LIMIT_BYTES = 1024 * 1024;
+const MCP_SSE_CONNECTED_COMMENT = ": connected\n\n";
+const MCP_SSE_HEARTBEAT_COMMENT = ": heartbeat\n\n";
+const MCP_SSE_HEARTBEAT_INTERVAL_MS = 15_000;
 
 type JsonBodyReadResult =
   | {
@@ -44,6 +47,67 @@ function writeMcpRequestFailure(error: unknown) {
       status: 500,
     },
   );
+}
+
+function isEventStreamResponse(response: Response) {
+  return response.headers.get("content-type")?.includes("text/event-stream");
+}
+
+function withSseHeartbeat(response: Response) {
+  if (!response.body) {
+    return response;
+  }
+
+  const encoder = new TextEncoder();
+  const reader = response.body.getReader();
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+
+  const body = new ReadableStream<Uint8Array>({
+    cancel(reason) {
+      if (heartbeat !== undefined) {
+        clearInterval(heartbeat);
+      }
+
+      return reader.cancel(reason);
+    },
+    start(controller) {
+      controller.enqueue(encoder.encode(MCP_SSE_CONNECTED_COMMENT));
+      heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(MCP_SSE_HEARTBEAT_COMMENT));
+        } catch {
+          if (heartbeat !== undefined) {
+            clearInterval(heartbeat);
+          }
+        }
+      }, MCP_SSE_HEARTBEAT_INTERVAL_MS);
+
+      void (async () => {
+        try {
+          for (;;) {
+            const result = await reader.read();
+
+            if (result.done) {
+              controller.close();
+              break;
+            }
+
+            controller.enqueue(result.value);
+          }
+        } catch (error) {
+          controller.error(error);
+        } finally {
+          clearInterval(heartbeat);
+        }
+      })();
+    },
+  });
+
+  return new Response(body, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
 }
 
 async function readBoundedJsonBody(
@@ -143,8 +207,16 @@ export function registerMcpRoutes(
       await server.connect(transport);
 
       const requestOptions = parsedBody !== undefined ? { parsedBody } : {};
+      const response = await transport.handleRequest(
+        context.req.raw,
+        requestOptions,
+      );
 
-      return transport.handleRequest(context.req.raw, requestOptions);
+      if (context.req.method === "GET" && isEventStreamResponse(response)) {
+        return withSseHeartbeat(response);
+      }
+
+      return response;
     } catch (error) {
       return writeMcpRequestFailure(error);
     }
