@@ -178,6 +178,15 @@ describe("repository preflight tooling", () => {
     expect(wranglerConfig.triggers?.crons).toEqual(["0 * * * *"]);
   });
 
+  it("keeps README DB-backed tool status current", () => {
+    // DEFECT: stale DB-backed documentation can tell operators that production tools are unavailable.
+    const readme = readRootFile("README.md");
+
+    expect(readme).toContain("All advertised normal MCP tools are registered in D1 mode");
+    expect(readme).not.toContain("Only `ynab_search_transactions` is rebuilt against D1 so far.");
+    expect(readme).not.toContain("return a clear “not available yet in DB-backed read mode” error");
+  });
+
   it("keeps JSON-RPC tool-call validation in the MCP layer", () => {
     // DEFECT: protocol validation in HTTP routes couples transport adapters to MCP request details.
     const httpMcpRoute = readRootFile("src/http/routes/mcp.ts");
