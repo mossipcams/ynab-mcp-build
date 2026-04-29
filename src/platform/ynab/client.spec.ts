@@ -430,8 +430,8 @@ describe("ynab client endpoint contracts", () => {
     expect(
       requests.every(
         ({ init }) =>
-          (init?.headers as Record<string, string>).Authorization ===
-          "Bearer pat-secret",
+          (init?.headers as Record<string, string> | undefined)
+            ?.Authorization === "Bearer pat-secret",
       ),
     ).toBe(true);
   });
