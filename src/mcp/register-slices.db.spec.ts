@@ -47,6 +47,12 @@ class FakeStatement {
       } as D1Result<T>);
     }
 
+    if (this.sql.includes("FROM ynab_plans")) {
+      return Promise.resolve({
+        results: this.db.plans,
+      } as D1Result<T>);
+    }
+
     if (this.sql.includes("FROM ynab_money_movements")) {
       return Promise.resolve({
         results: [
@@ -115,6 +121,9 @@ class FakeD1Database {
   allCalls: Array<{ sql: string; params: unknown[] }> = [];
   endpointHealthStatuses = new Map<string, string>();
   healthStatus = "ok";
+  plans: Array<{ id: string; name: string; deleted: number }> = [
+    { id: "plan-1", name: "Household", deleted: 0 },
+  ];
   transactionSearchParams: unknown[] = [];
 
   prepare(sql: string) {
@@ -332,8 +341,40 @@ describe("DB-backed tool registration", () => {
     );
   });
 
+  it("auto-populates omitted plan ids from the synced read-model plan", async () => {
+    const database = new FakeD1Database();
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database, null),
+      {
+        now: () => Date.parse("2026-04-28T12:01:00.000Z"),
+      },
+    );
+    const moneyMovements = definitions.find(
+      (definition) => definition.name === "ynab_get_money_movements",
+    );
+
+    await expect(
+      executeToolDefinition(moneyMovements, {}),
+    ).resolves.toMatchObject({
+      status: "ok",
+      data: {
+        movement_count: 1,
+      },
+    });
+
+    expect(database.allCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sql: expect.stringContaining("FROM ynab_money_movements"),
+          params: expect.arrayContaining(["plan-1"]),
+        }),
+      ]),
+    );
+  });
+
   it("requires plan ids for freshness checks when no default plan is configured", async () => {
     const database = new FakeD1Database();
+    database.plans = [];
     const definitions = getRegisteredToolDefinitions(
       createD1Env(database as unknown as D1Database, null),
       {},
