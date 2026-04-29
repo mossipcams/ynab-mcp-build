@@ -8,11 +8,11 @@ import {
   dateFieldSchema,
   fieldProjectionSchema,
   includeIdsSchema,
+  monthFieldSchema,
   paginatedProjectionSchema,
   paginationSchema,
   planIdSchema,
-  requiredIdSchema,
-  requiredMonthSchema
+  requiredIdSchema
 } from "../../shared/tool-inputs.js";
 import {
   getTransaction,
@@ -86,7 +86,7 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
       description: "Lists transactions for a single plan month. Use for month-specific transaction drilldowns after a summary.",
       inputSchema: {
         ...planIdSchema,
-        month: requiredMonthSchema,
+        month: monthFieldSchema,
         ...paginationSchema,
         fields: fieldProjectionSchema(transactionFields),
         ...includeIdsSchema

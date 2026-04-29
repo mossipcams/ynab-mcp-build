@@ -7,8 +7,7 @@ import {
   monthFieldSchema,
   monthSelectorSchema,
   planIdSchema,
-  requiredIdSchema,
-  requiredMonthSchema
+  requiredIdSchema
 } from "../../shared/tool-inputs.js";
 import {
   getBudgetCleanupSummary,
@@ -113,7 +112,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): Slice
       description: "Flags category spending spikes against a trailing monthly baseline. Use for broad budget anomaly questions.",
       inputSchema: {
         ...planIdSchema,
-        latestMonth: requiredMonthSchema,
+        latestMonth: monthFieldSchema,
         baselineMonths: z.number().int().min(1).max(12).optional(),
         topN: z.number().int().min(1).max(10).optional(),
         thresholdMultiplier: z.number().min(1).optional(),
@@ -142,7 +141,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): Slice
       description: "Estimates how many days liquid cash can cover recent outflows. Use for broad budget runway questions.",
       inputSchema: {
         ...planIdSchema,
-        asOfMonth: requiredMonthSchema,
+        asOfMonth: monthFieldSchema,
         monthsBack: z.number().int().min(1).max(12).optional(),
         detailLevel: detailLevelSchema.optional()
       },
@@ -192,7 +191,7 @@ export function getFinancialHealthToolDefinitions(ynabClient: YnabClient): Slice
       description: "Estimates how many months of recent spending liquid cash can cover. Use for broad budget emergency fund questions.",
       inputSchema: {
         ...planIdSchema,
-        asOfMonth: requiredMonthSchema,
+        asOfMonth: monthFieldSchema,
         monthsBack: z.number().int().min(1).max(12).optional(),
         detailLevel: detailLevelSchema.optional()
       },

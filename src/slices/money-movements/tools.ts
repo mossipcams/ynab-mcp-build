@@ -1,6 +1,6 @@
 import type { YnabClient } from "../../platform/ynab/client.js";
 import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
-import { paginationSchema, planIdSchema, requiredMonthSchema } from "../../shared/tool-inputs.js";
+import { monthFieldSchema, paginationSchema, planIdSchema } from "../../shared/tool-inputs.js";
 import {
   getMoneyMovementGroups,
   getMoneyMovementGroupsByMonth,
@@ -26,7 +26,7 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       description: "Returns transfer-style money movements for a single plan month.",
       inputSchema: {
         ...planIdSchema,
-        month: requiredMonthSchema,
+        month: monthFieldSchema,
         ...paginationSchema
       },
       execute: async (input) => getMoneyMovementsByMonth(ynabClient, input)
@@ -47,7 +47,7 @@ export function getMoneyMovementToolDefinitions(ynabClient: YnabClient): SliceTo
       description: "Groups transfer-style money movements by source and destination account for a single month.",
       inputSchema: {
         ...planIdSchema,
-        month: requiredMonthSchema,
+        month: monthFieldSchema,
         ...paginationSchema
       },
       execute: async (input) => getMoneyMovementGroupsByMonth(ynabClient, input)

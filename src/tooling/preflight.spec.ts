@@ -26,6 +26,7 @@ describe("repository preflight tooling", () => {
       "npm run lint",
       "npm run check:deps",
       "npm run check:duplication",
+      "npm run check:knip",
       "npm test"
     ]);
   });
@@ -63,6 +64,19 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.devDependencies).toHaveProperty("jscpd");
+  });
+
+  it("declares knip as the unused-code detection tool", () => {
+    // DEFECT: unused-code checks can become non-reproducible if knip is not pinned in repository dev dependencies.
+    const packageJson = JSON.parse(readRootFile("package.json")) as {
+      devDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.devDependencies).toHaveProperty("knip");
+    expect(packageJson.scripts).toMatchObject({
+      "check:knip": "knip"
+    });
   });
 
   it("declares type-aware ESLint tooling", () => {
