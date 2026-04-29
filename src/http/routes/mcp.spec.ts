@@ -12,7 +12,45 @@ function createEnv(): Env {
   } as unknown as Env;
 }
 
+async function readFirstChunk(response: Response) {
+  const reader = response.body?.getReader();
+
+  if (!reader) {
+    return "";
+  }
+
+  const result = await Promise.race([
+    reader.read(),
+    new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
+      setTimeout(() => resolve({ done: true, value: undefined }), 25);
+    }),
+  ]);
+
+  await reader.cancel();
+
+  return result.done ? "" : new TextDecoder().decode(result.value);
+}
+
 describe("http mcp route optimization", () => {
+  it("emits an immediate SSE heartbeat for standalone GET streams", async () => {
+    const app = createApp();
+
+    const response = await app.request(
+      "http://localhost/mcp",
+      {
+        headers: {
+          accept: "text/event-stream",
+        },
+        method: "GET",
+      },
+      createEnv(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    await expect(readFirstChunk(response)).resolves.toBe(": connected\n\n");
+  });
+
   it("reuses tool definitions between route validation and MCP server registration", async () => {
     const now = vi.fn(() => 1777406400000);
     const app = createApp({ now });
