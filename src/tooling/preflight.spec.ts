@@ -18,16 +18,16 @@ describe("repository preflight tooling", () => {
     }>("scripts/preflight.mjs");
 
     expect(CI_COMMANDS).toEqual([
-      "npm run cf-typegen",
-      "npm run typecheck:tsgo",
-      "npm run lint:fast",
-      "npm run typecheck:tsc",
-      "npm run typecheck:spec",
-      "npm run lint",
-      "npm run check:deps",
-      "npm run check:duplication",
-      "npm run check:knip",
-      "npm test"
+      "pnpm run cf-typegen",
+      "pnpm run typecheck:tsgo",
+      "pnpm run lint:fast",
+      "pnpm run typecheck:tsc",
+      "pnpm run typecheck:spec",
+      "pnpm run lint",
+      "pnpm run check:deps",
+      "pnpm run check:duplication",
+      "pnpm run check:knip",
+      "pnpm test"
     ]);
   });
 
@@ -135,7 +135,7 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      lint: "npm run lint:fast && npm run lint:eslint",
+      lint: "pnpm run lint:fast && pnpm run lint:eslint",
       "lint:eslint": "eslint .",
       "lint:fast": "oxlint --type-aware"
     });
@@ -148,8 +148,8 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      "pretypecheck:tsgo": "npm run cf-typegen",
-      typecheck: "npm run typecheck:tsgo",
+      "pretypecheck:tsgo": "pnpm run cf-typegen",
+      typecheck: "pnpm run typecheck:tsgo",
       "typecheck:tsc": "tsc --noEmit -p tsconfig.json",
       "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json"
     });
@@ -160,9 +160,9 @@ describe("repository preflight tooling", () => {
     const agents = readRootFile("AGENTS.md");
 
     expect(agents).toContain("test often, fail fast, fix fast");
-    expect(agents).toContain("npm run typecheck:tsgo");
-    expect(agents).toContain("npm run lint:fast");
-    expect(agents).toContain("npm run typecheck:tsc");
+    expect(agents).toContain("pnpm run typecheck:tsgo");
+    expect(agents).toContain("pnpm run lint:fast");
+    expect(agents).toContain("pnpm run typecheck:tsc");
   });
 
   it("configures the required type-aware ESLint rules", async () => {
@@ -213,13 +213,13 @@ describe("repository preflight tooling", () => {
     // DEFECT: local git hooks can allow commits that fail the agreed fast typecheck and lint loop.
     const preCommitHook = readRootFile(".husky/pre-commit");
 
-    expect(preCommitHook).toContain("npm run typecheck:tsgo");
-    expect(preCommitHook).toContain("npm run lint:fast");
+    expect(preCommitHook).toContain("pnpm run typecheck:tsgo");
+    expect(preCommitHook).toContain("pnpm run lint:fast");
   });
 
   it("runs the shared CI command before pushing through Husky", () => {
     // DEFECT: local git hooks can bypass the shared preflight suite before code reaches the remote branch.
-    expect(readRootFile(".husky/pre-push")).toContain("npm run ci");
+    expect(readRootFile(".husky/pre-push")).toContain("pnpm run ci");
   });
 
   it("runs CI before creating a GitHub pull request", () => {

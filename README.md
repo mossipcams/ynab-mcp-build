@@ -82,25 +82,26 @@ YNAB_DB
 Install dependencies:
 
 ```sh
-npm install
+corepack enable
+pnpm install
 ```
 
 Generate Worker types after changing `wrangler.jsonc`:
 
 ```sh
-npm run cf-typegen
+pnpm run cf-typegen
 ```
 
 Run tests:
 
 ```sh
-npm test
+pnpm test
 ```
 
 Run typecheck:
 
 ```sh
-npm run typecheck
+pnpm run typecheck
 ```
 
 Apply the D1 schema with Wrangler once a real database is created and `database_id` is updated in `wrangler.jsonc`.

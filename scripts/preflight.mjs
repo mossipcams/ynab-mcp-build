@@ -1,16 +1,16 @@
 import { spawnSync } from "node:child_process";
 
 export const CI_COMMANDS = [
-  "npm run cf-typegen",
-  "npm run typecheck:tsgo",
-  "npm run lint:fast",
-  "npm run typecheck:tsc",
-  "npm run typecheck:spec",
-  "npm run lint",
-  "npm run check:deps",
-  "npm run check:duplication",
-  "npm run check:knip",
-  "npm test"
+  "pnpm run cf-typegen",
+  "pnpm run typecheck:tsgo",
+  "pnpm run lint:fast",
+  "pnpm run typecheck:tsc",
+  "pnpm run typecheck:spec",
+  "pnpm run lint",
+  "pnpm run check:deps",
+  "pnpm run check:duplication",
+  "pnpm run check:knip",
+  "pnpm test"
 ];
 
 export const runCommand = (command, args, options = {}) => {
