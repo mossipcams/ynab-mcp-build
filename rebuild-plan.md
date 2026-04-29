@@ -560,23 +560,23 @@ Trade-offs:
 - Financial-health tools provide a lot of product value once primitives are stable.
 - They are computation-heavy and easiest to get subtly wrong, so deterministic fixture coverage matters more here than broad integration breadth.
 
-### Step 21: Add `money-movements`
+### Step 21: Add DB-backed `money-movements`
 
 Status: completed
 
 51. Port `ynab_get_money_movements` and `ynab_get_money_movements_by_month`.
-- Test to write: failing MCP tool tests for cross-account movement summaries
-- Code to implement: `src/slices/money-movements/*` using stable transaction primitives
-- How to verify it works: movement summary tests pass
+- Test to write: failing MCP tool tests for category movement rows synced into D1
+- Code to implement: `src/slices/db-money-movements/*` using the D1 money movement read-model repository
+- How to verify it works: DB-backed movement tests pass
 
 52. Port `ynab_get_money_movement_groups` and `ynab_get_money_movement_groups_by_month`.
-- Test to write: failing MCP tool tests for grouped movement views
-- Code to implement: grouped money movement services and mappers
-- How to verify it works: grouped movement tests pass
+- Test to write: failing MCP tool tests for grouped D1 movement views
+- Code to implement: grouped DB money movement services and mappers
+- How to verify it works: grouped DB movement tests pass
 
 Trade-offs:
-- These tools naturally sit late because they build on transaction semantics already proven elsewhere.
-- Keeping them late reduces rework if transfer-detection logic changes during transaction migration.
+- These tools naturally sit late because they depend on the money movement read-model schema and sync contract.
+- Keeping them read-model backed avoids deriving movement semantics from unrelated transaction data.
 
 ### Step 22: Finish meta parity and discovery polish
 

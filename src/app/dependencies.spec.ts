@@ -1,27 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { resolveYnabClient } from "./dependencies.js";
 import { runScheduledReadModelSync, runScheduledReadModelSyncAndReport } from "./scheduled-sync.js";
-
-describe("resolveYnabClient", () => {
-  it("keeps YNAB access configured independently from OAuth provider storage", async () => {
-    const client = resolveYnabClient(
-      {
-        mcpServerName: "ynab-mcp-build",
-        mcpServerVersion: "0.1.0",
-        oauthEnabled: true,
-        publicUrl: "https://example.com/mcp",
-        ynabApiBaseUrl: "https://api.ynab.com/v1",
-        ynabReadSource: "live",
-        ynabStaleAfterMinutes: 360,
-        ynabSyncMaxRowsPerRun: 100
-      },
-      {}
-    );
-
-    await expect(client.getUser()).rejects.toThrow("YNAB access token is not configured.");
-  });
-});
 
 function createD1Env(overrides: Record<string, unknown> = {}) {
   return {
@@ -172,20 +151,6 @@ describe("runScheduledReadModelSync", () => {
     expect(result).toEqual({
       reason: "No YNAB default plan was available for scheduled D1 sync.",
       status: "failed"
-    });
-  });
-
-  it("skips safely outside D1 mode", async () => {
-    const createReadModelSyncService = vi.fn();
-
-    const result = await runScheduledReadModelSync(createD1Env({ YNAB_READ_SOURCE: "live" }), 1777406400000, {
-      createReadModelSyncService
-    });
-
-    expect(createReadModelSyncService).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      reason: "YNAB_READ_SOURCE is not d1.",
-      status: "skipped"
     });
   });
 

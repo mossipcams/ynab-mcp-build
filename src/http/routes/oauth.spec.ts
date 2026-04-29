@@ -43,7 +43,9 @@ function createOAuthEnv(): Env {
     MCP_SERVER_NAME: "ynab-mcp-build",
     MCP_SERVER_VERSION: "0.1.0",
     OAUTH_KV: createMemoryKvNamespace(),
-    YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+    YNAB_API_BASE_URL: "https://api.ynab.com/v1",
+    YNAB_DB: {} as D1Database,
+    YNAB_READ_SOURCE: "d1"
   } as unknown as Env;
 }
 

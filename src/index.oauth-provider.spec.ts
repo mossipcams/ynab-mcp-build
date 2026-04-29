@@ -51,7 +51,7 @@ describe("Worker OAuth provider", () => {
 
     worker.scheduled!(
       { cron: "0 * * * *", scheduledTime: 1777406400000 } as ScheduledController,
-      { YNAB_READ_SOURCE: "live" } as unknown as Env,
+      {} as Env,
       { waitUntil } as unknown as ExecutionContext
     );
 
@@ -59,10 +59,9 @@ describe("Worker OAuth provider", () => {
     const [scheduledPromise] = waitUntil.mock.calls[0] ?? [];
 
     expect(scheduledPromise).toBeDefined();
-    await expect(scheduledPromise).resolves.toEqual({
-      reason: "YNAB_READ_SOURCE is not d1.",
-      status: "skipped"
-    });
+    await expect(scheduledPromise).rejects.toThrow(
+      "Scheduled D1 sync failed: YNAB_ACCESS_TOKEN is required for scheduled D1 sync."
+    );
   });
 
   it("protects MCP requests with the Cloudflare OAuth provider", async () => {

@@ -8,7 +8,7 @@ import { resolveAppEnv } from "../shared/env.js";
 
 type ScheduledReadModelSyncResult =
   | Awaited<ReturnType<ReturnType<typeof createReadModelSyncService>["syncReadModel"]>>
-  | { status: "failed" | "skipped"; reason: string };
+  | { status: "failed"; reason: string };
 
 type ScheduledSyncDependencies = {
   createReadModelSyncService?: typeof createReadModelSyncService;
@@ -136,13 +136,6 @@ export async function runScheduledReadModelSync(
   dependencies: ScheduledSyncDependencies = {}
 ): Promise<ScheduledReadModelSyncResult> {
   const appEnv = resolveScheduledAppEnv(env);
-
-  if (appEnv.ynabReadSource !== "d1") {
-    return {
-      reason: "YNAB_READ_SOURCE is not d1.",
-      status: "skipped"
-    };
-  }
 
   if (!appEnv.ynabAccessToken) {
     return {

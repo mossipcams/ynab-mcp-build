@@ -1,24 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../../app/create-app.js";
-import type { YnabClient } from "../../platform/ynab/client.js";
 
 function createEnv(): Env {
   return {
     MCP_SERVER_NAME: "ynab-mcp-build",
     MCP_SERVER_VERSION: "0.1.0",
-    YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+    YNAB_API_BASE_URL: "https://api.ynab.com/v1",
+    YNAB_DB: {} as D1Database,
+    YNAB_READ_SOURCE: "d1"
   } as unknown as Env;
 }
 
 describe("http mcp route optimization", () => {
   it("reuses tool definitions between route validation and MCP server registration", async () => {
-    const resolveClient = vi.fn(() => ({}) as YnabClient);
-    const app = createApp({
-      get ynabClient() {
-        return resolveClient();
-      }
-    });
+    const now = vi.fn(() => 1777406400000);
+    const app = createApp({ now });
 
     const response = await app.request(
       "http://localhost/mcp",
@@ -42,16 +39,12 @@ describe("http mcp route optimization", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(resolveClient).toHaveBeenCalledTimes(1);
+    expect(now).not.toHaveBeenCalled();
   });
 
   it("rejects oversized JSON bodies before creating MCP dependencies", async () => {
-    const resolveClient = vi.fn(() => ({}) as YnabClient);
-    const app = createApp({
-      get ynabClient() {
-        return resolveClient();
-      }
-    });
+    const now = vi.fn(() => 1777406400000);
+    const app = createApp({ now });
     const response = await app.request(
       "http://localhost/mcp",
       {
@@ -75,6 +68,6 @@ describe("http mcp route optimization", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: "request_too_large"
     });
-    expect(resolveClient).not.toHaveBeenCalled();
+    expect(now).not.toHaveBeenCalled();
   });
 });

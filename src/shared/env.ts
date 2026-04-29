@@ -20,7 +20,7 @@ export type AppEnv = {
   ynabAccessToken?: string;
   ynabDatabase?: D1Database;
   ynabDefaultPlanId?: string;
-  ynabReadSource: "live" | "d1";
+  ynabReadSource: "d1";
   ynabStaleAfterMinutes: number;
   ynabSyncMaxRowsPerRun: number;
 };
@@ -30,7 +30,7 @@ const DEFAULT_APP_ENV: AppEnv = {
   mcpServerVersion: "0.1.0",
   oauthEnabled: false,
   ynabApiBaseUrl: "https://api.ynab.com/v1",
-  ynabReadSource: "live",
+  ynabReadSource: "d1",
   ynabStaleAfterMinutes: 360,
   ynabSyncMaxRowsPerRun: 100
 };
@@ -53,8 +53,12 @@ function getOptionalPositiveInteger(value: unknown, fallback: number) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function resolveYnabReadSource(value: unknown) {
-  return value === "d1" ? "d1" : DEFAULT_APP_ENV.ynabReadSource;
+function resolveYnabReadSource(value: unknown): AppEnv["ynabReadSource"] {
+  if (value === undefined || value === "" || value === "d1") {
+    return "d1";
+  }
+
+  throw new Error("YNAB_READ_SOURCE must be d1.");
 }
 
 function getAccessOidcDiscoveryUrl(teamDomain: string, clientId: string) {

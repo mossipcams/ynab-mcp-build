@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -13,6 +16,10 @@ const repository = {
 };
 
 describe("DB-backed money movement service", () => {
+  it("is the only money movement slice because public movement tools are category read-model tools", () => {
+    expect(existsSync(join(process.cwd(), "src", "slices", "money-movements"))).toBe(false);
+  });
+
   it("lists category money movements from the read model with pagination", async () => {
     repository.listMoneyMovements.mockResolvedValueOnce([
       {
@@ -102,6 +109,24 @@ describe("DB-backed money movement service", () => {
     });
     expect(repository.listMoneyMovements).toHaveBeenCalledWith({
       month: "2026-04-01",
+      planId: "plan-1"
+    });
+  });
+
+  it("falls back to the default plan when input plan ids are blank", async () => {
+    repository.listMoneyMovements.mockResolvedValueOnce([]);
+
+    await getDbMoneyMovements(
+      {
+        defaultPlanId: "plan-1",
+        moneyMovementsRepository: repository
+      },
+      {
+        planId: "   "
+      }
+    );
+
+    expect(repository.listMoneyMovements).toHaveBeenLastCalledWith({
       planId: "plan-1"
     });
   });
