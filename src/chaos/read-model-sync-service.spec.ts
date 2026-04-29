@@ -69,7 +69,6 @@ describe("read-model sync service chaos", () => {
     };
     const service = createReadModelSyncService({
       deltaClient,
-      maxRowsPerRun: 100,
       readModelRepository,
       syncStateRepository,
       transactionsRepository,

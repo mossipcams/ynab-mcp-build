@@ -12,7 +12,6 @@ function createD1Env(overrides: Record<string, unknown> = {}) {
     YNAB_DB: {} as D1Database,
     YNAB_DEFAULT_PLAN_ID: "plan-1",
     YNAB_READ_SOURCE: "d1",
-    YNAB_SYNC_MAX_ROWS_PER_RUN: "50",
     ...overrides,
   } as unknown as Env;
 }

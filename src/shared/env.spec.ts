@@ -65,20 +65,17 @@ describe("resolveAppEnv", () => {
       YNAB_DEFAULT_PLAN_ID: "plan-1",
       YNAB_READ_SOURCE: "d1",
       YNAB_STALE_AFTER_MINUTES: "120",
-      YNAB_SYNC_MAX_ROWS_PER_RUN: "50",
     } as Partial<Env> & {
       YNAB_DB: D1Database;
       YNAB_DEFAULT_PLAN_ID: string;
       YNAB_READ_SOURCE: string;
       YNAB_STALE_AFTER_MINUTES: string;
-      YNAB_SYNC_MAX_ROWS_PER_RUN: string;
     });
 
     expect(env.ynabDatabase).toBe(database);
     expect(env.ynabDefaultPlanId).toBe("plan-1");
     expect(env.ynabReadSource).toBe("d1");
     expect(env.ynabStaleAfterMinutes).toBe(120);
-    expect(env.ynabSyncMaxRowsPerRun).toBe(50);
     expect(env.ynabAccessToken).toBeUndefined();
   });
 

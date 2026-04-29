@@ -22,7 +22,6 @@ export type AppEnv = {
   ynabDefaultPlanId?: string;
   ynabReadSource: "d1";
   ynabStaleAfterMinutes: number;
-  ynabSyncMaxRowsPerRun: number;
 };
 
 const DEFAULT_APP_ENV: AppEnv = {
@@ -32,7 +31,6 @@ const DEFAULT_APP_ENV: AppEnv = {
   ynabApiBaseUrl: "https://api.ynab.com/v1",
   ynabReadSource: "d1",
   ynabStaleAfterMinutes: 360,
-  ynabSyncMaxRowsPerRun: 100,
 };
 
 function getOptionalString(value: unknown) {
@@ -107,7 +105,6 @@ export function resolveAppEnv(
         YNAB_DEFAULT_PLAN_ID?: string;
         YNAB_READ_SOURCE?: string;
         YNAB_STALE_AFTER_MINUTES?: string;
-        YNAB_SYNC_MAX_ROWS_PER_RUN?: string;
       }
     | undefined;
   const accessOidcValues = {
@@ -181,10 +178,6 @@ export function resolveAppEnv(
     ynabStaleAfterMinutes: getOptionalPositiveInteger(
       runtimeEnv?.YNAB_STALE_AFTER_MINUTES,
       DEFAULT_APP_ENV.ynabStaleAfterMinutes,
-    ),
-    ynabSyncMaxRowsPerRun: getOptionalPositiveInteger(
-      runtimeEnv?.YNAB_SYNC_MAX_ROWS_PER_RUN,
-      DEFAULT_APP_ENV.ynabSyncMaxRowsPerRun,
     ),
   });
 

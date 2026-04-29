@@ -145,7 +145,6 @@ export type ReadModelSyncServiceOptions = {
   transactionsRepository: TransactionsRepository;
   metadataClient?: MetadataClient;
   moneyMovementClient?: MoneyMovementClient;
-  maxRowsPerRun: number;
   leaseSeconds?: number;
 };
 
