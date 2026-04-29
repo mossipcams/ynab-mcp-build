@@ -26,6 +26,109 @@ function createSyncStateRepository() {
 }
 
 describe("read-model sync service", () => {
+  it("syncs budget metadata and advances freshness cursors for metadata-backed tools", async () => {
+    const deltaClient = {
+      listAccountsDelta: vi.fn(async () => ({ records: [], serverKnowledge: 201 })),
+      listCategoriesDelta: vi.fn(async () => ({ records: [], serverKnowledge: 202 })),
+      listMonthsDelta: vi.fn(async () => ({ records: [], serverKnowledge: 203 })),
+      listPayeesDelta: vi.fn(async () => ({ records: [], serverKnowledge: 204 })),
+      listPayeeLocationsDelta: vi.fn(async () => ({ records: [], serverKnowledge: 205 })),
+      listScheduledTransactionsDelta: vi.fn(async () => ({ records: [], serverKnowledge: 206 })),
+      listTransactionsDelta: vi.fn(async () => ({ records: [], serverKnowledge: 207 }))
+    } as unknown as YnabDeltaClient;
+    const metadataClient = {
+      getPlan: vi.fn(async () => ({
+        firstMonth: "2026-01-01",
+        id: "plan-1",
+        lastMonth: "2026-12-01",
+        name: "Main Budget"
+      })),
+      getPlanSettings: vi.fn(async () => ({
+        currencyFormat: { isoCode: "USD" },
+        dateFormat: { format: "MM/DD/YYYY" }
+      })),
+      getUser: vi.fn(async () => ({ id: "user-1", name: "Avery" })),
+      listPlans: vi.fn(async () => ({
+        defaultPlan: { id: "plan-1", name: "Main Budget" },
+        plans: [{ id: "plan-1", name: "Main Budget" }]
+      }))
+    };
+    const syncStateRepository = createSyncStateRepository();
+    const readModelRepository = {
+      upsertAccounts: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertCategoryGroups: vi.fn(async () => ({ categoriesUpserted: 0, categoryGroupsUpserted: 0 })),
+      upsertMonths: vi.fn(async () => ({ monthCategoriesUpserted: 0, monthsUpserted: 0 })),
+      upsertMoneyMovementGroups: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertMoneyMovements: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertPayees: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertPayeeLocations: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertPlanDetail: vi.fn(async () => ({ rowsUpserted: 1 })),
+      upsertPlans: vi.fn(async () => ({ rowsUpserted: 1 })),
+      upsertPlanSettings: vi.fn(async () => ({ rowsUpserted: 1 })),
+      upsertScheduledTransactions: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertUser: vi.fn(async () => ({ rowsUpserted: 1 }))
+    };
+    const transactionsRepository = {
+      upsertTransactions: vi.fn(async () => ({ rowsDeleted: 0, rowsUpserted: 0 }))
+    };
+    const service = createReadModelSyncService({
+      deltaClient,
+      maxRowsPerRun: 100,
+      metadataClient,
+      readModelRepository,
+      syncStateRepository,
+      transactionsRepository
+    });
+
+    const result = await service.syncReadModel({
+      leaseOwner: "cron:123",
+      now: "2026-04-28T12:00:00.000Z",
+      planId: "plan-1"
+    });
+
+    expect(metadataClient.getUser).toHaveBeenCalledWith();
+    expect(metadataClient.listPlans).toHaveBeenCalledWith();
+    expect(metadataClient.getPlan).toHaveBeenCalledWith("plan-1");
+    expect(metadataClient.getPlanSettings).toHaveBeenCalledWith("plan-1");
+    expect(readModelRepository.upsertUser).toHaveBeenCalledWith({
+      syncedAt: "2026-04-28T12:00:00.000Z",
+      user: { id: "user-1", name: "Avery" }
+    });
+    expect(readModelRepository.upsertPlans).toHaveBeenCalledWith({
+      plans: [{ id: "plan-1", name: "Main Budget" }],
+      syncedAt: "2026-04-28T12:00:00.000Z"
+    });
+    expect(readModelRepository.upsertPlanDetail).toHaveBeenCalledWith({
+      plan: expect.objectContaining({ firstMonth: "2026-01-01", id: "plan-1" }),
+      syncedAt: "2026-04-28T12:00:00.000Z"
+    });
+    expect(readModelRepository.upsertPlanSettings).toHaveBeenCalledWith({
+      planId: "plan-1",
+      settings: expect.objectContaining({ dateFormat: { format: "MM/DD/YYYY" } }),
+      syncedAt: "2026-04-28T12:00:00.000Z"
+    });
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "users",
+      rowsUpserted: 1,
+      serverKnowledge: 0
+    }));
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "plans",
+      rowsUpserted: 2,
+      serverKnowledge: 0
+    }));
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "plan_settings",
+      rowsUpserted: 1,
+      serverKnowledge: 0
+    }));
+    expect(result.endpointResults).toEqual(expect.arrayContaining([
+      expect.objectContaining({ endpoint: "users", status: "ok" }),
+      expect.objectContaining({ endpoint: "plans", rowsUpserted: 2, status: "ok" }),
+      expect.objectContaining({ endpoint: "plan_settings", status: "ok" })
+    ]));
+  });
+
   it("syncs every cursor-backed endpoint through its own lease and cursor", async () => {
     const deltaClient = {
       listAccountsDelta: vi.fn(async () => ({ records: [{ id: "account-1" }], serverKnowledge: 201 })),
@@ -114,7 +217,7 @@ describe("read-model sync service", () => {
     });
   });
 
-  it("records one endpoint failure and continues syncing later endpoints", async () => {
+  it("writes large initial deltas instead of permanently failing on the row limit", async () => {
     const deltaClient = {
       listAccountsDelta: vi.fn(async () => ({ records: [{ id: "account-1" }, { id: "account-2" }], serverKnowledge: 201 })),
       listCategoriesDelta: vi.fn(async () => ({ records: [], serverKnowledge: 202 })),
@@ -126,7 +229,7 @@ describe("read-model sync service", () => {
     } as unknown as YnabDeltaClient;
     const syncStateRepository = createSyncStateRepository();
     const readModelRepository = {
-      upsertAccounts: vi.fn(),
+      upsertAccounts: vi.fn(async () => ({ rowsUpserted: 2 })),
       upsertCategoryGroups: vi.fn(async () => ({ categoriesUpserted: 0, categoryGroupsUpserted: 0 })),
       upsertMonths: vi.fn(async () => ({ monthCategoriesUpserted: 0, monthsUpserted: 0 })),
       upsertMoneyMovementGroups: vi.fn(async () => ({ rowsUpserted: 0 })),
@@ -152,21 +255,19 @@ describe("read-model sync service", () => {
       planId: "plan-1"
     });
 
-    expect(readModelRepository.upsertAccounts).not.toHaveBeenCalled();
-    expect(deltaClient.listCategoriesDelta).toHaveBeenCalled();
-    expect(syncStateRepository.recordFailure).toHaveBeenCalledWith({
-      endpoint: "accounts",
-      error: "Delta response contained 2 rows, exceeding the configured limit of 1.",
-      leaseOwner: "cron:123",
-      now: "2026-04-28T12:00:00.000Z",
-      planId: "plan-1"
+    expect(readModelRepository.upsertAccounts).toHaveBeenCalledWith({
+      accounts: [{ id: "account-1" }, { id: "account-2" }],
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z"
     });
+    expect(deltaClient.listCategoriesDelta).toHaveBeenCalled();
+    expect(syncStateRepository.recordFailure).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       endpointResults: expect.arrayContaining([
-        expect.objectContaining({ endpoint: "accounts", reason: "row_limit_exceeded", status: "failed" }),
+        expect.objectContaining({ endpoint: "accounts", rowsUpserted: 2, status: "ok" }),
         expect.objectContaining({ endpoint: "categories", status: "ok" })
       ]),
-      status: "failed"
+      status: "ok"
     });
   });
 });

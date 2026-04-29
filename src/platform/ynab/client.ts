@@ -318,7 +318,7 @@ export interface YnabClient {
   getPlanMonth(planId: string, month: string): Promise<YnabPlanMonthDetail>;
   listAccounts(planId: string): Promise<YnabAccountSummary[]>;
   getAccount(planId: string, accountId: string): Promise<YnabAccountDetail>;
-  listTransactions(planId: string, fromDate?: string): Promise<YnabTransaction[]>;
+  listTransactions(planId: string, fromDate?: string, toDate?: string): Promise<YnabTransaction[]>;
   listTransactionsByAccount(planId: string, accountId: string): Promise<YnabTransaction[]>;
   listTransactionsByCategory(planId: string, categoryId: string): Promise<YnabTransaction[]>;
   listTransactionsByPayee(planId: string, payeeId: string): Promise<YnabTransaction[]>;
@@ -1489,7 +1489,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
 	        balance: account.balance
 	      });
     },
-    async listTransactions(planId: string, fromDate?: string) {
+    async listTransactions(planId: string, fromDate?: string, toDate?: string) {
       const url = new URL(`${baseUrl}/plans/${encodeURIComponent(planId)}/transactions`);
 
       if (fromDate) {
@@ -1499,7 +1499,9 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
       const response = await authorizedFetch(url.toString());
       const payload = await getJson<YnabTransactionsResponse>(response, YnabTransactionsResponseSchema);
 
-      return payload.data.transactions.map(toYnabTransaction);
+      return payload.data.transactions
+        .map(toYnabTransaction)
+        .filter((transaction) => !toDate || transaction.date <= toDate);
     },
     async listTransactionsByAccount(planId: string, accountId: string) {
       const response = await authorizedFetch(

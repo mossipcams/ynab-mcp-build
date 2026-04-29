@@ -89,6 +89,14 @@ function addMonths(month: string, offset: number) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
+function endOfMonth(month: string) {
+  const nextMonth = addMonths(month, 1);
+  const [yearPart, monthPart] = nextMonth.slice(0, 7).split("-");
+  const date = new Date(Date.UTC(Number(yearPart), Number(monthPart) - 1, 0));
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
 function listMonthsInRange(fromMonth: string, toMonth: string) {
   const months: string[] = [];
   let currentMonth = fromMonth;
@@ -190,7 +198,7 @@ async function getMonthTransactionContext(ynabClient: YnabClient, input: Financi
   const month = await resolveMonth(ynabClient, planId, input.month);
   const [monthDetail, transactions] = await Promise.all([
     ynabClient.getPlanMonth(planId, month),
-    ynabClient.listTransactions(planId, month)
+    ynabClient.listTransactions(planId, month, endOfMonth(month))
   ]);
 
   return { planId, month, monthDetail, transactions };
@@ -202,7 +210,7 @@ async function getMonthContext(ynabClient: YnabClient, input: FinancialHealthInp
   const [monthDetail, accounts, transactions] = await Promise.all([
     ynabClient.getPlanMonth(planId, month),
     ynabClient.listAccounts(planId),
-    ynabClient.listTransactions(planId, month)
+    ynabClient.listTransactions(planId, month, endOfMonth(month))
   ]);
 
   return { planId, month, monthDetail, accounts, transactions };
@@ -213,7 +221,7 @@ async function getRangeContext(ynabClient: YnabClient, input: FinancialHealthRan
   const { fromMonth, toMonth } = await resolveMonthRange(ynabClient, planId, input.fromMonth, input.toMonth);
   const [months, transactions] = await Promise.all([
     ynabClient.listPlanMonths(planId),
-    ynabClient.listTransactions(planId, fromMonth)
+    ynabClient.listTransactions(planId, fromMonth, endOfMonth(toMonth))
   ]);
   const visibleMonths = months
     .filter((month) => !month.deleted && month.month >= fromMonth && month.month <= toMonth)
@@ -996,7 +1004,7 @@ export async function getRecurringExpenseSummary(
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const topN = resolveTopN(input);
-  const transactions = await ynabClient.listTransactions(planId, input.fromDate);
+  const transactions = await ynabClient.listTransactions(planId, input.fromDate, input.toDate);
   const candidates = new Map<string, { payeeId?: string | null; payeeName: string; dates: string[]; amounts: number[] }>();
 
   for (const transaction of transactions) {

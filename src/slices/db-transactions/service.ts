@@ -1,11 +1,12 @@
-import type { TransactionSearchRow } from "../../platform/ynab/read-model/transactions-repository.js";
+import type {
+  TransactionSearchRow,
+  TransactionSummaryResult
+} from "../../platform/ynab/read-model/transactions-repository.js";
 import {
   formatAmountMilliunits,
   hasPaginationControls,
   hasProjectionControls,
-  paginateEntries,
-  projectRecord,
-  shouldPaginateEntries
+  projectRecord
 } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 
@@ -71,8 +72,25 @@ type DbTransactionServiceDependencies = {
       includeDeleted?: boolean;
       includeTransfers?: boolean;
       limit: number;
+      offset?: number;
       sort?: TransactionSort;
-    }): Promise<TransactionSearchRow[]>;
+    }): Promise<{ rows: TransactionSearchRow[]; totalCount: number }>;
+    summarizeTransactions?(input: {
+      planId: string;
+      startDate?: string;
+      endDate?: string;
+      accountIds?: string[];
+      categoryIds?: string[];
+      payeeIds?: string[];
+      payeeSearch?: string;
+      approved?: boolean;
+      cleared?: string;
+      minAmountMilliunits?: number;
+      maxAmountMilliunits?: number;
+      includeDeleted?: boolean;
+      includeTransfers?: boolean;
+      topN?: number;
+    }): Promise<TransactionSummaryResult>;
   };
   freshness: {
     getFreshness(planId: string, requiredEndpoints: readonly string[]): Promise<FreshnessResult>;
@@ -97,10 +115,6 @@ function resolvePlanId(input: { planId?: string }, defaultPlanId?: string) {
 
 function resolveLimit(limit: number | undefined) {
   return Math.min(Math.max(limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
-}
-
-function resolveFetchLimit(input: DbTransactionSearchInput) {
-  return Math.min((input.offset ?? 0) + resolveLimit(input.limit), MAX_LIMIT);
 }
 
 function toFreshnessEnvelope(freshness: FreshnessResult) {
@@ -140,42 +154,6 @@ function toDisplayTransaction(row: TransactionSearchRow) {
     debt_transaction_type: row.debt_transaction_type,
     deleted: row.deleted ? true : undefined
   }).filter(([, value]) => value !== undefined));
-}
-
-function rowApproved(row: TransactionSearchRow) {
-  return row.approved === undefined || row.approved === null ? undefined : Boolean(row.approved);
-}
-
-function isTransfer(row: TransactionSearchRow) {
-  return Boolean(row.transfer_account_id);
-}
-
-function compareRows(left: TransactionSearchRow, right: TransactionSearchRow, sort: TransactionSort) {
-  switch (sort) {
-    case "date_asc":
-      return left.date.localeCompare(right.date) || left.id.localeCompare(right.id);
-    case "date_desc":
-      return right.date.localeCompare(left.date) || left.id.localeCompare(right.id);
-    case "amount_asc":
-      return left.amount_milliunits - right.amount_milliunits || right.date.localeCompare(left.date) || left.id.localeCompare(right.id);
-    case "amount_desc":
-      return right.amount_milliunits - left.amount_milliunits || right.date.localeCompare(left.date) || left.id.localeCompare(right.id);
-  }
-}
-
-function matchesTransactionFilters(row: TransactionSearchRow, input: DbTransactionSearchInput) {
-  return [
-    input.includeDeleted === true || !row.deleted,
-    input.includeTransfers === true || !isTransfer(row),
-    !input.toDate || row.date <= input.toDate,
-    !input.payeeId || row.payee_id === input.payeeId,
-    !input.accountId || row.account_id === input.accountId,
-    !input.categoryId || row.category_id === input.categoryId,
-    input.approved === undefined || rowApproved(row) === input.approved,
-    !input.cleared || row.cleared === input.cleared,
-    input.minAmount === undefined || row.amount_milliunits >= input.minAmount,
-    input.maxAmount === undefined || row.amount_milliunits <= input.maxAmount
-  ].every(Boolean);
 }
 
 function buildTransactionSummary(rows: TransactionSearchRow[], topN = 5) {
@@ -247,38 +225,59 @@ function buildTransactionSummary(rows: TransactionSearchRow[], topN = 5) {
   };
 }
 
+function formatTransactionSummary(summary: TransactionSummaryResult) {
+  const toRollups = (
+    entries: Array<{ id?: string; name: string; amountMilliunits: number; transactionCount: number }>
+  ) =>
+    entries.map((entry) =>
+      compactObject({
+        id: entry.id,
+        name: entry.name,
+        amount: formatAmountMilliunits(entry.amountMilliunits),
+        transaction_count: entry.transactionCount
+      })
+    );
+
+  return {
+    totals: {
+      total_inflow: formatAmountMilliunits(summary.totals.inflowMilliunits),
+      total_outflow: formatAmountMilliunits(summary.totals.outflowMilliunits),
+      net: formatAmountMilliunits(summary.totals.inflowMilliunits - summary.totals.outflowMilliunits)
+    },
+    top_categories: toRollups(summary.topCategories),
+    top_payees: toRollups(summary.topPayees)
+  };
+}
+
 function buildTransactionCollectionResult(
   rows: TransactionSearchRow[],
+  totalCount: number,
   input: DbTransactionSearchInput,
   extra: Record<string, unknown> = {}
 ) {
   const displayTransactions = rows.map(toDisplayTransaction);
-  const shouldPaginate = shouldPaginateEntries(displayTransactions, input);
+  const transactions = hasProjectionControls(input)
+    ? displayTransactions.map((transaction) => projectRecord(transaction, transactionFields, input))
+    : displayTransactions;
 
-  if (!shouldPaginate && !hasProjectionControls(input)) {
+  if (!hasPaginationControls(input) && rows.length === totalCount) {
     return {
-      transactions: displayTransactions,
-      match_count: rows.length,
+      transactions,
+      match_count: totalCount,
       ...extra
     };
   }
 
-  if (!shouldPaginate) {
-    return {
-      transactions: displayTransactions.map((transaction) => projectRecord(transaction, transactionFields, input)),
-      match_count: rows.length,
-      ...extra
-    };
-  }
-
-  const pagedTransactions = paginateEntries(displayTransactions, input);
+  const offset = Math.max(input.offset ?? 0, 0);
+  const requestedLimit = Math.max(input.limit ?? DEFAULT_LIMIT, 1);
 
   return {
-    transactions: hasProjectionControls(input)
-      ? pagedTransactions.entries.map((transaction) => projectRecord(transaction, transactionFields, input))
-      : pagedTransactions.entries,
-    match_count: rows.length,
-    ...pagedTransactions.metadata,
+    transactions,
+    match_count: totalCount,
+    offset,
+    limit: requestedLimit,
+    returned_count: rows.length,
+    has_more: offset + rows.length < totalCount,
     ...extra
   };
 }
@@ -299,10 +298,9 @@ export async function searchTransactions(
     };
   }
 
-  const transactions = await dependencies.transactionsRepository.searchTransactions({
+  const repositoryFilters = {
     includeDeleted: input.includeDeleted ?? false,
     includeTransfers: input.includeTransfers ?? false,
-    limit: resolveFetchLimit(input),
     planId,
     ...(input.accountId ? { accountIds: [input.accountId] } : {}),
     ...(input.approved !== undefined ? { approved: input.approved } : {}),
@@ -312,20 +310,31 @@ export async function searchTransactions(
     ...(input.maxAmount !== undefined ? { maxAmountMilliunits: input.maxAmount } : {}),
     ...(input.minAmount !== undefined ? { minAmountMilliunits: input.minAmount } : {}),
     ...(input.payeeId ? { payeeIds: [input.payeeId] } : {}),
-    ...(input.fromDate ? { startDate: input.fromDate } : {}),
+    ...(input.fromDate ? { startDate: input.fromDate } : {})
+  };
+  const transactionPage = await dependencies.transactionsRepository.searchTransactions({
+    ...repositoryFilters,
+    limit: resolveLimit(input.limit),
+    offset: Math.max(input.offset ?? 0, 0),
     ...(input.sort ? { sort: input.sort } : {})
   });
   const sort = input.sort ?? "date_desc";
-  const filteredTransactions = transactions
-    .filter((transaction) => matchesTransactionFilters(transaction, input))
-    .sort((left, right) => compareRows(left, right, sort));
-  const includeSummary = input.includeSummary === true || (!hasPaginationControls(input) && shouldPaginateEntries(filteredTransactions, input));
+  const includeSummary = input.includeSummary === true
+    || (!hasPaginationControls(input) && transactionPage.totalCount > transactionPage.rows.length);
+  const summary = includeSummary
+    ? dependencies.transactionsRepository.summarizeTransactions
+      ? formatTransactionSummary(await dependencies.transactionsRepository.summarizeTransactions({
+        ...repositoryFilters,
+        topN: 5
+      }))
+      : buildTransactionSummary(transactionPage.rows)
+    : {};
 
   return {
     status: freshness.stale ? "stale" : "ok",
     data_freshness: dataFreshness,
-    data: buildTransactionCollectionResult(filteredTransactions, input, {
-      ...(includeSummary ? buildTransactionSummary(filteredTransactions) : {}),
+    data: buildTransactionCollectionResult(transactionPage.rows, transactionPage.totalCount, input, {
+      ...summary,
       filters: compactObject({
         from_date: input.fromDate,
         to_date: input.toDate,

@@ -22,14 +22,14 @@ class FakeStatement {
     this.db.allCalls.push({ sql: this.sql, params: this.params });
 
     return Promise.resolve({
-      results: this.db.allResults as T[]
+      results: (this.db.allResults.shift() ?? []) as T[]
     } as D1Result<T>);
   }
 }
 
 class FakeD1Database {
   allCalls: BoundStatement[] = [];
-  allResults: unknown[] = [];
+  allResults: unknown[][] = [];
   batchStatements: BoundStatement[] = [];
 
   prepare(sql: string) {
@@ -134,17 +134,18 @@ describe("transactions repository", () => {
 
   it("searches with parameterized filters and excludes deleted transactions by default", async () => {
     const db = new FakeD1Database();
-    db.allResults = [
+    const rows = [
       {
-        id: "txn-1",
-        date: "2026-04-12",
         amount_milliunits: -12000,
-        payee_name: "Market",
-        category_name: "Groceries",
         account_name: "Checking",
-        deleted: 0
+        category_name: "Groceries",
+        date: "2026-04-12",
+        deleted: 0,
+        id: "txn-1",
+        payee_name: "Market"
       }
     ];
+    db.allResults = [[{ count: 42 }], rows];
     const repository = createTransactionsRepository(db as unknown as D1Database);
 
     const result = await repository.searchTransactions({
@@ -154,20 +155,38 @@ describe("transactions repository", () => {
       limit: 25,
       maxAmountMilliunits: -1000,
       minAmountMilliunits: -20000,
+      offset: 50,
       payeeSearch: "market",
       planId: "plan-1",
       startDate: "2026-04-01"
     });
 
-    expect(result).toEqual(db.allResults);
-    expect(db.allCalls).toHaveLength(1);
-    const call = db.allCalls[0]!;
-    expect(call.sql).toContain("deleted = 0");
-    expect(call.sql).toContain("account_id IN (?)");
-    expect(call.sql).toContain("category_id IN (?, ?)");
-    expect(call.sql).toContain("payee_name LIKE ?");
-    expect(call.sql).toContain("LIMIT ?");
-    expect(call.params).toEqual([
+    expect(result).toEqual({
+      rows,
+      totalCount: 42
+    });
+    expect(db.allCalls).toHaveLength(2);
+    const countCall = db.allCalls[0]!;
+    const rowCall = db.allCalls[1]!;
+    expect(countCall.sql).toContain("COUNT(*) AS count");
+    expect(countCall.sql).toContain("deleted = 0");
+    expect(countCall.params).toEqual([
+      "plan-1",
+      "2026-04-01",
+      "2026-04-30",
+      "account-1",
+      "category-1",
+      "category-2",
+      "%market%",
+      -20000,
+      -1000
+    ]);
+    expect(rowCall.sql).toContain("deleted = 0");
+    expect(rowCall.sql).toContain("account_id IN (?)");
+    expect(rowCall.sql).toContain("category_id IN (?, ?)");
+    expect(rowCall.sql).toContain("payee_name LIKE ?");
+    expect(rowCall.sql).toContain("LIMIT ? OFFSET ?");
+    expect(rowCall.params).toEqual([
       "plan-1",
       "2026-04-01",
       "2026-04-30",
@@ -177,7 +196,56 @@ describe("transactions repository", () => {
       "%market%",
       -20000,
       -1000,
-      25
+      25,
+      50
     ]);
+  });
+
+  it("summarizes all matching transactions without page limits", async () => {
+    const db = new FakeD1Database();
+    db.allResults = [
+      [{ inflow_milliunits: 5000, outflow_milliunits: 12000 }],
+      [{ amount_milliunits: 12000, category_id: "category-1", name: "Groceries", transaction_count: 3 }],
+      [{ amount_milliunits: 9000, name: "Market", payee_id: "payee-1", transaction_count: 2 }]
+    ];
+    const repository = createTransactionsRepository(db as unknown as D1Database);
+
+    const result = await repository.summarizeTransactions({
+      accountIds: ["account-1"],
+      endDate: "2026-04-30",
+      includeDeleted: false,
+      includeTransfers: false,
+      planId: "plan-1",
+      startDate: "2026-04-01",
+      topN: 5
+    });
+
+    expect(result).toEqual({
+      totals: {
+        inflowMilliunits: 5000,
+        outflowMilliunits: 12000
+      },
+      topCategories: [
+        {
+          amountMilliunits: 12000,
+          id: "category-1",
+          name: "Groceries",
+          transactionCount: 3
+        }
+      ],
+      topPayees: [
+        {
+          amountMilliunits: 9000,
+          id: "payee-1",
+          name: "Market",
+          transactionCount: 2
+        }
+      ]
+    });
+    expect(db.allCalls).toHaveLength(3);
+    expect(db.allCalls[0]!.sql).not.toContain("LIMIT");
+    expect(db.allCalls[1]!.sql).toContain("GROUP BY");
+    expect(db.allCalls[1]!.sql).toContain("LIMIT ?");
+    expect(db.allCalls[1]!.params).toEqual(["plan-1", "2026-04-01", "2026-04-30", "account-1", 5]);
   });
 });

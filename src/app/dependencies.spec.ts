@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveYnabClient } from "./dependencies.js";
-import { runScheduledReadModelSync } from "./scheduled-sync.js";
+import { runScheduledReadModelSync, runScheduledReadModelSyncAndReport } from "./scheduled-sync.js";
 
 describe("resolveYnabClient", () => {
   it("keeps YNAB access configured independently from OAuth provider storage", async () => {
@@ -55,6 +55,12 @@ describe("runScheduledReadModelSync", () => {
 
     expect(ynabClient.listPlans).not.toHaveBeenCalled();
     expect(createReadModelSyncService).toHaveBeenCalledWith(expect.objectContaining({
+      metadataClient: expect.objectContaining({
+        getPlan: expect.any(Function),
+        getPlanSettings: expect.any(Function),
+        getUser: expect.any(Function),
+        listPlans: expect.any(Function)
+      }),
       moneyMovementClient: expect.objectContaining({
         listMoneyMovementGroups: expect.any(Function),
         listMoneyMovements: expect.any(Function)
@@ -192,5 +198,13 @@ describe("runScheduledReadModelSync", () => {
       reason: "YNAB_ACCESS_TOKEN is required for scheduled D1 sync.",
       status: "failed"
     });
+  });
+
+  it("rejects reported scheduled sync failures so cron waitUntil surfaces them", async () => {
+    await expect(
+      runScheduledReadModelSyncAndReport(createD1Env({ YNAB_ACCESS_TOKEN: undefined }), 1777406400000, {
+        createReadModelSyncService: vi.fn()
+      })
+    ).rejects.toThrow("Scheduled D1 sync failed: YNAB_ACCESS_TOKEN is required for scheduled D1 sync.");
   });
 });

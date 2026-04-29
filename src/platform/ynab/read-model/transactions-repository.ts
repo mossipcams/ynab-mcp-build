@@ -21,6 +21,7 @@ export type SearchTransactionsInput = {
   includeDeleted?: boolean;
   includeTransfers?: boolean;
   limit: number;
+  offset?: number;
   sort?: "amount_asc" | "amount_desc" | "date_asc" | "date_desc";
 };
 
@@ -49,6 +50,53 @@ export type TransactionSearchRow = {
   deleted: number;
 };
 
+type TransactionCountRow = {
+  count: number;
+};
+
+export type TransactionSearchResult = {
+  rows: TransactionSearchRow[];
+  totalCount: number;
+};
+
+export type TransactionSummaryInput = Omit<SearchTransactionsInput, "limit" | "offset" | "sort"> & {
+  topN?: number;
+};
+
+export type TransactionSummaryResult = {
+  totals: {
+    inflowMilliunits: number;
+    outflowMilliunits: number;
+  };
+  topCategories: Array<{
+    id?: string;
+    name: string;
+    amountMilliunits: number;
+    transactionCount: number;
+  }>;
+  topPayees: Array<{
+    id?: string;
+    name: string;
+    amountMilliunits: number;
+    transactionCount: number;
+  }>;
+};
+
+type TransactionTotalsRow = {
+  inflow_milliunits: number | null;
+  outflow_milliunits: number | null;
+};
+
+type TransactionRollupRow = {
+  amount_milliunits: number | null;
+  category_id?: string | null;
+  payee_id?: string | null;
+  name: string | null;
+  transaction_count: number;
+};
+
+const D1_BATCH_SIZE = 50;
+
 function toIntegerBoolean(value: boolean | null | undefined) {
   if (value === undefined || value === null) {
     return null;
@@ -71,6 +119,80 @@ function orderByClause(sort: SearchTransactionsInput["sort"]) {
       return "amount_milliunits ASC, date DESC, id ASC";
     case "amount_desc":
       return "amount_milliunits DESC, date DESC, id ASC";
+  }
+}
+
+function buildSearchWhere(input: Omit<SearchTransactionsInput, "limit" | "offset" | "sort">) {
+  const where = ["plan_id = ?"];
+  const params: Array<string | number> = [input.planId];
+
+  if (input.startDate) {
+    where.push("date >= ?");
+    params.push(input.startDate);
+  }
+
+  if (input.endDate) {
+    where.push("date <= ?");
+    params.push(input.endDate);
+  }
+
+  if (!input.includeDeleted) {
+    where.push("deleted = 0");
+  }
+
+  if (!input.includeTransfers) {
+    where.push("transfer_account_id IS NULL");
+  }
+
+  if (input.accountIds?.length) {
+    where.push(`account_id IN (${placeholders(input.accountIds.length)})`);
+    params.push(...input.accountIds);
+  }
+
+  if (input.categoryIds?.length) {
+    where.push(`category_id IN (${placeholders(input.categoryIds.length)})`);
+    params.push(...input.categoryIds);
+  }
+
+  if (input.payeeIds?.length) {
+    where.push(`payee_id IN (${placeholders(input.payeeIds.length)})`);
+    params.push(...input.payeeIds);
+  }
+
+  if (input.payeeSearch) {
+    where.push("payee_name LIKE ?");
+    params.push(`%${input.payeeSearch}%`);
+  }
+
+  if (input.approved !== undefined) {
+    where.push("approved = ?");
+    params.push(input.approved ? 1 : 0);
+  }
+
+  if (input.cleared) {
+    where.push("cleared = ?");
+    params.push(input.cleared);
+  }
+
+  if (input.minAmountMilliunits !== undefined) {
+    where.push("amount_milliunits >= ?");
+    params.push(input.minAmountMilliunits);
+  }
+
+  if (input.maxAmountMilliunits !== undefined) {
+    where.push("amount_milliunits <= ?");
+    params.push(input.maxAmountMilliunits);
+  }
+
+  return {
+    params,
+    whereClause: where.join(" AND ")
+  };
+}
+
+async function runBatch(database: D1Database, statements: D1PreparedStatement[]): Promise<void> {
+  for (let index = 0; index < statements.length; index += D1_BATCH_SIZE) {
+    await database.batch(statements.slice(index, index + D1_BATCH_SIZE));
   }
 }
 
@@ -215,9 +337,7 @@ export function createTransactionsRepository(database: D1Database) {
         return [transactionStatement, ...subtransactionStatements];
       });
 
-      if (statements.length > 0) {
-        await database.batch(statements);
-      }
+      await runBatch(database, statements);
 
       return {
         rowsUpserted: input.transactions.length,
@@ -225,69 +345,17 @@ export function createTransactionsRepository(database: D1Database) {
       };
     },
 
-    async searchTransactions(input: SearchTransactionsInput) {
-      const where = ["plan_id = ?"];
-      const params: Array<string | number> = [input.planId];
-
-      if (input.startDate) {
-        where.push("date >= ?");
-        params.push(input.startDate);
-      }
-
-      if (input.endDate) {
-        where.push("date <= ?");
-        params.push(input.endDate);
-      }
-
-      if (!input.includeDeleted) {
-        where.push("deleted = 0");
-      }
-
-      if (!input.includeTransfers) {
-        where.push("transfer_account_id IS NULL");
-      }
-
-      if (input.accountIds?.length) {
-        where.push(`account_id IN (${placeholders(input.accountIds.length)})`);
-        params.push(...input.accountIds);
-      }
-
-      if (input.categoryIds?.length) {
-        where.push(`category_id IN (${placeholders(input.categoryIds.length)})`);
-        params.push(...input.categoryIds);
-      }
-
-      if (input.payeeIds?.length) {
-        where.push(`payee_id IN (${placeholders(input.payeeIds.length)})`);
-        params.push(...input.payeeIds);
-      }
-
-      if (input.payeeSearch) {
-        where.push("payee_name LIKE ?");
-        params.push(`%${input.payeeSearch}%`);
-      }
-
-      if (input.approved !== undefined) {
-        where.push("approved = ?");
-        params.push(input.approved ? 1 : 0);
-      }
-
-      if (input.cleared) {
-        where.push("cleared = ?");
-        params.push(input.cleared);
-      }
-
-      if (input.minAmountMilliunits !== undefined) {
-        where.push("amount_milliunits >= ?");
-        params.push(input.minAmountMilliunits);
-      }
-
-      if (input.maxAmountMilliunits !== undefined) {
-        where.push("amount_milliunits <= ?");
-        params.push(input.maxAmountMilliunits);
-      }
-
-      params.push(input.limit);
+    async searchTransactions(input: SearchTransactionsInput): Promise<TransactionSearchResult> {
+      const search = buildSearchWhere(input);
+      const countResult = await database
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM ynab_transactions
+           WHERE ${search.whereClause}`
+        )
+        .bind(...search.params)
+        .all<TransactionCountRow>();
+      const rowParams = [...search.params, input.limit, input.offset ?? 0];
 
       const result = await database
         .prepare(
@@ -314,14 +382,79 @@ export function createTransactionsRepository(database: D1Database) {
                   debt_transaction_type,
                   deleted
            FROM ynab_transactions
-           WHERE ${where.join(" AND ")}
+           WHERE ${search.whereClause}
            ORDER BY ${orderByClause(input.sort)}
-           LIMIT ?`
+           LIMIT ? OFFSET ?`
         )
-        .bind(...params)
+        .bind(...rowParams)
         .all<TransactionSearchRow>();
 
-      return result.results ?? [];
+      return {
+        rows: result.results ?? [],
+        totalCount: countResult.results?.[0]?.count ?? 0
+      };
+    },
+
+    async summarizeTransactions(input: TransactionSummaryInput): Promise<TransactionSummaryResult> {
+      const search = buildSearchWhere(input);
+      const topN = Math.max(input.topN ?? 5, 1);
+      const totalsResult = await database
+        .prepare(
+          `SELECT COALESCE(SUM(CASE WHEN amount_milliunits >= 0 THEN amount_milliunits ELSE 0 END), 0) AS inflow_milliunits,
+                  COALESCE(SUM(CASE WHEN amount_milliunits < 0 THEN -amount_milliunits ELSE 0 END), 0) AS outflow_milliunits
+           FROM ynab_transactions
+           WHERE ${search.whereClause}`
+        )
+        .bind(...search.params)
+        .all<TransactionTotalsRow>();
+      const categoryResult = await database
+        .prepare(
+          `SELECT category_id,
+                  COALESCE(category_name, 'Uncategorized') AS name,
+                  COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
+                  COUNT(*) AS transaction_count
+           FROM ynab_transactions
+           WHERE ${search.whereClause} AND amount_milliunits < 0
+           GROUP BY category_id, COALESCE(category_name, 'Uncategorized')
+           ORDER BY amount_milliunits DESC, name ASC
+           LIMIT ?`
+        )
+        .bind(...search.params, topN)
+        .all<TransactionRollupRow>();
+      const payeeResult = await database
+        .prepare(
+          `SELECT payee_id,
+                  COALESCE(payee_name, 'Unknown Payee') AS name,
+                  COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
+                  COUNT(*) AS transaction_count
+           FROM ynab_transactions
+           WHERE ${search.whereClause} AND amount_milliunits < 0
+           GROUP BY payee_id, COALESCE(payee_name, 'Unknown Payee')
+           ORDER BY amount_milliunits DESC, name ASC
+           LIMIT ?`
+        )
+        .bind(...search.params, topN)
+        .all<TransactionRollupRow>();
+      const totals = totalsResult.results?.[0];
+
+      return {
+        totals: {
+          inflowMilliunits: totals?.inflow_milliunits ?? 0,
+          outflowMilliunits: totals?.outflow_milliunits ?? 0
+        },
+        topCategories: (categoryResult.results ?? []).map((row) => ({
+          ...(row.category_id ? { id: row.category_id } : {}),
+          amountMilliunits: row.amount_milliunits ?? 0,
+          name: row.name ?? "Uncategorized",
+          transactionCount: row.transaction_count
+        })),
+        topPayees: (payeeResult.results ?? []).map((row) => ({
+          ...(row.payee_id ? { id: row.payee_id } : {}),
+          amountMilliunits: row.amount_milliunits ?? 0,
+          name: row.name ?? "Unknown Payee",
+          transactionCount: row.transaction_count
+        }))
+      };
     }
   };
 }

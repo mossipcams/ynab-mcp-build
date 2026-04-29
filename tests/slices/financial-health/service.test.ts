@@ -771,7 +771,7 @@ describe("financial health service", () => {
         }
       ]
     });
-    expect(ynabClient.listTransactions).toHaveBeenCalledWith("plan-1", "2026-01-01");
+    expect(ynabClient.listTransactions).toHaveBeenCalledWith("plan-1", "2026-01-01", "2026-03-31");
   });
 
   it("summarizes spending by category, group, and payee across a month range with topN limits", async () => {

@@ -38,6 +38,28 @@ function createMoneyMovementClient(accessToken: string, baseUrl: string) {
   };
 }
 
+function createMetadataClient(accessToken: string, baseUrl: string) {
+  const client = createYnabClient({
+    accessToken,
+    baseUrl
+  });
+
+  return {
+    getPlan(planId: string) {
+      return client.getPlan(planId);
+    },
+    getPlanSettings(planId: string) {
+      return client.getPlanSettings(planId);
+    },
+    getUser() {
+      return client.getUser();
+    },
+    listPlans() {
+      return client.listPlans();
+    }
+  };
+}
+
 function createPlanDiscoveryClient(accessToken: string, baseUrl: string) {
   const client = createYnabClient({
     accessToken,
@@ -87,6 +109,7 @@ function createProductionReadModelSyncService(env: ReturnType<typeof resolveSche
     baseUrl: env.ynabApiBaseUrl
   });
   const moneyMovementClient = createMoneyMovementClient(env.ynabAccessToken, env.ynabApiBaseUrl);
+  const metadataClient = createMetadataClient(env.ynabAccessToken, env.ynabApiBaseUrl);
   const database = env.ynabDatabase;
 
   return {
@@ -94,6 +117,7 @@ function createProductionReadModelSyncService(env: ReturnType<typeof resolveSche
     service: createReadModelSyncService({
       deltaClient,
       maxRowsPerRun: env.ynabSyncMaxRowsPerRun,
+      metadataClient,
       moneyMovementClient,
       readModelRepository: createReadModelSyncRepository(database),
       syncStateRepository: createSyncStateRepository(database),
@@ -151,6 +175,7 @@ export async function runScheduledReadModelSync(
         baseUrl: appEnv.ynabApiBaseUrl
       }),
       maxRowsPerRun: appEnv.ynabSyncMaxRowsPerRun,
+      metadataClient: createMetadataClient(appEnv.ynabAccessToken, appEnv.ynabApiBaseUrl),
       moneyMovementClient: createMoneyMovementClient(appEnv.ynabAccessToken, appEnv.ynabApiBaseUrl),
       readModelRepository: createReadModelSyncRepository(appEnv.ynabDatabase),
       syncStateRepository: createSyncStateRepository(appEnv.ynabDatabase),
@@ -172,4 +197,25 @@ export async function runScheduledReadModelSync(
   };
 
   return service.syncReadModel(input);
+}
+
+export async function runScheduledReadModelSyncAndReport(
+  env: Env,
+  scheduledTime: number,
+  dependencies: ScheduledSyncDependencies = {}
+): Promise<ScheduledReadModelSyncResult> {
+  const result = await runScheduledReadModelSync(env, scheduledTime, dependencies);
+
+  if (result.status === "failed") {
+    const detail = "reason" in result
+      ? result.reason
+      : result.endpointResults
+        .filter((endpointResult) => endpointResult.status === "failed")
+        .map((endpointResult) => `${endpointResult.endpoint}: ${endpointResult.reason ?? "failed"}`)
+        .join("; ");
+
+    throw new Error(`Scheduled D1 sync failed: ${detail || "unknown failure"}.`);
+  }
+
+  return result;
 }
