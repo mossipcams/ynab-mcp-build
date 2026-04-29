@@ -127,4 +127,43 @@ describe("OIDC ID token verifier", () => {
       })
     ).rejects.toThrow("Access OIDC ID token audience does not match.");
   });
+
+  it("rejects ID tokens without the expected issuer", async () => {
+    const missingIssuer = await createOidcToken({
+      alg: "RS256",
+      payload: {
+        aud: "client-1",
+        exp: 1_700_000_300,
+        sub: "user-1"
+      }
+    });
+    const wrongIssuer = await createOidcToken({
+      alg: "RS256",
+      payload: {
+        aud: "client-1",
+        exp: 1_700_000_300,
+        iss: "https://other-team.example.com",
+        sub: "user-1"
+      }
+    });
+
+    await expect(
+      verifyOidcIdToken({
+        expectedAudience: "client-1",
+        expectedIssuer: "https://access-team.example.com",
+        jwks: missingIssuer.jwks,
+        now: () => 1_700_000_000_000,
+        token: missingIssuer.token
+      })
+    ).rejects.toThrow("Access OIDC ID token issuer does not match.");
+    await expect(
+      verifyOidcIdToken({
+        expectedAudience: "client-1",
+        expectedIssuer: "https://access-team.example.com",
+        jwks: wrongIssuer.jwks,
+        now: () => 1_700_000_000_000,
+        token: wrongIssuer.token
+      })
+    ).rejects.toThrow("Access OIDC ID token issuer does not match.");
+  });
 });
