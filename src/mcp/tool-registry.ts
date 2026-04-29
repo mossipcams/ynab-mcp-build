@@ -17,7 +17,7 @@ export function registerToolDefinitions(server: McpServer, definitions: SliceToo
       },
       async (input) => {
         try {
-          return toTextResult(await definition.execute(input));
+          return toTextResult(await definition.execute(input as never));
         } catch (error) {
           return toErrorResult(error);
         }

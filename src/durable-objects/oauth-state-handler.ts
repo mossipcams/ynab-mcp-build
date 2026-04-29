@@ -65,21 +65,27 @@ export function createMemoryOAuthStateStorage(): StorageLike {
   const values = new Map<string, unknown>();
 
   return {
-    async delete(key) {
+    delete(key) {
       values.delete(key);
+
+      return Promise.resolve();
     },
-    async get(key) {
-      return values.get(key) as never;
+    get(key) {
+      return Promise.resolve(values.get(key) as never);
     },
-    async list(options) {
-      return new Map(
+    list(options) {
+      const records = new Map(
         [...values.entries()].filter(([key]) =>
           options?.prefix ? key.startsWith(options.prefix) : true
         )
       ) as never;
+
+      return Promise.resolve(records);
     },
-    async put(key, value) {
+    put(key, value) {
       values.set(key, value);
+
+      return Promise.resolve();
     }
   };
 }

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import {
   groupCategoriesByGroupId,
   toYnabAccount,
@@ -119,16 +121,35 @@ type YnabCategoriesDeltaEnvelope = {
   };
 };
 
-async function getJson<T>(response: Response): Promise<T> {
+const YnabErrorResponseSchema = z.object({
+  error: z.object({
+    detail: z.string().optional()
+  }).optional()
+}).passthrough();
+
+const deltaEnvelopeSchema = <TDataKey extends string>(dataKey: TDataKey) =>
+  z.object({
+    data: z.object({
+      server_knowledge: z.number(),
+      [dataKey]: z.array(z.unknown())
+    }).passthrough()
+  }).passthrough() as unknown as z.ZodType<YnabDeltaEnvelope<TDataKey, unknown>>;
+
+const YnabCategoriesDeltaEnvelopeSchema = z.object({
+  data: z.object({
+    server_knowledge: z.number(),
+    category_groups: z.array(z.unknown()),
+    categories: z.array(z.unknown()).optional()
+  }).passthrough()
+}).passthrough() as z.ZodType<YnabCategoriesDeltaEnvelope>;
+
+async function getJson<T>(response: Response, schema: z.ZodType<unknown>): Promise<T> {
   if (!response.ok) {
     let detail = response.statusText;
 
     try {
-      const payload = await response.json() as {
-        error?: {
-          detail?: string;
-        };
-      };
+      const rawPayload: unknown = await response.json();
+      const payload = YnabErrorResponseSchema.parse(rawPayload);
 
       if (typeof payload.error?.detail === "string" && payload.error.detail.length > 0) {
         detail = payload.error.detail;
@@ -153,8 +174,19 @@ async function getJson<T>(response: Response): Promise<T> {
   }
 
   try {
-    return await response.json() as T;
+    const rawPayload: unknown = await response.json();
+    const result = schema.safeParse(rawPayload);
+
+    if (!result.success) {
+      throw new YnabClientError("YNAB API response did not match expected schema.", "upstream", true);
+    }
+
+    return result.data as T;
   } catch (error) {
+    if (error instanceof YnabClientError) {
+      throw error;
+    }
+
     throw new YnabClientError(
       error instanceof Error ? error.message : "YNAB API returned malformed JSON.",
       "upstream",
@@ -200,7 +232,7 @@ export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): Yn
     applyServerKnowledge(url, serverKnowledge);
 
     const response = await authorizedFetch(url.toString());
-    const payload = await getJson<YnabDeltaEnvelope<TDataKey, TRecord>>(response);
+    const payload = await getJson<YnabDeltaEnvelope<TDataKey, TRecord>>(response, deltaEnvelopeSchema(dataKey));
 
     return {
       serverKnowledge: payload.data.server_knowledge,
@@ -228,7 +260,7 @@ export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): Yn
     applyServerKnowledge(url, serverKnowledge);
 
     const response = await authorizedFetch(url.toString());
-    const payload = await getJson<YnabCategoriesDeltaEnvelope>(response);
+    const payload = await getJson<YnabCategoriesDeltaEnvelope>(response, YnabCategoriesDeltaEnvelopeSchema);
     const categories = (payload.data.categories ?? []).map(toYnabCategory);
     const categoriesByGroupId = groupCategoriesByGroupId(categories);
 

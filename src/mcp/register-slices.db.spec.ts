@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { getRegisteredToolDefinitions } from "../app/tool-definitions.js";
 import type { AppEnv } from "../shared/env.js";
+import type { SliceToolDefinition } from "../shared/tool-definition.js";
 import { DISCOVERY_TOOL_NAMES } from "./discovery.js";
-import { getRegisteredToolDefinitions } from "./register-slices.js";
+
+function executeToolDefinition(definition: SliceToolDefinition | undefined, input: unknown) {
+  return (definition as SliceToolDefinition<unknown> | undefined)?.execute(input);
+}
 
 class FakeStatement {
   constructor(
@@ -76,6 +81,7 @@ class FakeStatement {
           id: "txn-1",
           date: "2026-04-12",
           amount_milliunits: -12000,
+          account_id: "account-1",
           payee_name: "Market",
           category_name: "Groceries",
           account_name: "Checking",
@@ -120,7 +126,12 @@ describe("DB-backed tool registration", () => {
     expect(names).toEqual([...DISCOVERY_TOOL_NAMES].sort());
 
     const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
-    await expect(searchTransactions?.execute({ limit: 5 })).resolves.toMatchObject({
+    await expect(executeToolDefinition(searchTransactions, {
+      accountId: "account-1",
+      limit: 5,
+      maxAmount: -10000,
+      minAmount: -15000
+    })).resolves.toMatchObject({
       status: "ok",
       data: {
         match_count: 1
@@ -133,9 +144,13 @@ describe("DB-backed tool registration", () => {
         })
       ])
     );
+    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_transactions"))).toBe(true);
+    expect(database.transactionSearchParams).toEqual(
+      expect.arrayContaining(["plan-1", "account-1", -15000, -10000, 5])
+    );
 
     const moneyMovements = definitions.find((definition) => definition.name === "ynab_get_money_movements");
-    await expect(moneyMovements?.execute({})).resolves.toMatchObject({
+    await expect(executeToolDefinition(moneyMovements, {})).resolves.toMatchObject({
       status: "ok",
       data_freshness: {
         required_endpoints: ["money_movements"]
@@ -156,7 +171,7 @@ describe("DB-backed tool registration", () => {
     const scheduledTransactions = definitions.find(
       (definition) => definition.name === "ynab_list_scheduled_transactions"
     );
-    await expect(scheduledTransactions?.execute({})).resolves.toMatchObject({
+    await expect(executeToolDefinition(scheduledTransactions, {})).resolves.toMatchObject({
       status: "ok",
       data_freshness: {
         required_endpoints: ["scheduled_transactions"]
@@ -177,7 +192,7 @@ describe("DB-backed tool registration", () => {
     const unavailableMessages = await Promise.all(
       definitions.map(async (definition) => {
         try {
-          await definition.execute({});
+          await executeToolDefinition(definition, {});
           return null;
         } catch (error) {
           return error instanceof Error ? error.message : String(error);

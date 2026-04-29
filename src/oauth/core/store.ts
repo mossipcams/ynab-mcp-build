@@ -71,50 +71,58 @@ export function createInMemoryOAuthStore(): OAuthStore {
   const revokedRefreshTokenFamilies = new Set<string>();
 
   return {
-    async getAccessToken(token) {
-      return accessTokens.get(token);
+    getAccessToken(token) {
+      return Promise.resolve(accessTokens.get(token));
     },
-    async getAuthorizationCode(code) {
-      return authorizationCodes.get(code);
+    getAuthorizationCode(code) {
+      return Promise.resolve(authorizationCodes.get(code));
     },
-    async getRegisteredClient(clientId) {
-      return registeredClients.get(clientId);
+    getRegisteredClient(clientId) {
+      return Promise.resolve(registeredClients.get(clientId));
     },
-    async issueAccessToken(record) {
+    issueAccessToken(record) {
       accessTokens.set(record.token, record);
+
+      return Promise.resolve();
     },
-    async issueAuthorizationCode(record) {
+    issueAuthorizationCode(record) {
       authorizationCodes.set(record.code, record);
+
+      return Promise.resolve();
     },
-    async issueRefreshToken(record) {
+    issueRefreshToken(record) {
       refreshTokens.set(record.token, record);
+
+      return Promise.resolve();
     },
-    async registerClient(record) {
+    registerClient(record) {
       registeredClients.set(record.clientId, record);
+
+      return Promise.resolve();
     },
-    async rotateRefreshToken(token) {
+    rotateRefreshToken(token) {
       const record = refreshTokens.get(token);
 
       if (!record) {
-        return {
+        return Promise.resolve({
           status: "not_found"
-        };
+        } satisfies OAuthRefreshTokenRotationResult);
       }
 
       if (revokedRefreshTokenFamilies.has(record.familyId)) {
-        return {
+        return Promise.resolve({
           record,
           status: "replay_detected"
-        };
+        } satisfies OAuthRefreshTokenRotationResult);
       }
 
       if (record.used) {
         revokedRefreshTokenFamilies.add(record.familyId);
 
-        return {
+        return Promise.resolve({
           record,
           status: "replay_detected"
-        };
+        } satisfies OAuthRefreshTokenRotationResult);
       }
 
       const nextRecord = {
@@ -124,16 +132,16 @@ export function createInMemoryOAuthStore(): OAuthStore {
 
       refreshTokens.set(token, nextRecord);
 
-      return {
+      return Promise.resolve({
         record,
         status: "rotated"
-      };
+      } satisfies OAuthRefreshTokenRotationResult);
     },
-    async useAuthorizationCode(code) {
+    useAuthorizationCode(code) {
       const record = authorizationCodes.get(code);
 
       if (!record || record.used) {
-        return undefined;
+        return Promise.resolve(undefined);
       }
 
       authorizationCodes.set(code, {
@@ -141,7 +149,7 @@ export function createInMemoryOAuthStore(): OAuthStore {
         used: true
       });
 
-      return record;
+      return Promise.resolve(record);
     }
   };
 }

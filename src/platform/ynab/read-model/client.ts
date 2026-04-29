@@ -174,10 +174,16 @@ function toRequiredBoolean(value: number | null | undefined) {
   return value === 1;
 }
 
-function compact<T extends Record<string, unknown>>(entry: T): T {
+type Compact<T extends Record<string, unknown>> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
+};
+
+function compact<T extends Record<string, unknown>>(entry: T): Compact<T> {
   return Object.fromEntries(
     Object.entries(entry).filter(([, value]) => value !== undefined)
-  ) as T;
+  ) as Compact<T>;
 }
 
 function first<T>(rows: T[], message: string) {
@@ -191,45 +197,45 @@ function first<T>(rows: T[], message: string) {
 }
 
 function toPlan(row: PlanRow): YnabPlanSummary {
-  return {
+  return compact({
     id: row.id,
     name: row.name,
     lastModifiedOn: row.last_modified_on ?? undefined
-  };
+  });
 }
 
 function toAccount(row: AccountRow): YnabAccountSummary {
-  return {
+  return compact({
     id: row.id,
     name: row.name,
     type: row.type,
     closed: toRequiredBoolean(row.closed),
     deleted: toBoolean(row.deleted),
     balance: row.balance_milliunits ?? 0
-  };
+  });
 }
 
 function toCategorySummary(row: CategoryRow) {
-  return {
+  return compact({
     id: row.id,
     name: row.name,
     hidden: toRequiredBoolean(row.hidden),
     deleted: toRequiredBoolean(row.deleted),
     categoryGroupName: row.category_group_name ?? undefined
-  };
+  });
 }
 
 function toCategoryDetail(row: CategoryRow): YnabCategoryDetail {
-  return {
+  return compact({
     ...toCategorySummary(row),
     balance: row.balance_milliunits ?? undefined,
     goalType: row.goal_type ?? undefined,
     goalTarget: row.goal_target_milliunits ?? undefined
-  };
+  });
 }
 
 function toMonthCategory(row: MonthCategoryRow): NonNullable<YnabPlanMonthDetail["categories"]>[number] {
-  return {
+  return compact({
     id: row.category_id,
     name: row.name,
     budgeted: row.budgeted_milliunits ?? undefined,
@@ -239,11 +245,11 @@ function toMonthCategory(row: MonthCategoryRow): NonNullable<YnabPlanMonthDetail
     hidden: toBoolean(row.hidden),
     goalUnderFunded: row.goal_under_funded_milliunits ?? undefined,
     categoryGroupName: row.category_group_name ?? undefined
-  };
+  });
 }
 
 function toTransaction(row: TransactionRow): YnabTransaction {
-  return {
+  return compact({
     id: row.id,
     date: row.date,
     amount: row.amount_milliunits,
@@ -258,11 +264,11 @@ function toTransaction(row: TransactionRow): YnabTransaction {
     deleted: toBoolean(row.deleted),
     isTransfer: Boolean(row.transfer_account_id),
     transferAccountId: row.transfer_account_id
-  };
+  });
 }
 
 function toScheduledTransaction(row: ScheduledTransactionRow): YnabScheduledTransaction {
-  return {
+  return compact({
     id: row.id,
     dateFirst: row.date_first,
     dateNext: row.date_next,
@@ -271,30 +277,30 @@ function toScheduledTransaction(row: ScheduledTransactionRow): YnabScheduledTran
     categoryName: row.category_name,
     accountName: row.account_name,
     deleted: toBoolean(row.deleted)
-  };
+  });
 }
 
 function toPayee(row: PayeeRow): YnabPayee {
-  return {
+  return compact({
     id: row.id,
     name: row.name,
     transferAccountId: row.transfer_account_id,
     deleted: toBoolean(row.deleted)
-  };
+  });
 }
 
 function toPayeeLocation(row: PayeeLocationRow): YnabPayeeLocation {
-  return {
+  return compact({
     id: row.id,
     payeeId: row.payee_id,
     latitude: row.latitude,
     longitude: row.longitude,
     deleted: toBoolean(row.deleted)
-  };
+  });
 }
 
 function toMoneyMovement(row: MoneyMovementRow): YnabMoneyMovement {
-  return {
+  return compact({
     amount: row.amount_milliunits,
     deleted: toBoolean(row.deleted),
     fromCategoryId: row.from_category_id,
@@ -305,18 +311,18 @@ function toMoneyMovement(row: MoneyMovementRow): YnabMoneyMovement {
     note: row.note,
     performedByUserId: row.performed_by_user_id,
     toCategoryId: row.to_category_id
-  };
+  });
 }
 
 function toMoneyMovementGroup(row: MoneyMovementGroupRow): YnabMoneyMovementGroup {
-  return {
+  return compact({
     deleted: toBoolean(row.deleted),
     groupCreatedAt: row.group_created_at,
     id: row.id,
     month: row.month,
     note: row.note,
     performedByUserId: row.performed_by_user_id
-  };
+  });
 }
 
 export function createYnabReadModelClient(
@@ -410,7 +416,7 @@ export function createYnabReadModelClient(
         count("SELECT COUNT(*) AS count FROM ynab_payees WHERE plan_id = ? AND deleted = 0", planId)
       ]);
 
-      return {
+      return compact({
         id: row.id,
         name: row.name,
         lastModifiedOn: row.last_modified_on ?? undefined,
@@ -419,7 +425,7 @@ export function createYnabReadModelClient(
         accountCount,
         categoryGroupCount,
         payeeCount
-      };
+      });
     },
 
     async listCategories(planId: string): Promise<YnabCategoryGroupSummary[]> {
@@ -536,13 +542,13 @@ export function createYnabReadModelClient(
         `YNAB plan settings for ${planId} were not found in the read model.`
       );
 
-      return {
+      return compact({
         dateFormat: row.date_format
           ? {
               format: row.date_format
             }
           : undefined,
-        currencyFormat: {
+        currencyFormat: compact({
           isoCode: row.currency_iso_code ?? undefined,
           exampleFormat: row.currency_example_format ?? undefined,
           decimalDigits: row.currency_decimal_digits ?? undefined,
@@ -551,8 +557,8 @@ export function createYnabReadModelClient(
           groupSeparator: row.currency_group_separator ?? undefined,
           currencySymbol: row.currency_symbol ?? undefined,
           displaySymbol: toBoolean(row.currency_display_symbol)
-        }
-      };
+        })
+      });
     },
 
     async listPlanMonths(planId: string): Promise<YnabPlanMonthSummary[]> {
@@ -567,7 +573,7 @@ export function createYnabReadModelClient(
          WHERE plan_id = ?
          ORDER BY month DESC`,
         planId
-      )).map((row) => ({
+      )).map((row) => compact({
         month: row.month,
         income: row.income_milliunits ?? undefined,
         budgeted: row.budgeted_milliunits ?? undefined,
@@ -613,7 +619,7 @@ export function createYnabReadModelClient(
       const row = first(monthRow, `YNAB month ${month} was not found in the read model.`);
       const mappedCategories = categories.map(toMonthCategory);
 
-      return {
+      return compact({
         month: row.month,
         income: row.income_milliunits ?? undefined,
         budgeted: row.budgeted_milliunits ?? undefined,
@@ -622,7 +628,7 @@ export function createYnabReadModelClient(
         ageOfMoney: row.age_of_money ?? undefined,
         categoryCount: mappedCategories.length,
         categories: mappedCategories
-      };
+      });
     },
 
     async listAccounts(planId: string): Promise<YnabAccountSummary[]> {
@@ -648,14 +654,14 @@ export function createYnabReadModelClient(
         `YNAB account ${accountId} was not found in the read model.`
       );
 
-      return {
+      return compact({
         id: row.id,
         name: row.name,
         type: row.type,
         onBudget: toBoolean(row.on_budget),
         closed: toRequiredBoolean(row.closed),
         balance: row.balance_milliunits ?? undefined
-      };
+      });
     },
 
     async listTransactions(planId: string, fromDate?: string) {

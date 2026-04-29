@@ -14,10 +14,14 @@ export type SearchTransactionsInput = {
   categoryIds?: string[];
   payeeIds?: string[];
   payeeSearch?: string;
+  approved?: boolean;
+  cleared?: string;
   minAmountMilliunits?: number;
   maxAmountMilliunits?: number;
   includeDeleted?: boolean;
+  includeTransfers?: boolean;
   limit: number;
+  sort?: "amount_asc" | "amount_desc" | "date_asc" | "date_desc";
 };
 
 export type TransactionSearchRow = {
@@ -55,6 +59,19 @@ function toIntegerBoolean(value: boolean | null | undefined) {
 
 function placeholders(count: number) {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function orderByClause(sort: SearchTransactionsInput["sort"]) {
+  switch (sort ?? "date_desc") {
+    case "date_asc":
+      return "date ASC, id ASC";
+    case "date_desc":
+      return "date DESC, id ASC";
+    case "amount_asc":
+      return "amount_milliunits ASC, date DESC, id ASC";
+    case "amount_desc":
+      return "amount_milliunits DESC, date DESC, id ASC";
+  }
 }
 
 export function createTransactionsRepository(database: D1Database) {
@@ -226,6 +243,10 @@ export function createTransactionsRepository(database: D1Database) {
         where.push("deleted = 0");
       }
 
+      if (!input.includeTransfers) {
+        where.push("transfer_account_id IS NULL");
+      }
+
       if (input.accountIds?.length) {
         where.push(`account_id IN (${placeholders(input.accountIds.length)})`);
         params.push(...input.accountIds);
@@ -244,6 +265,16 @@ export function createTransactionsRepository(database: D1Database) {
       if (input.payeeSearch) {
         where.push("payee_name LIKE ?");
         params.push(`%${input.payeeSearch}%`);
+      }
+
+      if (input.approved !== undefined) {
+        where.push("approved = ?");
+        params.push(input.approved ? 1 : 0);
+      }
+
+      if (input.cleared) {
+        where.push("cleared = ?");
+        params.push(input.cleared);
       }
 
       if (input.minAmountMilliunits !== undefined) {
@@ -284,7 +315,7 @@ export function createTransactionsRepository(database: D1Database) {
                   deleted
            FROM ynab_transactions
            WHERE ${where.join(" AND ")}
-           ORDER BY date DESC, id
+           ORDER BY ${orderByClause(input.sort)}
            LIMIT ?`
         )
         .bind(...params)

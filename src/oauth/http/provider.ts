@@ -44,6 +44,10 @@ function createScopedApiHandler(apiHandler: HandlerWithFetch) {
   } satisfies HandlerWithFetch;
 }
 
+function readTokenExchangeProps(props: unknown) {
+  return typeof props === "object" && props !== null ? props : {};
+}
+
 function createOAuthProviderOptions(apiHandler: HandlerWithFetch): OAuthProviderOptions<Env> {
   const scopedApiHandler = createScopedApiHandler(apiHandler);
 
@@ -56,9 +60,11 @@ function createOAuthProviderOptions(apiHandler: HandlerWithFetch): OAuthProvider
     allowPlainPKCE: false,
     scopesSupported: ["mcp"],
     tokenExchangeCallback(options) {
+      const props = readTokenExchangeProps(options.props);
+
       return {
         accessTokenProps: {
-          ...options.props,
+          ...props,
           scopes: options.requestedScope
         }
       };

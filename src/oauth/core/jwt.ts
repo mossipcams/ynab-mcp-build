@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 function toBase64Url(input: string | Uint8Array) {
   const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
   let binary = "";
@@ -50,6 +52,26 @@ export type JwtPayload = {
   sub: string;
 };
 
+const JwtHeaderSchema = z.object({
+  alg: z.string().optional()
+}).passthrough();
+
+const JwtPayloadSchema = z.object({
+  aud: z.string(),
+  exp: z.number(),
+  iat: z.number(),
+  iss: z.string(),
+  jti: z.string(),
+  scope: z.string(),
+  sub: z.string()
+});
+
+async function parseBase64UrlJson<T>(input: string, schema: z.ZodType<T>) {
+  const rawPayload: unknown = await new Response(new TextDecoder().decode(fromBase64Url(input))).json();
+
+  return schema.parse(rawPayload);
+}
+
 export async function signJwt(payload: JwtPayload, secret: string) {
   const headerSegment = toBase64Url(JSON.stringify({
     alg: "HS256",
@@ -73,9 +95,7 @@ export async function verifyJwt(token: string, secret: string) {
     throw new Error("Bearer token is invalid or expired.");
   }
 
-  const header = JSON.parse(new TextDecoder().decode(fromBase64Url(headerSegment))) as {
-    alg?: string;
-  };
+  const header = await parseBase64UrlJson(headerSegment, JwtHeaderSchema);
 
   if (header.alg !== "HS256") {
     throw new Error("Bearer token is invalid or expired.");
@@ -92,5 +112,5 @@ export async function verifyJwt(token: string, secret: string) {
     throw new Error("Bearer token is invalid or expired.");
   }
 
-  return JSON.parse(new TextDecoder().decode(fromBase64Url(payloadSegment))) as JwtPayload;
+  return parseBase64UrlJson(payloadSegment, JwtPayloadSchema);
 }

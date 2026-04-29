@@ -27,6 +27,26 @@ function transactionResponse() {
 }
 
 describe("ynab scoped transaction client methods", () => {
+  it("rejects malformed YNAB response envelopes at the external boundary", async () => {
+    const client = createYnabClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async () => Response.json({
+        data: {
+          transactions: [
+            {
+              id: "txn-1"
+            }
+          ]
+        }
+      })
+    });
+
+    await expect(client.listTransactions("plan-1")).rejects.toThrow(
+      "YNAB API response did not match expected schema."
+    );
+  });
+
   it("uses scoped transaction endpoints for account, category, and payee drilldowns", async () => {
     const requests: Array<string | URL | Request> = [];
     const client = createYnabClient({
@@ -48,6 +68,37 @@ describe("ynab scoped transaction client methods", () => {
       "https://api.ynab.com/v1/plans/plan-1/categories/category-1/transactions",
       "https://api.ynab.com/v1/plans/plan-1/payees/payee-1/transactions"
     ]);
+  });
+});
+
+describe("ynab category client methods", () => {
+  it("accepts ordinary no-goal categories with null goal fields", async () => {
+    const client = createYnabClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async () => Response.json({
+        data: {
+          category: {
+            id: "category-1",
+            name: "Groceries",
+            hidden: false,
+            deleted: false,
+            balance: 12000,
+            goal_type: null,
+            goal_target: null
+          }
+        }
+      })
+    });
+
+    await expect(client.getCategory("plan-1", "category-1")).resolves.toMatchObject({
+      id: "category-1",
+      name: "Groceries"
+    });
+    await expect(client.getMonthCategory("plan-1", "2026-04-01", "category-1")).resolves.toMatchObject({
+      id: "category-1",
+      name: "Groceries"
+    });
   });
 });
 

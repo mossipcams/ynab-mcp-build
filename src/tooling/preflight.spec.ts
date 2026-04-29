@@ -21,6 +21,7 @@ describe("repository preflight tooling", () => {
       "npm run cf-typegen",
       "npm run typecheck",
       "npm run typecheck:spec",
+      "npm run lint",
       "npm run check:duplication",
       "npm test"
     ]);
@@ -36,6 +37,22 @@ describe("repository preflight tooling", () => {
     expect(packageJson.devDependencies).toHaveProperty("@types/node");
   });
 
+  it("enables strict TypeScript safety flags", () => {
+    // DEFECT: weaker compiler settings allow generated code to skip nullish, return-path, and control-flow checks.
+    const tsconfig = JSON.parse(readRootFile("tsconfig.json")) as {
+      compilerOptions?: Record<string, unknown>;
+    };
+
+    expect(tsconfig.compilerOptions).toMatchObject({
+      exactOptionalPropertyTypes: true,
+      noFallthroughCasesInSwitch: true,
+      noImplicitOverride: true,
+      noImplicitReturns: true,
+      noUncheckedIndexedAccess: true,
+      strict: true
+    });
+  });
+
   it("declares jscpd as the copy-paste detection tool", () => {
     // DEFECT: duplication checks can become non-reproducible if jscpd is not pinned in repository dev dependencies.
     const packageJson = JSON.parse(readRootFile("package.json")) as {
@@ -43,6 +60,17 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.devDependencies).toHaveProperty("jscpd");
+  });
+
+  it("declares type-aware ESLint tooling", () => {
+    // DEFECT: lint rules that require TypeScript type information can silently disappear from local and CI checks.
+    const packageJson = JSON.parse(readRootFile("package.json")) as {
+      devDependencies?: Record<string, string>;
+    };
+
+    expect(packageJson.devDependencies).toHaveProperty("@eslint/js");
+    expect(packageJson.devDependencies).toHaveProperty("eslint");
+    expect(packageJson.devDependencies).toHaveProperty("typescript-eslint");
   });
 
   it("wires package scripts to the shared preflight entrypoints", () => {
@@ -67,6 +95,37 @@ describe("repository preflight tooling", () => {
 
     expect(packageJson.scripts).toMatchObject({
       "check:duplication": "jscpd"
+    });
+  });
+
+  it("wires a package script for type-aware linting", () => {
+    // DEFECT: ESLint can be configured but omitted from reproducible package-level quality gates.
+    const packageJson = JSON.parse(readRootFile("package.json")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts).toMatchObject({
+      lint: "eslint ."
+    });
+  });
+
+  it("configures the required type-aware ESLint rules", async () => {
+    // DEFECT: unsafe any usage, floating promises, and non-exhaustive switches can slip through generated code.
+    const config = await importRootModule<{ default: Array<{ rules?: Record<string, unknown> }> }>("eslint.config.mjs");
+    const mergedRules = Object.assign({}, ...config.default.map((entry) => entry.rules ?? {}));
+
+    expect(mergedRules).toMatchObject({
+      "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/consistent-type-imports": "error",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/require-await": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": "error"
     });
   });
 
@@ -117,6 +176,30 @@ describe("repository preflight tooling", () => {
     };
 
     expect(wranglerConfig.triggers?.crons).toEqual(["0 * * * *"]);
+  });
+
+  it("keeps JSON-RPC tool-call validation in the MCP layer", () => {
+    // DEFECT: protocol validation in HTTP routes couples transport adapters to MCP request details.
+    const httpMcpRoute = readRootFile("src/http/routes/mcp.ts");
+
+    expect(httpMcpRoute).not.toContain('from "zod"');
+    expect(readRootFile("src/mcp/json-rpc-validation.ts")).toContain("validateToolCallRequest");
+  });
+
+  it("keeps a single MCP tool registration implementation", () => {
+    // DEFECT: duplicate MCP registration modules can diverge on result formatting and schema handling.
+    expect(() => readRootFile("src/mcp/tools.ts")).toThrow();
+    expect(readRootFile("src/mcp/tool-registry.ts")).toContain("registerToolDefinitions");
+  });
+
+  it("validates OAuth JSON token payloads with Zod", () => {
+    // DEFECT: JWT and JWKS payload casts can trust malformed external JSON before signature and claim checks.
+    for (const path of ["src/oauth/core/jwt.ts", "src/oauth/core/oidc.ts", "src/oauth/core/cf-access-jwt.ts"]) {
+      const source = readRootFile(path);
+
+      expect(source).toContain('from "zod"');
+      expect(source).not.toContain("JSON.parse");
+    }
   });
 
   it("disables non-custom Worker URLs", () => {

@@ -3,6 +3,22 @@ import { describe, expect, it } from "vitest";
 import { createYnabDeltaClient } from "./delta-client.js";
 
 describe("YNAB delta client", () => {
+  it("rejects malformed delta envelopes at the external boundary", async () => {
+    const client = createYnabDeltaClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async () => Response.json({
+        data: {
+          accounts: []
+        }
+      })
+    });
+
+    await expect(client.listAccountsDelta("plan-1", 101)).rejects.toThrow(
+      "YNAB API response did not match expected schema."
+    );
+  });
+
   it("sends endpoint-specific cursors and returns changed records for every cursor-backed read-model endpoint", async () => {
     const requests: Array<string | URL | Request> = [];
     const client = createYnabDeltaClient({

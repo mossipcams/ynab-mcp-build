@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 type CfAccessJwtHeader = {
   alg: string;
   kid?: string;
@@ -15,6 +17,27 @@ type CfAccessJwks = {
   keys: (JsonWebKey & { kid?: string })[];
 };
 
+const JsonWebKeyWithKidSchema = z.object({
+  kid: z.string().optional()
+}).passthrough() as unknown as z.ZodType<JsonWebKey & { kid?: string }>;
+
+const CfAccessJwtHeaderSchema = z.object({
+  alg: z.string(),
+  kid: z.string().optional()
+}).passthrough();
+
+const CfAccessJwtPayloadSchema = z.object({
+  aud: z.union([z.string(), z.array(z.string())]),
+  email: z.string().optional(),
+  exp: z.number(),
+  iss: z.string(),
+  sub: z.string()
+}).passthrough();
+
+const CfAccessJwksSchema = z.object({
+  keys: z.array(JsonWebKeyWithKidSchema)
+}).passthrough();
+
 function base64urlDecode(input: string): Uint8Array {
   const base64 = input.replace(/-/g, "+").replace(/_/g, "/").padEnd(
     input.length + (4 - (input.length % 4)) % 4,
@@ -28,8 +51,10 @@ function base64urlDecode(input: string): Uint8Array {
   return bytes;
 }
 
-function parseJsonFromBase64url<T>(input: string): T {
-  return JSON.parse(new TextDecoder().decode(base64urlDecode(input))) as T;
+async function parseJsonFromBase64url<T>(input: string, schema: z.ZodType<unknown>): Promise<T> {
+  const rawPayload: unknown = await new Response(new TextDecoder().decode(base64urlDecode(input))).json();
+
+  return schema.parse(rawPayload) as T;
 }
 
 async function importRsaKey(jwk: JsonWebKey): Promise<CryptoKey> {
@@ -83,8 +108,8 @@ export async function verifyCfAccessJwt(
 
   const [headerB64, payloadB64, signatureB64] = parts as [string, string, string];
 
-  const header = parseJsonFromBase64url<CfAccessJwtHeader>(headerB64);
-  const payload = parseJsonFromBase64url<CfAccessJwtPayload>(payloadB64);
+  const header = await parseJsonFromBase64url<CfAccessJwtHeader>(headerB64, CfAccessJwtHeaderSchema);
+  const payload = await parseJsonFromBase64url<CfAccessJwtPayload>(payloadB64, CfAccessJwtPayloadSchema);
 
   const nowSec = Math.floor((options?.now?.() ?? Date.now()) / 1000);
   if (payload.exp <= nowSec) {
@@ -109,7 +134,8 @@ export async function verifyCfAccessJwt(
     throw new Error(`Failed to fetch CF Access JWKS: ${certsRes.status}`);
   }
 
-  const jwks = await certsRes.json() as CfAccessJwks;
+  const rawJwks: unknown = await certsRes.json();
+  const jwks: CfAccessJwks = CfAccessJwksSchema.parse(rawJwks);
   const matchingKey = jwks.keys.find(k => !header.kid || k.kid === header.kid);
 
   if (!matchingKey) {
@@ -128,5 +154,8 @@ export async function verifyCfAccessJwt(
     throw new Error("CF Access token signature is invalid.");
   }
 
-  return { email: payload.email, sub: payload.sub };
+  return {
+    ...(payload.email ? { email: payload.email } : {}),
+    sub: payload.sub
+  };
 }

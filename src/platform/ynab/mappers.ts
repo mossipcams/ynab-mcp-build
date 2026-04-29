@@ -52,8 +52,20 @@ export function sumSubtransactionAmounts(subtransactions: YnabSubtransactionReco
   return subtransactions.reduce((sum, subtransaction) => sum + subtransaction.amount, 0);
 }
 
+type Compact<T extends Record<string, unknown>> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
+};
+
+function compact<T extends Record<string, unknown>>(entry: T): Compact<T> {
+  return Object.fromEntries(
+    Object.entries(entry).filter(([, value]) => value !== undefined)
+  ) as Compact<T>;
+}
+
 export function mapTransactionRecord(transaction: YnabTransactionRecordInput) {
-  return {
+  return compact({
     id: transaction.id,
     date: transaction.date,
     amount: transaction.amount,
@@ -76,7 +88,7 @@ export function mapTransactionRecord(transaction: YnabTransactionRecordInput) {
     importPayeeName: transaction.import_payee_name,
     importPayeeNameOriginal: transaction.import_payee_name_original,
     debtTransactionType: transaction.debt_transaction_type,
-    subtransactions: transaction.subtransactions?.map((subtransaction) => ({
+    subtransactions: transaction.subtransactions?.map((subtransaction) => compact({
       id: subtransaction.id,
       transactionId: subtransaction.transaction_id,
       amount: subtransaction.amount,
@@ -90,7 +102,7 @@ export function mapTransactionRecord(transaction: YnabTransactionRecordInput) {
       deleted: subtransaction.deleted
     })),
     isTransfer: Boolean(transaction.transfer_account_id)
-  };
+  });
 }
 
 export function filterActiveTransactions<T extends { deleted?: boolean }>(transactions: T[]) {

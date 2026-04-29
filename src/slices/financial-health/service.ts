@@ -66,13 +66,14 @@ function resolveTopN(input: { topN?: number; detailLevel?: DetailLevel }) {
     return input.topN;
   }
 
-  switch (input.detailLevel) {
+  const detailLevel = input.detailLevel ?? "normal";
+
+  switch (detailLevel) {
     case "brief":
       return 3;
     case "detailed":
       return 10;
     case "normal":
-    default:
       return 5;
   }
 }
@@ -410,7 +411,7 @@ function toMonthSpendingRollups(transactions: YnabTransaction[], topN: number) {
     }
 
     rollups.set(key, {
-      id: transaction.categoryId ?? undefined,
+      ...(transaction.categoryId ? { id: transaction.categoryId } : {}),
       name: transaction.categoryName ?? "Uncategorized",
       amountMilliunits: Math.abs(transaction.amount),
       transactionCount: 1
@@ -648,7 +649,7 @@ export async function getSpendingSummary(ynabClient: YnabClient, input: Financia
       categoryRollup.transactionCount += 1;
     } else {
       categoryRollups.set(categoryId, {
-        id: transaction.categoryId ?? undefined,
+        ...(transaction.categoryId ? { id: transaction.categoryId } : {}),
         name: categoryName,
         amountMilliunits: spendMilliunits,
         transactionCount: 1
@@ -673,7 +674,7 @@ export async function getSpendingSummary(ynabClient: YnabClient, input: Financia
       payeeRollup.transactionCount += 1;
     } else {
       payeeRollups.set(payeeId, {
-        id: transaction.payeeId ?? undefined,
+        ...(transaction.payeeId ? { id: transaction.payeeId } : {}),
         name: payeeName,
         amountMilliunits: spendMilliunits,
         transactionCount: 1
@@ -734,6 +735,9 @@ export async function getSpendingAnomalies(ynabClient: YnabClient, input: Spendi
     ynabClient.getPlanMonth(planId, input.latestMonth)
   ]);
   const latestMonthDetail = monthDetails[monthDetails.length - 1];
+  if (!latestMonthDetail) {
+    throw new Error(`YNAB month ${input.latestMonth} was not found.`);
+  }
   const anomalies = buildSpendingAnomalies(latestMonthDetail.categories ?? [], monthDetails.slice(0, baselineMonthIds.length), {
     minimumDifference,
     thresholdMultiplier,
@@ -921,7 +925,7 @@ export async function getIncomeSummary(ynabClient: YnabClient, input: FinancialH
       current.transactionCount += 1;
     } else {
       incomeByPayee.set(payeeKey, {
-        id: transaction.payeeId ?? undefined,
+        ...(transaction.payeeId ? { id: transaction.payeeId } : {}),
         name: transaction.payeeName ?? "Unknown Payee",
         amountMilliunits: transaction.amount,
         transactionCount: 1
@@ -1008,10 +1012,10 @@ export async function getRecurringExpenseSummary(
 
     const key = transaction.payeeId ?? transaction.payeeName ?? "unknown-payee";
     const current = candidates.get(key) ?? {
-      payeeId: transaction.payeeId,
+      ...(transaction.payeeId !== undefined ? { payeeId: transaction.payeeId } : {}),
       payeeName: transaction.payeeName ?? "Unknown Payee",
-      dates: [],
-      amounts: []
+      dates: [] as string[],
+      amounts: [] as number[]
     };
     current.dates.push(transaction.date);
     current.amounts.push(Math.abs(transaction.amount));

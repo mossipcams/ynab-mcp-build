@@ -21,8 +21,9 @@ type PendingAccessAuthorizationStore = KVNamespace & {
 };
 
 function sanitizeOAuthErrorDescription(errorDescription: string) {
-  return errorDescription
-    .split(/\r?\n/u)[0]
+  const firstLine = errorDescription.split(/\r?\n/u)[0] ?? "";
+
+  return firstLine
     .replace(/\/Users\/[^\s"]+/gu, "[REDACTED_PATH]")
     .replace(/[A-Za-z]:\\[^\s"]+/gu, "[REDACTED_PATH]");
 }

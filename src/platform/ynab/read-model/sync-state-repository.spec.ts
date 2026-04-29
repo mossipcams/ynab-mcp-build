@@ -86,9 +86,10 @@ describe("sync state repository", () => {
       leaseExpiresAt: "2026-04-28T12:01:00.000Z"
     });
     expect(db.runs).toHaveLength(1);
-    expect(db.runs[0].sql).toContain("ON CONFLICT(plan_id, endpoint) DO UPDATE");
-    expect(db.runs[0].params).toContain("worker-1");
-    expect(db.runs[0].params).toContain("2026-04-28T12:01:00.000Z");
+    const run = db.runs[0]!;
+    expect(run.sql).toContain("ON CONFLICT(plan_id, endpoint) DO UPDATE");
+    expect(run.params).toContain("worker-1");
+    expect(run.params).toContain("2026-04-28T12:01:00.000Z");
   });
 
   it("advances a cursor only for the expected lease owner and previous cursor", async () => {
@@ -108,10 +109,11 @@ describe("sync state repository", () => {
 
     expect(result).toEqual({ advanced: true });
     expect(db.runs).toHaveLength(1);
-    expect(db.runs[0].sql).toContain("server_knowledge = ?");
-    expect(db.runs[0].sql).toContain("lease_owner = ?");
-    expect(db.runs[0].sql).toContain("server_knowledge = ?");
-    expect(db.runs[0].params).toEqual([
+    const run = db.runs[0]!;
+    expect(run.sql).toContain("server_knowledge = ?");
+    expect(run.sql).toContain("lease_owner = ?");
+    expect(run.sql).toContain("server_knowledge = ?");
+    expect(run.params).toEqual([
       456,
       "2026-04-28T12:02:00.000Z",
       2,

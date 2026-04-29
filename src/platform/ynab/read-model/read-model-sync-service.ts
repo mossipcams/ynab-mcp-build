@@ -234,6 +234,11 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
               syncedAt: string;
             }) {
               const [record] = input.records as MoneyMovementDeltaRecord[];
+
+              if (!record) {
+                return { rowsUpserted: 0 };
+              }
+
               const movementGroupsResult = await options.readModelRepository.upsertMoneyMovementGroups({
                 moneyMovementGroups: record.moneyMovementGroups,
                 planId: input.planId,
@@ -310,7 +315,9 @@ export function createReadModelSyncService(options: ReadModelSyncServiceOptions)
     if (endpoint === "money_movements") {
       const [record] = records as MoneyMovementDeltaRecord[];
 
-      return record.moneyMovementGroups.length + record.moneyMovements.length;
+      return record
+        ? record.moneyMovementGroups.length + record.moneyMovements.length
+        : 0;
     }
 
     return records.length;
