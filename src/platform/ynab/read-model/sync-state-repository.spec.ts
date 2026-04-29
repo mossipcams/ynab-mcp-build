@@ -7,6 +7,11 @@ type BoundStatement = {
   params: unknown[];
 };
 
+type LeaseRow = {
+  lease_expires_at?: string | null;
+  lease_owner?: string | null;
+};
+
 class FakeStatement {
   constructor(
     private readonly db: FakeD1Database,
@@ -24,11 +29,19 @@ class FakeStatement {
 
   run() {
     this.db.runs.push({ sql: this.sql, params: this.params });
+    const activeLease = this.db.firstResult as LeaseRow | null;
+    const now = String(this.params.at(-1));
+    const changes = this.sql.includes("lease_expires_at <= ?")
+      && activeLease?.lease_owner
+      && activeLease.lease_expires_at
+      && activeLease.lease_expires_at > now
+      ? 0
+      : this.db.nextChanges;
 
     return Promise.resolve({
       success: true,
       meta: {
-        changes: this.db.nextChanges
+        changes
       }
     } as D1Result);
   }
@@ -62,7 +75,8 @@ describe("sync state repository", () => {
     });
 
     expect(result).toEqual({ acquired: false, reason: "lease_active" });
-    expect(db.runs).toEqual([]);
+    expect(db.runs).toHaveLength(1);
+    expect(db.runs[0]?.sql).toContain("lease_expires_at <= ?");
   });
 
   it("acquires an expired lease by writing owner and expiry", async () => {

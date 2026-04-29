@@ -117,6 +117,20 @@ async function getKvRecord(storage: StorageLike, key: string) {
 }
 
 export async function handleOAuthStateRequest(storage: StorageLike, request: Request) {
+  try {
+    return await handleOAuthStateRequestUnsafe(storage, request);
+  } catch (error) {
+    return jsonResponse(
+      {
+        error: "oauth_state_store_unavailable",
+        error_description: error instanceof Error ? error.message : "OAuth state store unavailable."
+      },
+      500
+    );
+  }
+}
+
+async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Request) {
   const url = new URL(request.url);
 
   if (request.method === "GET" && url.pathname === "/kv") {

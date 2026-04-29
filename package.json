@@ -18,6 +18,8 @@
     "prepare": "node scripts/install-hooks.mjs",
     "pr": "node scripts/pre-pr.mjs",
     "test": "vitest run",
+    "test:chaos": "vitest run --config vitest.chaos.config.ts",
+    "test:manual-gates": "vitest run --config vitest.manual.config.ts",
     "test:watch": "vitest watch",
     "test:mutation": "stryker run",
     "test:mutation:dry": "stryker run --dryRunOnly",

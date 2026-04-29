@@ -340,6 +340,8 @@ type CreateYnabClientOptions = {
   fetchFn?: typeof fetch;
 };
 
+const YNAB_REQUEST_ATTEMPTS = 2;
+
 type Compact<T extends Record<string, unknown>> = {
   [K in keyof T as undefined extends T[K] ? never : K]: T[K];
 } & {
@@ -1295,17 +1297,31 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
   };
 
   async function authorizedFetch(input: string) {
-    try {
-      return await fetchFn(input, {
-        headers: authorizationHeaders
-      });
-    } catch (error) {
-      throw new YnabClientError(
-        error instanceof Error ? error.message : "YNAB API request failed before a response was received.",
-        "upstream",
-        true
-      );
+    for (let attempt = 1; attempt <= YNAB_REQUEST_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetchFn(input, {
+          headers: authorizationHeaders
+        });
+
+        if (attempt < YNAB_REQUEST_ATTEMPTS && (response.status === 429 || response.status >= 500)) {
+          continue;
+        }
+
+        return response;
+      } catch (error) {
+        if (attempt < YNAB_REQUEST_ATTEMPTS) {
+          continue;
+        }
+
+        throw new YnabClientError(
+          error instanceof Error ? error.message : "YNAB API request failed before a response was received.",
+          "upstream",
+          true
+        );
+      }
     }
+
+    throw new YnabClientError("YNAB API request failed before a response was received.", "upstream", true);
   }
 
   return {

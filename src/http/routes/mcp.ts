@@ -33,6 +33,18 @@ function writeRequestTooLarge() {
   );
 }
 
+function writeMcpRequestFailure(error: unknown) {
+  return Response.json(
+    {
+      error: "mcp_request_failed",
+      error_description: error instanceof Error ? error.message : "MCP request failed."
+    },
+    {
+      status: 500
+    }
+  );
+}
+
 async function readBoundedJsonBody(request: Request): Promise<JsonBodyReadResult> {
   const contentLength = request.headers.get("content-length");
 
@@ -87,35 +99,39 @@ async function readBoundedJsonBody(request: Request): Promise<JsonBodyReadResult
 
 export function registerMcpRoutes(app: Hono<{ Bindings: Env }>, dependencies: AppDependencies = {}) {
   app.all("/mcp", async (context) => {
-    const env = resolveAppEnv(context.env, context.req.raw);
-    let parsedBody: unknown;
+    try {
+      const env = resolveAppEnv(context.env, context.req.raw);
+      let parsedBody: unknown;
 
-    if (context.req.method === "POST" && context.req.header("content-type")?.includes("application/json")) {
-      const body = await readBoundedJsonBody(context.req.raw);
+      if (context.req.method === "POST" && context.req.header("content-type")?.includes("application/json")) {
+        const body = await readBoundedJsonBody(context.req.raw);
 
-      if (body.kind === "too_large") {
-        return writeRequestTooLarge();
+        if (body.kind === "too_large") {
+          return writeRequestTooLarge();
+        }
+
+        if (body.kind === "parsed") {
+          parsedBody = body.value;
+        }
       }
 
-      if (body.kind === "parsed") {
-        parsedBody = body.value;
+      const registeredToolDefinitions = getRegisteredToolDefinitions(env, dependencies);
+      const validation = validateToolCallRequest(parsedBody, registeredToolDefinitions);
+
+      if (validation.kind === "invalid") {
+        return validation.response;
       }
+
+      const transport = new WebStandardStreamableHTTPServerTransport();
+      const server = createMcpServer(env, registeredToolDefinitions);
+
+      await server.connect(transport);
+
+      const requestOptions = parsedBody !== undefined ? { parsedBody } : {};
+
+      return transport.handleRequest(context.req.raw, requestOptions);
+    } catch (error) {
+      return writeMcpRequestFailure(error);
     }
-
-    const registeredToolDefinitions = getRegisteredToolDefinitions(env, dependencies);
-    const validation = validateToolCallRequest(parsedBody, registeredToolDefinitions);
-
-    if (validation.kind === "invalid") {
-      return validation.response;
-    }
-
-    const transport = new WebStandardStreamableHTTPServerTransport();
-    const server = createMcpServer(env, registeredToolDefinitions);
-
-    await server.connect(transport);
-
-    const requestOptions = parsedBody !== undefined ? { parsedBody } : {};
-
-    return transport.handleRequest(context.req.raw, requestOptions);
   });
 }
