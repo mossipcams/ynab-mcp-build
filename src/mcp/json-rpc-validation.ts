@@ -27,6 +27,20 @@ function writeJsonRpcInvalidParams(id: string | number | null, message: string) 
   );
 }
 
+function formatZodPath(path: PropertyKey[]) {
+  if (path.length === 0) {
+    return "arguments";
+  }
+
+  return path.map(String).join(".");
+}
+
+function formatZodError(error: z.ZodError) {
+  return error.issues
+    .map((issue) => `${formatZodPath(issue.path)}: ${issue.message}`)
+    .join("; ");
+}
+
 export function validateToolCallRequest(
   parsedBody: unknown,
   definitions: readonly SliceToolDefinition[]
@@ -64,7 +78,7 @@ export function validateToolCallRequest(
       kind: "invalid",
       response: writeJsonRpcInvalidParams(
         request.id ?? null,
-        `Invalid arguments for tool ${request.params.name}: ${parseResult.error.message}`
+        `Invalid arguments for tool ${request.params.name}: ${formatZodError(parseResult.error)}`
       )
     };
   }

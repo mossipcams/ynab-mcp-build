@@ -1,7 +1,9 @@
 import { z } from "zod";
 
-import type { SliceToolDefinition } from "../../shared/tool-definition.js";
+import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
 import {
+  amountFilterSchema,
+  clearedStatusSchema,
   dateFieldSchema,
   fieldProjectionSchema,
   includeIdsSchema,
@@ -19,7 +21,7 @@ export function getDbTransactionToolDefinitions(
   dependencies: DbTransactionToolDependencies
 ): SliceToolDefinition[] {
   return [
-    {
+    defineTool({
       name: "ynab_search_transactions",
       title: "Search YNAB Transactions",
       description: "Searches synced YNAB transactions from the D1 read model with freshness metadata.",
@@ -31,9 +33,9 @@ export function getDbTransactionToolDefinitions(
         accountId: z.string().optional(),
         categoryId: z.string().optional(),
         approved: z.boolean().optional(),
-        cleared: z.string().optional(),
-        minAmount: z.number().optional(),
-        maxAmount: z.number().optional(),
+        cleared: clearedStatusSchema.optional(),
+        minAmount: amountFilterSchema.optional(),
+        maxAmount: amountFilterSchema.optional(),
         includeTransfers: z.boolean().optional(),
         includeSummary: z.boolean().optional(),
         includeDeleted: z.boolean().optional(),
@@ -43,6 +45,6 @@ export function getDbTransactionToolDefinitions(
         sort: z.enum(sortableValues).optional()
       },
       execute: async (input) => searchTransactions(dependencies, input)
-    }
+    })
   ];
 }

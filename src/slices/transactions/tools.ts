@@ -1,8 +1,10 @@
 import { z } from "zod";
 
 import type { YnabClient } from "../../platform/ynab/client.js";
-import type { SliceToolDefinition } from "../../shared/tool-definition.js";
+import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
 import {
+  amountFilterSchema,
+  clearedStatusSchema,
   dateFieldSchema,
   fieldProjectionSchema,
   includeIdsSchema,
@@ -37,14 +39,14 @@ const scheduledTransactionFields = [
 
 export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
   return [
-    {
+    defineTool({
       name: "ynab_list_transactions",
       title: "List YNAB Transactions",
       description: "Lists YNAB transactions with optional pagination and compact field projection. Use only when the user explicitly asks for raw transaction browsing.",
       inputSchema: paginatedProjectionSchema(transactionFields),
       execute: async (input) => listTransactions(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_transaction",
       title: "Get YNAB Transaction",
       description: "Returns a compact summary for a single individual transaction. Use for exact transaction inspection after a drilldown.",
@@ -53,8 +55,8 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         transactionId: requiredIdSchema
       },
       execute: async (input) => getTransaction(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_search_transactions",
       title: "Search YNAB Transactions",
       description: "Searches YNAB transactions with compact filters, rollups, projections, pagination, and sorting. Use for transaction detail or follow-up drilldowns.",
@@ -66,9 +68,9 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         accountId: z.string().optional(),
         categoryId: z.string().optional(),
         approved: z.boolean().optional(),
-        cleared: z.string().optional(),
-        minAmount: z.number().optional(),
-        maxAmount: z.number().optional(),
+        cleared: clearedStatusSchema.optional(),
+        minAmount: amountFilterSchema.optional(),
+        maxAmount: amountFilterSchema.optional(),
         includeTransfers: z.boolean().optional(),
         includeSummary: z.boolean().optional(),
         ...paginationSchema,
@@ -77,8 +79,8 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         sort: z.enum(sortableValues).optional()
       },
       execute: async (input) => searchTransactions(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_transactions_by_month",
       title: "Get YNAB Transactions By Month",
       description: "Lists transactions for a single plan month. Use for month-specific transaction drilldowns after a summary.",
@@ -90,8 +92,8 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         ...includeIdsSchema
       },
       execute: async (input) => getTransactionsByMonth(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_transactions_by_account",
       title: "Get YNAB Transactions By Account",
       description: "Lists transactions for a single account. Use only when the user explicitly asks for account-specific raw records.",
@@ -103,8 +105,8 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         ...includeIdsSchema
       },
       execute: async (input) => getTransactionsByAccount(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_transactions_by_category",
       title: "Get YNAB Transactions By Category",
       description: "Lists transactions for a single category. Use only when the user explicitly asks for category-specific raw records.",
@@ -116,8 +118,8 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         ...includeIdsSchema
       },
       execute: async (input) => getTransactionsByCategory(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_transactions_by_payee",
       title: "Get YNAB Transactions By Payee",
       description: "Lists transactions for a single payee. Use only when the user explicitly asks for payee-specific raw records.",
@@ -129,15 +131,15 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         ...includeIdsSchema
       },
       execute: async (input) => getTransactionsByPayee(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_list_scheduled_transactions",
       title: "List YNAB Scheduled Transactions",
       description: "Lists scheduled transactions with optional pagination and compact field projection. Use only when the user explicitly asks for raw scheduled records.",
       inputSchema: paginatedProjectionSchema(scheduledTransactionFields),
       execute: async (input) => listScheduledTransactions(ynabClient, input)
-    },
-    {
+    }),
+    defineTool({
       name: "ynab_get_scheduled_transaction",
       title: "Get YNAB Scheduled Transaction",
       description: "Returns a compact summary for a single scheduled transaction.",
@@ -146,6 +148,6 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         scheduledTransactionId: requiredIdSchema
       },
       execute: async (input) => getScheduledTransaction(ynabClient, input)
-    }
+    })
   ];
 }
