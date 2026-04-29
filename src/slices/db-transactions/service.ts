@@ -80,7 +80,13 @@ type DbTransactionServiceDependencies = {
 };
 
 function resolvePlanId(input: { planId?: string }, defaultPlanId?: string) {
-  const planId = input.planId ?? defaultPlanId;
+  const inputPlanId = input.planId?.trim();
+
+  if (inputPlanId) {
+    return inputPlanId;
+  }
+
+  const planId = defaultPlanId?.trim();
 
   if (!planId) {
     throw new Error("planId is required when YNAB_DEFAULT_PLAN_ID is not configured.");

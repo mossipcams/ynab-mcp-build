@@ -27,7 +27,7 @@ class FakeStatement {
       return Promise.resolve({
         results: this.params.slice(1).map((endpoint) => ({
           endpoint,
-          health_status: "ok",
+          health_status: this.db.healthStatus,
           last_successful_sync_at: "2026-04-28T12:00:00.000Z"
         }))
       } as D1Result<T>);
@@ -94,6 +94,7 @@ class FakeStatement {
 
 class FakeD1Database {
   allCalls: Array<{ sql: string; params: unknown[] }> = [];
+  healthStatus = "ok";
   transactionSearchParams: unknown[] = [];
 
   prepare(sql: string) {
@@ -101,14 +102,14 @@ class FakeD1Database {
   }
 }
 
-function createD1Env(database: D1Database): AppEnv {
+function createD1Env(database?: D1Database, defaultPlanId: string | null = "plan-1"): AppEnv {
   return {
     mcpServerName: "ynab-mcp-build",
     mcpServerVersion: "0.1.0",
     oauthEnabled: false,
     ynabApiBaseUrl: "https://api.ynab.com/v1",
-    ynabDatabase: database,
-    ynabDefaultPlanId: "plan-1",
+    ...(database ? { ynabDatabase: database } : {}),
+    ...(defaultPlanId ? { ynabDefaultPlanId: defaultPlanId } : {}),
     ynabReadSource: "d1",
     ynabStaleAfterMinutes: 360,
     ynabSyncMaxRowsPerRun: 100
@@ -116,6 +117,12 @@ function createD1Env(database: D1Database): AppEnv {
 }
 
 describe("DB-backed tool registration", () => {
+  it("requires a D1 database binding in D1 mode", () => {
+    expect(() =>
+      getRegisteredToolDefinitions(createD1Env(), {})
+    ).toThrowError("YNAB_DB is required when YNAB_READ_SOURCE=d1.");
+  });
+
   it("registers existing public tool names in D1 mode without live YNAB dependencies", async () => {
     const database = new FakeD1Database();
     const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {
@@ -230,5 +237,53 @@ describe("DB-backed tool registration", () => {
     const names = definitions.map((definition) => definition.name);
 
     expect(names).not.toContain("ynab_admin_populate_d1");
+  });
+
+  it("uses explicit non-blank input plan ids for read-model freshness checks", async () => {
+    const database = new FakeD1Database();
+    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
+    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
+
+    await expect(executeToolDefinition(searchTransactions, { limit: 5, planId: "plan-explicit" })).resolves.toHaveProperty("data");
+
+    expect(database.allCalls[0]?.params).toEqual(expect.arrayContaining(["plan-explicit"]));
+  });
+
+  it("falls back to the default plan when input plan ids are blank", async () => {
+    const database = new FakeD1Database();
+    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
+    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
+
+    await expect(executeToolDefinition(searchTransactions, { limit: 5, planId: "   " })).resolves.toHaveProperty("data");
+
+    expect(database.allCalls[0]?.params).toEqual(expect.arrayContaining(["plan-1"]));
+  });
+
+  it("requires plan ids for freshness checks when no default plan is configured", async () => {
+    const database = new FakeD1Database();
+    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database, null), {});
+    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
+
+    await expect(executeToolDefinition(searchTransactions, { limit: 5 })).rejects.toThrowError(
+      "planId is required when YNAB_DEFAULT_PLAN_ID is not configured."
+    );
+  });
+
+  it("short-circuits read-model tools when required sync data is unhealthy", async () => {
+    const database = new FakeD1Database();
+    database.healthStatus = "unhealthy";
+    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
+    const searchTransactions = definitions.find((definition) => definition.name === "ynab_search_transactions");
+
+    await expect(executeToolDefinition(searchTransactions, { limit: 5 })).resolves.toMatchObject({
+      status: "unhealthy",
+      data_freshness: {
+        health_status: "unhealthy",
+        required_endpoints: ["transactions"]
+      },
+      data: null
+    });
+
+    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_transactions"))).toBe(false);
   });
 });

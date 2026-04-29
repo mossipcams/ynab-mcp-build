@@ -52,7 +52,7 @@ export type YnabCategorySummary = {
   id: string;
   name: string;
   hidden: boolean;
-  deleted: boolean;
+  deleted?: boolean;
   categoryGroupId?: string | null;
   categoryGroupName?: string;
   originalCategoryGroupId?: string | null;
@@ -760,7 +760,7 @@ const YnabCategoryRecordSchema = z.object({
   id: z.string(),
   name: z.string(),
   hidden: z.boolean(),
-  deleted: z.boolean(),
+  deleted: z.boolean().optional(),
   category_group_id: optionalNullableString,
   category_group_name: z.string().optional(),
   original_category_group_id: optionalNullableString,
