@@ -22,11 +22,15 @@ class ContendedLeaseStatement {
   constructor(
     private readonly db: ContendedLeaseD1Database,
     private readonly sql: string,
-    private readonly params: unknown[] = []
+    private readonly params: unknown[] = [],
   ) {}
 
   bind(...params: unknown[]) {
-    return new ContendedLeaseStatement(this.db, this.sql, params) as unknown as D1PreparedStatement;
+    return new ContendedLeaseStatement(
+      this.db,
+      this.sql,
+      params,
+    ) as unknown as D1PreparedStatement;
   }
 
   first<T>() {
@@ -48,7 +52,10 @@ class ContendedLeaseD1Database {
   private lease: LeaseRow | null = null;
 
   prepare(sql: string) {
-    return new ContendedLeaseStatement(this, sql) as unknown as D1PreparedStatement;
+    return new ContendedLeaseStatement(
+      this,
+      sql,
+    ) as unknown as D1PreparedStatement;
   }
 
   readLease<T>() {
@@ -76,24 +83,27 @@ class ContendedLeaseD1Database {
     const owner = String(params[2]);
     const leaseExpiresAt = String(params[3]);
     const now = String(params.at(-1));
-    const activeLease = this.lease?.lease_owner && this.lease.lease_expires_at && this.lease.lease_expires_at > now;
+    const activeLease =
+      this.lease?.lease_owner &&
+      this.lease.lease_expires_at &&
+      this.lease.lease_expires_at > now;
     const atomicConditionalWrite = sql.includes("lease_expires_at <= ?");
 
     if (atomicConditionalWrite && activeLease) {
       return {
         meta: { changes: 0 },
-        success: true
+        success: true,
       } as D1Result;
     }
 
     this.lease = {
       lease_expires_at: leaseExpiresAt,
-      lease_owner: owner
+      lease_owner: owner,
     };
 
     return {
       meta: { changes: 1 },
-      success: true
+      success: true,
     } as D1Result;
   }
 }
@@ -101,28 +111,30 @@ class ContendedLeaseD1Database {
 describe("sync state repository chaos", () => {
   it("allows only one concurrent worker to acquire a sync lease", async () => {
     const database = new ContendedLeaseD1Database();
-    const repository = createSyncStateRepository(database as unknown as D1Database);
+    const repository = createSyncStateRepository(
+      database as unknown as D1Database,
+    );
     const input = {
       endpoint: "transactions",
       leaseSeconds: 60,
       now: "2026-04-29T12:00:00.000Z",
-      planId: "plan-1"
+      planId: "plan-1",
     };
 
     const results = await Promise.all([
       repository.acquireLease({
         ...input,
-        leaseOwner: "worker-1"
+        leaseOwner: "worker-1",
       }),
       repository.acquireLease({
         ...input,
-        leaseOwner: "worker-2"
-      })
+        leaseOwner: "worker-2",
+      }),
     ]);
 
     expect(results.filter((result) => result.acquired)).toHaveLength(1);
     expect(results.filter((result) => !result.acquired)).toEqual([
-      { acquired: false, reason: "lease_active" }
+      { acquired: false, reason: "lease_active" },
     ]);
   });
 });

@@ -13,7 +13,7 @@ const typeAwareRules = {
   "@typescript-eslint/no-unsafe-return": "error",
   "@typescript-eslint/restrict-template-expressions": "error",
   "@typescript-eslint/require-await": "error",
-  "@typescript-eslint/switch-exhaustiveness-check": "error"
+  "@typescript-eslint/switch-exhaustiveness-check": "error",
 };
 
 export default [
@@ -25,8 +25,8 @@ export default [
       "**/*.spec.ts",
       "tests/**",
       "vitest.stryker.config.ts",
-      "worker-configuration.d.ts"
-    ]
+      "worker-configuration.d.ts",
+    ],
   },
   {
     files: ["**/*.js", "**/*.mjs"],
@@ -35,9 +35,9 @@ export default [
       globals: {
         console: "readonly",
         process: "readonly",
-        URL: "readonly"
-      }
-    }
+        URL: "readonly",
+      },
+    },
   },
   {
     files: ["src/**/*.ts", "vitest.config.ts", "vitest.stryker.config.ts"],
@@ -45,12 +45,12 @@ export default [
       parser: tseslint.parser,
       parserOptions: {
         project: ["./tsconfig.spec.json"],
-        tsconfigRootDir: import.meta.dirname
-      }
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     plugins: {
-      "@typescript-eslint": tseslint.plugin
+      "@typescript-eslint": tseslint.plugin,
     },
-    rules: typeAwareRules
-  }
+    rules: typeAwareRules,
+  },
 ];

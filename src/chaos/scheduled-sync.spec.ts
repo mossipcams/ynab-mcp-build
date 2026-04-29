@@ -11,21 +11,21 @@ describe("scheduled sync chaos", () => {
         YNAB_ACCESS_TOKEN: "token",
         YNAB_API_BASE_URL: "https://api.ynab.com/v1",
         YNAB_DB: {} as D1Database,
-        YNAB_READ_SOURCE: "d1"
+        YNAB_READ_SOURCE: "d1",
       } as unknown as Env,
       Date.parse("2026-04-29T12:00:00.000Z"),
       {
         ynabClient: {
           listPlans: async () => {
             throw new Error("YNAB plan discovery unavailable");
-          }
-        }
-      }
+          },
+        },
+      },
     );
 
     expect(result).toEqual({
       reason: "YNAB plan discovery unavailable",
-      status: "failed"
+      status: "failed",
     });
   });
 });

@@ -16,7 +16,7 @@ class FakeStatement {
   constructor(
     private readonly db: FakeD1Database,
     private readonly sql: string,
-    private params: unknown[] = []
+    private params: unknown[] = [],
   ) {}
 
   bind(...params: unknown[]) {
@@ -31,18 +31,19 @@ class FakeStatement {
     this.db.runs.push({ sql: this.sql, params: this.params });
     const activeLease = this.db.firstResult as LeaseRow | null;
     const now = String(this.params.at(-1));
-    const changes = this.sql.includes("lease_expires_at <= ?")
-      && activeLease?.lease_owner
-      && activeLease.lease_expires_at
-      && activeLease.lease_expires_at > now
-      ? 0
-      : this.db.nextChanges;
+    const changes =
+      this.sql.includes("lease_expires_at <= ?") &&
+      activeLease?.lease_owner &&
+      activeLease.lease_expires_at &&
+      activeLease.lease_expires_at > now
+        ? 0
+        : this.db.nextChanges;
 
     return Promise.resolve({
       success: true,
       meta: {
-        changes
-      }
+        changes,
+      },
     } as D1Result);
   }
 }
@@ -62,7 +63,7 @@ describe("sync state repository", () => {
     const db = new FakeD1Database();
     db.firstResult = {
       lease_owner: "other-worker",
-      lease_expires_at: "2026-04-28T12:05:00.000Z"
+      lease_expires_at: "2026-04-28T12:05:00.000Z",
     };
     const repository = createSyncStateRepository(db as unknown as D1Database);
 
@@ -71,7 +72,7 @@ describe("sync state repository", () => {
       leaseOwner: "worker-1",
       leaseSeconds: 60,
       now: "2026-04-28T12:00:00.000Z",
-      planId: "plan-1"
+      planId: "plan-1",
     });
 
     expect(result).toEqual({ acquired: false, reason: "lease_active" });
@@ -83,7 +84,7 @@ describe("sync state repository", () => {
     const db = new FakeD1Database();
     db.firstResult = {
       lease_owner: "old-worker",
-      lease_expires_at: "2026-04-28T11:59:00.000Z"
+      lease_expires_at: "2026-04-28T11:59:00.000Z",
     };
     const repository = createSyncStateRepository(db as unknown as D1Database);
 
@@ -92,12 +93,12 @@ describe("sync state repository", () => {
       leaseOwner: "worker-1",
       leaseSeconds: 60,
       now: "2026-04-28T12:00:00.000Z",
-      planId: "plan-1"
+      planId: "plan-1",
     });
 
     expect(result).toEqual({
       acquired: true,
-      leaseExpiresAt: "2026-04-28T12:01:00.000Z"
+      leaseExpiresAt: "2026-04-28T12:01:00.000Z",
     });
     expect(db.runs).toHaveLength(1);
     const run = db.runs[0]!;
@@ -118,7 +119,7 @@ describe("sync state repository", () => {
       previousServerKnowledge: 123,
       rowsDeleted: 1,
       rowsUpserted: 2,
-      serverKnowledge: 456
+      serverKnowledge: 456,
     });
 
     expect(result).toEqual({ advanced: true });
@@ -136,7 +137,7 @@ describe("sync state repository", () => {
       "plan-1",
       "transactions",
       "worker-1",
-      123
+      123,
     ]);
   });
 
@@ -153,7 +154,7 @@ describe("sync state repository", () => {
       previousServerKnowledge: null,
       rowsDeleted: 0,
       rowsUpserted: 0,
-      serverKnowledge: 456
+      serverKnowledge: 456,
     });
 
     expect(result).toEqual({ advanced: false, reason: "contention" });

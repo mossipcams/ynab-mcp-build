@@ -1,5 +1,6 @@
 node_modules/
 .bin/
+.eslintcache
 .wrangler/
 coverage/
 reports/mutation/

@@ -6,7 +6,7 @@ import type { SliceToolDefinition } from "../shared/tool-definition.js";
 
 const mocks = vi.hoisted(() => ({
   createdServers: [] as Array<{ config: unknown }>,
-  registerSlices: vi.fn()
+  registerSlices: vi.fn(),
 }));
 
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
@@ -14,11 +14,11 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
     constructor(config: unknown) {
       mocks.createdServers.push({ config });
     }
-  }
+  },
 }));
 
 vi.mock("./register-slices.js", () => ({
-  registerSlices: mocks.registerSlices
+  registerSlices: mocks.registerSlices,
 }));
 
 describe("createMcpServer", () => {
@@ -31,7 +31,7 @@ describe("createMcpServer", () => {
     const { createMcpServer } = await import("./server.js");
     const env = {
       mcpServerName: "ynab-mcp-test",
-      mcpServerVersion: "1.2.3"
+      mcpServerVersion: "1.2.3",
     } as AppEnv;
     const toolDefinitions: SliceToolDefinition[] = [
       {
@@ -39,10 +39,10 @@ describe("createMcpServer", () => {
         title: "Get demo",
         description: "Reads demo.",
         inputSchema: {
-          id: z.string()
+          id: z.string(),
         },
-        execute: async () => ({ ok: true })
-      }
+        execute: async () => ({ ok: true }),
+      },
     ];
 
     const server = createMcpServer(env, toolDefinitions);
@@ -51,9 +51,9 @@ describe("createMcpServer", () => {
       {
         config: {
           name: "ynab-mcp-test",
-          version: "1.2.3"
-        }
-      }
+          version: "1.2.3",
+        },
+      },
     ]);
     expect(mocks.registerSlices).toHaveBeenCalledWith(server, toolDefinitions);
   });

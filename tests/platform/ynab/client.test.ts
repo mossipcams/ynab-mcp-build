@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { createYnabClient, YnabClientError } from "../../../src/platform/ynab/client.js";
+import {
+  createYnabClient,
+  YnabClientError,
+} from "../../../src/platform/ynab/client.js";
 import { readYnabFixture } from "./fixtures.js";
 
 describe("ynab client transport errors", () => {
@@ -18,24 +21,24 @@ describe("ynab client transport errors", () => {
             data: {
               user: {
                 id: "user-1",
-                name: "Test User"
-              }
-            }
+                name: "Test User",
+              },
+            },
           }),
           {
             headers: {
-              "content-type": "application/json"
+              "content-type": "application/json",
             },
-            status: 200
-          }
+            status: 200,
+          },
         );
-      }
+      },
     });
 
     await client.getUser();
 
     expect(requests[0]?.headers).toMatchObject({
-      Authorization: "Bearer pat-secret"
+      Authorization: "Bearer pat-secret",
     });
   });
 
@@ -54,16 +57,13 @@ describe("ynab client transport errors", () => {
       fetchFn: async (input) => {
         requests.push(input);
 
-        return new Response(
-          JSON.stringify(plansResponse),
-          {
-            headers: {
-              "content-type": "application/json"
-            },
-            status: 200
-          }
-        );
-      }
+        return new Response(JSON.stringify(plansResponse), {
+          headers: {
+            "content-type": "application/json",
+          },
+          status: 200,
+        });
+      },
     });
 
     await client.listPlans();
@@ -85,21 +85,20 @@ describe("ynab client transport errors", () => {
       fetchFn: async (input) => {
         requests.push(input);
 
-        return new Response(
-          JSON.stringify(accountsResponse),
-          {
-            headers: {
-              "content-type": "application/json"
-            },
-            status: 200
-          }
-        );
-      }
+        return new Response(JSON.stringify(accountsResponse), {
+          headers: {
+            "content-type": "application/json",
+          },
+          status: 200,
+        });
+      },
     });
 
     await client.listAccounts("plan-1");
 
-    expect(String(requests[0])).toBe("https://api.ynab.com/v1/plans/plan-1/accounts");
+    expect(String(requests[0])).toBe(
+      "https://api.ynab.com/v1/plans/plan-1/accounts",
+    );
   });
 
   it("maps 429 responses into retryable rate-limit errors", async () => {
@@ -111,23 +110,23 @@ describe("ynab client transport errors", () => {
         new Response(
           JSON.stringify({
             error: {
-              detail: "Too many requests"
-            }
+              detail: "Too many requests",
+            },
           }),
           {
             headers: {
               "Retry-After": "15",
-              "content-type": "application/json"
+              "content-type": "application/json",
             },
             status: 429,
-            statusText: "Too Many Requests"
-          }
-        )
+            statusText: "Too Many Requests",
+          },
+        ),
     });
 
     await expect(client.getUser()).rejects.toMatchObject({
       category: "rate_limit",
-      retryable: true
+      retryable: true,
     } satisfies Partial<YnabClientError>);
   });
 
@@ -140,22 +139,22 @@ describe("ynab client transport errors", () => {
         new Response(
           JSON.stringify({
             error: {
-              detail: "The access token provided is invalid."
-            }
+              detail: "The access token provided is invalid.",
+            },
           }),
           {
             headers: {
-              "content-type": "application/json"
+              "content-type": "application/json",
             },
             status: 401,
-            statusText: "Unauthorized"
-          }
-        )
+            statusText: "Unauthorized",
+          },
+        ),
     });
 
     await expect(client.getUser()).rejects.toMatchObject({
       category: "internal",
-      retryable: false
+      retryable: false,
     } satisfies Partial<YnabClientError>);
   });
 
@@ -168,22 +167,22 @@ describe("ynab client transport errors", () => {
         new Response(
           JSON.stringify({
             error: {
-              detail: "Temporary outage"
-            }
+              detail: "Temporary outage",
+            },
           }),
           {
             headers: {
-              "content-type": "application/json"
+              "content-type": "application/json",
             },
             status: 503,
-            statusText: "Service Unavailable"
-          }
-        )
+            statusText: "Service Unavailable",
+          },
+        ),
     });
 
     await expect(client.getUser()).rejects.toMatchObject({
       category: "upstream",
-      retryable: true
+      retryable: true,
     } satisfies Partial<YnabClientError>);
   });
 
@@ -195,15 +194,15 @@ describe("ynab client transport errors", () => {
       fetchFn: async () =>
         new Response("{not-json", {
           headers: {
-            "content-type": "application/json"
+            "content-type": "application/json",
           },
-          status: 200
-        })
+          status: 200,
+        }),
     });
 
     await expect(client.getUser()).rejects.toMatchObject({
       category: "upstream",
-      retryable: true
+      retryable: true,
     } satisfies Partial<YnabClientError>);
   });
 
@@ -218,23 +217,20 @@ describe("ynab client transport errors", () => {
       accessToken: "pat-secret",
       baseUrl: "https://api.ynab.com/v1",
       fetchFn: async () =>
-        new Response(
-          JSON.stringify(accountsResponse),
-          {
-            headers: {
-              "content-type": "application/json"
-            },
-            status: 200
-          }
-        )
+        new Response(JSON.stringify(accountsResponse), {
+          headers: {
+            "content-type": "application/json",
+          },
+          status: 200,
+        }),
     });
 
     await expect(client.listAccounts("plan-1")).resolves.toMatchObject([
       {
         id: "account-1",
         balance: 123450,
-        name: "Checking"
-      }
+        name: "Checking",
+      },
     ]);
   });
 
@@ -251,25 +247,25 @@ describe("ynab client transport errors", () => {
                 id: "user-1",
                 name: "Test User",
                 unexpected_nested: {
-                  region: "us"
-                }
+                  region: "us",
+                },
               },
-              server_trace_id: "trace-123"
+              server_trace_id: "trace-123",
             },
-            additive_top_level: true
+            additive_top_level: true,
           }),
           {
             headers: {
-              "content-type": "application/json"
+              "content-type": "application/json",
             },
-            status: 200
-          }
-        )
+            status: 200,
+          },
+        ),
     });
 
     await expect(client.getUser()).resolves.toMatchObject({
       id: "user-1",
-      name: "Test User"
+      name: "Test User",
     });
   });
 
@@ -284,15 +280,12 @@ describe("ynab client transport errors", () => {
       accessToken: "pat-secret",
       baseUrl: "https://api.ynab.com/v1",
       fetchFn: async () =>
-        new Response(
-          JSON.stringify(transactionsResponse),
-          {
-            headers: {
-              "content-type": "application/json"
-            },
-            status: 200
-          }
-        )
+        new Response(JSON.stringify(transactionsResponse), {
+          headers: {
+            "content-type": "application/json",
+          },
+          status: 200,
+        }),
     });
 
     await expect(client.listTransactions("plan-1")).resolves.toMatchObject([
@@ -300,8 +293,8 @@ describe("ynab client transport errors", () => {
         id: "txn-1",
         amount: -4560,
         accountId: "account-1",
-        isTransfer: false
-      }
+        isTransfer: false,
+      },
     ]);
   });
 
@@ -318,10 +311,10 @@ describe("ynab client transport errors", () => {
       fetchFn: async () =>
         new Response(JSON.stringify(categoriesResponse), {
           headers: {
-            "content-type": "application/json"
+            "content-type": "application/json",
           },
-          status: 200
-        })
+          status: 200,
+        }),
     });
 
     await expect(client.listCategories("plan-1")).resolves.toMatchObject([
@@ -331,11 +324,11 @@ describe("ynab client transport errors", () => {
           {
             id: "category-1",
             categoryGroupName: "Immediate Obligations",
-            name: "Rent"
-          }
+            name: "Rent",
+          },
         ],
-        name: "Immediate Obligations"
-      }
+        name: "Immediate Obligations",
+      },
     ]);
   });
 
@@ -352,13 +345,15 @@ describe("ynab client transport errors", () => {
       fetchFn: async () =>
         new Response(JSON.stringify(scheduledTransactionsResponse), {
           headers: {
-            "content-type": "application/json"
+            "content-type": "application/json",
           },
-          status: 200
-        })
+          status: 200,
+        }),
     });
 
-    await expect(client.listScheduledTransactions("plan-1")).resolves.toMatchObject([
+    await expect(
+      client.listScheduledTransactions("plan-1"),
+    ).resolves.toMatchObject([
       {
         accountName: "Checking",
         amount: -120000,
@@ -366,8 +361,8 @@ describe("ynab client transport errors", () => {
         dateFirst: "2026-04-01",
         dateNext: "2026-05-01",
         id: "scheduled-1",
-        payeeName: "Internet Provider"
-      }
+        payeeName: "Internet Provider",
+      },
     ]);
   });
 
@@ -378,12 +373,12 @@ describe("ynab client transport errors", () => {
       baseUrl: "https://api.ynab.com/v1",
       fetchFn: async () => {
         throw new Error("network timeout");
-      }
+      },
     });
 
     await expect(client.getUser()).rejects.toMatchObject({
       category: "upstream",
-      retryable: true
+      retryable: true,
     } satisfies Partial<YnabClientError>);
   });
 });

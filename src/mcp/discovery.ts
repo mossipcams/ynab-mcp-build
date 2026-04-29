@@ -47,7 +47,7 @@ export const DISCOVERY_TOOL_NAMES = [
   "ynab_list_plans",
   "ynab_list_scheduled_transactions",
   "ynab_list_transactions",
-  "ynab_search_transactions"
+  "ynab_search_transactions",
 ] as const;
 
 export type WellKnownDocument = {
@@ -71,15 +71,15 @@ export function buildDiscoveryDocument(env: AppEnv): WellKnownDocument {
     name: env.mcpServerName,
     version: env.mcpServerVersion,
     protocol: {
-      transport: "streamable-http"
+      transport: "streamable-http",
     },
     endpoints: {
       mcp: "/mcp",
-      wellKnown: "/.well-known/mcp.json"
+      wellKnown: "/.well-known/mcp.json",
     },
     tools: {
       count: DISCOVERY_TOOL_NAMES.length,
-      names: [...DISCOVERY_TOOL_NAMES]
-    }
+      names: [...DISCOVERY_TOOL_NAMES],
+    },
   };
 }

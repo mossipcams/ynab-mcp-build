@@ -14,10 +14,10 @@ describe("registerToolDefinitions", () => {
         title: "Demo Tool",
         description: "Does demo work.",
         inputSchema: {
-          query: z.string()
+          query: z.string(),
         },
-        execute: async ({ query }) => ({ echoed: query })
-      }
+        execute: async ({ query }) => ({ echoed: query }),
+      },
     ];
 
     registerToolDefinitions(server as never, definitions);
@@ -30,20 +30,20 @@ describe("registerToolDefinitions", () => {
       title: "Demo Tool",
       description: "Does demo work.",
       annotations: {
-        readOnlyHint: true
-      }
+        readOnlyHint: true,
+      },
     });
     await expect(handler({ query: "hello" })).resolves.toEqual({
       isError: false,
       structuredContent: {
-        echoed: "hello"
+        echoed: "hello",
       },
       content: [
         {
           type: "text",
-          text: JSON.stringify({ echoed: "hello" })
-        }
-      ]
+          text: JSON.stringify({ echoed: "hello" }),
+        },
+      ],
     });
   });
 
@@ -58,8 +58,8 @@ describe("registerToolDefinitions", () => {
         inputSchema: {},
         execute: async () => {
           throw new Error("broken");
-        }
-      }
+        },
+      },
     ];
 
     registerToolDefinitions(server as never, definitions);
@@ -69,17 +69,17 @@ describe("registerToolDefinitions", () => {
       isError: true,
       structuredContent: {
         success: false,
-        error: "broken"
+        error: "broken",
       },
       content: [
         {
           type: "text",
           text: JSON.stringify({
             success: false,
-            error: "broken"
-          })
-        }
-      ]
+            error: "broken",
+          }),
+        },
+      ],
     });
   });
 });

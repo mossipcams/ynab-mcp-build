@@ -6,16 +6,19 @@ import {
   filterActiveTransactions,
   mapTransactionRecord,
   milliunitsToDollars,
-  sumSubtransactionAmounts
+  sumSubtransactionAmounts,
 } from "../../../src/platform/ynab/mappers.js";
 
 describe("ynab mappers", () => {
   it("round-trips integer dollar amounts through milliunits", () => {
     // DEFECT: amount conversion can drift and silently corrupt balances when values cross mapper boundaries.
     fc.assert(
-      fc.property(fc.integer({ min: -1_000_000_000, max: 1_000_000_000 }), (amount) => {
-        expect(milliunitsToDollars(dollarsToMilliunits(amount))).toBe(amount);
-      })
+      fc.property(
+        fc.integer({ min: -1_000_000_000, max: 1_000_000_000 }),
+        (amount) => {
+          expect(milliunitsToDollars(dollarsToMilliunits(amount))).toBe(amount);
+        },
+      ),
     );
   });
 
@@ -23,15 +26,24 @@ describe("ynab mappers", () => {
     // DEFECT: subtransaction aggregation can become order-sensitive and break split-transaction accounting.
     fc.assert(
       fc.property(
-        fc.array(fc.integer({ min: -1_000_000, max: 1_000_000 }), { minLength: 1, maxLength: 20 }),
+        fc.array(fc.integer({ min: -1_000_000, max: 1_000_000 }), {
+          minLength: 1,
+          maxLength: 20,
+        }),
         (amounts) => {
-          const forward = sumSubtransactionAmounts(amounts.map((amount) => ({ amount })));
-          const reversed = sumSubtransactionAmounts([...amounts].reverse().map((amount) => ({ amount })));
+          const forward = sumSubtransactionAmounts(
+            amounts.map((amount) => ({ amount })),
+          );
+          const reversed = sumSubtransactionAmounts(
+            [...amounts].reverse().map((amount) => ({ amount })),
+          );
 
-          expect(forward).toBe(amounts.reduce((sum, amount) => sum + amount, 0));
+          expect(forward).toBe(
+            amounts.reduce((sum, amount) => sum + amount, 0),
+          );
           expect(reversed).toBe(forward);
-        }
-      )
+        },
+      ),
     );
   });
 
@@ -42,14 +54,14 @@ describe("ynab mappers", () => {
         id: "txn-active",
         date: "2026-04-01",
         amount: -1000,
-        deleted: false
+        deleted: false,
       }),
       mapTransactionRecord({
         id: "txn-deleted",
         date: "2026-04-02",
         amount: -2000,
-        deleted: true
-      })
+        deleted: true,
+      }),
     ]);
 
     expect(transactions).toHaveLength(1);
@@ -63,7 +75,7 @@ describe("ynab mappers", () => {
       date: "2026-04-03",
       amount: -5000,
       deleted: false,
-      transfer_account_id: "account-savings"
+      transfer_account_id: "account-savings",
     });
 
     expect(transaction.transferAccountId).toBe("account-savings");

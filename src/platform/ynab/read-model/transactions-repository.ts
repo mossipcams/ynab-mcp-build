@@ -59,7 +59,10 @@ export type TransactionSearchResult = {
   totalCount: number;
 };
 
-export type TransactionSummaryInput = Omit<SearchTransactionsInput, "limit" | "offset" | "sort"> & {
+export type TransactionSummaryInput = Omit<
+  SearchTransactionsInput,
+  "limit" | "offset" | "sort"
+> & {
   topN?: number;
 };
 
@@ -122,7 +125,9 @@ function orderByClause(sort: SearchTransactionsInput["sort"]) {
   }
 }
 
-function buildSearchWhere(input: Omit<SearchTransactionsInput, "limit" | "offset" | "sort">) {
+function buildSearchWhere(
+  input: Omit<SearchTransactionsInput, "limit" | "offset" | "sort">,
+) {
   const where = ["plan_id = ?"];
   const params: Array<string | number> = [input.planId];
 
@@ -186,11 +191,14 @@ function buildSearchWhere(input: Omit<SearchTransactionsInput, "limit" | "offset
 
   return {
     params,
-    whereClause: where.join(" AND ")
+    whereClause: where.join(" AND "),
   };
 }
 
-async function runBatch(database: D1Database, statements: D1PreparedStatement[]): Promise<void> {
+async function runBatch(
+  database: D1Database,
+  statements: D1PreparedStatement[],
+): Promise<void> {
   for (let index = 0; index < statements.length; index += D1_BATCH_SIZE) {
     await database.batch(statements.slice(index, index + D1_BATCH_SIZE));
   }
@@ -253,7 +261,7 @@ export function createTransactionsRepository(database: D1Database) {
                debt_transaction_type = excluded.debt_transaction_type,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -280,10 +288,12 @@ export function createTransactionsRepository(database: D1Database) {
             transaction.debt_transaction_type ?? null,
             transaction.deleted ? 1 : 0,
             input.syncedAt,
-            input.syncedAt
+            input.syncedAt,
           );
 
-        const subtransactionStatements = (transaction.subtransactions ?? []).map((subtransaction) =>
+        const subtransactionStatements = (
+          transaction.subtransactions ?? []
+        ).map((subtransaction) =>
           database
             .prepare(
               `INSERT INTO ynab_subtransactions (
@@ -314,7 +324,7 @@ export function createTransactionsRepository(database: D1Database) {
                  transfer_transaction_id = excluded.transfer_transaction_id,
                  deleted = excluded.deleted,
                  synced_at = excluded.synced_at,
-                 updated_at = excluded.updated_at`
+                 updated_at = excluded.updated_at`,
             )
             .bind(
               input.planId,
@@ -330,8 +340,8 @@ export function createTransactionsRepository(database: D1Database) {
               subtransaction.transfer_transaction_id ?? null,
               subtransaction.deleted ? 1 : 0,
               input.syncedAt,
-              input.syncedAt
-            )
+              input.syncedAt,
+            ),
         );
 
         return [transactionStatement, ...subtransactionStatements];
@@ -341,17 +351,21 @@ export function createTransactionsRepository(database: D1Database) {
 
       return {
         rowsUpserted: input.transactions.length,
-        rowsDeleted: input.transactions.filter((transaction) => transaction.deleted).length
+        rowsDeleted: input.transactions.filter(
+          (transaction) => transaction.deleted,
+        ).length,
       };
     },
 
-    async searchTransactions(input: SearchTransactionsInput): Promise<TransactionSearchResult> {
+    async searchTransactions(
+      input: SearchTransactionsInput,
+    ): Promise<TransactionSearchResult> {
       const search = buildSearchWhere(input);
       const countResult = await database
         .prepare(
           `SELECT COUNT(*) AS count
            FROM ynab_transactions
-           WHERE ${search.whereClause}`
+           WHERE ${search.whereClause}`,
         )
         .bind(...search.params)
         .all<TransactionCountRow>();
@@ -384,18 +398,20 @@ export function createTransactionsRepository(database: D1Database) {
            FROM ynab_transactions
            WHERE ${search.whereClause}
            ORDER BY ${orderByClause(input.sort)}
-           LIMIT ? OFFSET ?`
+           LIMIT ? OFFSET ?`,
         )
         .bind(...rowParams)
         .all<TransactionSearchRow>();
 
       return {
         rows: result.results ?? [],
-        totalCount: countResult.results?.[0]?.count ?? 0
+        totalCount: countResult.results?.[0]?.count ?? 0,
       };
     },
 
-    async summarizeTransactions(input: TransactionSummaryInput): Promise<TransactionSummaryResult> {
+    async summarizeTransactions(
+      input: TransactionSummaryInput,
+    ): Promise<TransactionSummaryResult> {
       const search = buildSearchWhere(input);
       const topN = Math.max(input.topN ?? 5, 1);
       const totalsResult = await database
@@ -403,7 +419,7 @@ export function createTransactionsRepository(database: D1Database) {
           `SELECT COALESCE(SUM(CASE WHEN amount_milliunits >= 0 THEN amount_milliunits ELSE 0 END), 0) AS inflow_milliunits,
                   COALESCE(SUM(CASE WHEN amount_milliunits < 0 THEN -amount_milliunits ELSE 0 END), 0) AS outflow_milliunits
            FROM ynab_transactions
-           WHERE ${search.whereClause}`
+           WHERE ${search.whereClause}`,
         )
         .bind(...search.params)
         .all<TransactionTotalsRow>();
@@ -417,7 +433,7 @@ export function createTransactionsRepository(database: D1Database) {
            WHERE ${search.whereClause} AND amount_milliunits < 0
            GROUP BY category_id, COALESCE(category_name, 'Uncategorized')
            ORDER BY amount_milliunits DESC, name ASC
-           LIMIT ?`
+           LIMIT ?`,
         )
         .bind(...search.params, topN)
         .all<TransactionRollupRow>();
@@ -431,7 +447,7 @@ export function createTransactionsRepository(database: D1Database) {
            WHERE ${search.whereClause} AND amount_milliunits < 0
            GROUP BY payee_id, COALESCE(payee_name, 'Unknown Payee')
            ORDER BY amount_milliunits DESC, name ASC
-           LIMIT ?`
+           LIMIT ?`,
         )
         .bind(...search.params, topN)
         .all<TransactionRollupRow>();
@@ -440,21 +456,21 @@ export function createTransactionsRepository(database: D1Database) {
       return {
         totals: {
           inflowMilliunits: totals?.inflow_milliunits ?? 0,
-          outflowMilliunits: totals?.outflow_milliunits ?? 0
+          outflowMilliunits: totals?.outflow_milliunits ?? 0,
         },
         topCategories: (categoryResult.results ?? []).map((row) => ({
           ...(row.category_id ? { id: row.category_id } : {}),
           amountMilliunits: row.amount_milliunits ?? 0,
           name: row.name ?? "Uncategorized",
-          transactionCount: row.transaction_count
+          transactionCount: row.transaction_count,
         })),
         topPayees: (payeeResult.results ?? []).map((row) => ({
           ...(row.payee_id ? { id: row.payee_id } : {}),
           amountMilliunits: row.amount_milliunits ?? 0,
           name: row.name ?? "Unknown Payee",
-          transactionCount: row.transaction_count
-        }))
+          transactionCount: row.transaction_count,
+        })),
       };
-    }
+    },
   };
 }

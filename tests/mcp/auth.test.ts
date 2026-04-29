@@ -5,7 +5,7 @@ import {
   fetchWorker,
   issueToken,
   MCP_ORIGIN,
-  MCP_RESOURCE
+  MCP_RESOURCE,
 } from "../helpers/oauth-provider.js";
 
 function createToolListRequest(headers?: HeadersInit) {
@@ -14,14 +14,14 @@ function createToolListRequest(headers?: HeadersInit) {
     headers: {
       accept: "application/json, text/event-stream",
       "content-type": "application/json",
-      ...headers
+      ...headers,
     },
     body: JSON.stringify({
       id: 1,
       jsonrpc: "2.0",
       method: "tools/list",
-      params: {}
-    })
+      params: {},
+    }),
   });
 }
 
@@ -31,37 +31,48 @@ describe("mcp oauth provider auth", () => {
       new Request(MCP_RESOURCE, {
         method: "GET",
         headers: {
-          accept: "text/event-stream"
-        }
+          accept: "text/event-stream",
+        },
       }),
-      createOAuthEnv()
+      createOAuthEnv(),
     );
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("content-type")).not.toContain("text/event-stream");
-    expect(response.headers.get("www-authenticate")).toContain('Bearer realm="OAuth"');
+    expect(response.headers.get("content-type")).not.toContain(
+      "text/event-stream",
+    );
     expect(response.headers.get("www-authenticate")).toContain(
-      `resource_metadata="${MCP_ORIGIN}/.well-known/oauth-protected-resource/mcp"`
+      'Bearer realm="OAuth"',
+    );
+    expect(response.headers.get("www-authenticate")).toContain(
+      `resource_metadata="${MCP_ORIGIN}/.well-known/oauth-protected-resource/mcp"`,
     );
   });
 
   it("rejects unauthenticated MCP JSON-RPC requests at the provider boundary", async () => {
-    const response = await fetchWorker(createToolListRequest(), createOAuthEnv());
+    const response = await fetchWorker(
+      createToolListRequest(),
+      createOAuthEnv(),
+    );
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("www-authenticate")).toContain('Bearer realm="OAuth"');
+    expect(response.headers.get("www-authenticate")).toContain(
+      'Bearer realm="OAuth"',
+    );
   });
 
   it("rejects random bearer tokens at the provider boundary", async () => {
     const response = await fetchWorker(
       createToolListRequest({
-        authorization: "Bearer not-a-provider-token"
+        authorization: "Bearer not-a-provider-token",
       }),
-      createOAuthEnv()
+      createOAuthEnv(),
     );
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
+    expect(response.headers.get("www-authenticate")).toContain(
+      'error="invalid_token"',
+    );
   });
 
   it("allows MCP requests with a provider-issued access token", async () => {
@@ -69,9 +80,9 @@ describe("mcp oauth provider auth", () => {
     const { accessToken } = await issueToken(env);
     const response = await fetchWorker(
       createToolListRequest({
-        authorization: `Bearer ${accessToken}`
+        authorization: `Bearer ${accessToken}`,
       }),
-      env
+      env,
     );
 
     expect(response.status).toBe(200);

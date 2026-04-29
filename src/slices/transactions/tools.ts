@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import type { YnabClient } from "../../platform/ynab/client.js";
-import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
+import {
+  defineTool,
+  type SliceToolDefinition,
+} from "../../shared/tool-definition.js";
 import {
   amountFilterSchema,
   clearedStatusSchema,
@@ -12,7 +15,7 @@ import {
   paginatedProjectionSchema,
   paginationSchema,
   planIdSchema,
-  requiredIdSchema
+  requiredIdSchema,
 } from "../../shared/tool-inputs.js";
 import {
   getTransaction,
@@ -23,43 +26,61 @@ import {
   getTransactionsByPayee,
   listTransactions,
   listScheduledTransactions,
-  searchTransactions
+  searchTransactions,
 } from "./service.js";
 
-const transactionFields = ["date", "amount", "payee_name", "category_name", "account_name", "approved", "cleared"] as const;
-const sortableValues = ["date_asc", "date_desc", "amount_asc", "amount_desc"] as const;
+const transactionFields = [
+  "date",
+  "amount",
+  "payee_name",
+  "category_name",
+  "account_name",
+  "approved",
+  "cleared",
+] as const;
+const sortableValues = [
+  "date_asc",
+  "date_desc",
+  "amount_asc",
+  "amount_desc",
+] as const;
 const scheduledTransactionFields = [
   "date_first",
   "date_next",
   "amount",
   "payee_name",
   "category_name",
-  "account_name"
+  "account_name",
 ] as const;
 
-export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceToolDefinition[] {
+export function getTransactionToolDefinitions(
+  ynabClient: YnabClient,
+): SliceToolDefinition[] {
   return [
     defineTool({
       name: "ynab_list_transactions",
       title: "List YNAB Transactions",
-      description: "Lists YNAB transactions with optional pagination and compact field projection. Use only when the user explicitly asks for raw transaction browsing.",
+      description:
+        "Lists YNAB transactions with optional pagination and compact field projection. Use only when the user explicitly asks for raw transaction browsing.",
       inputSchema: paginatedProjectionSchema(transactionFields),
-      execute: async (input) => listTransactions(ynabClient, input)
+      execute: async (input) => listTransactions(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_transaction",
       title: "Get YNAB Transaction",
-      description: "Returns a compact summary for a single individual transaction. Use for exact transaction inspection after a drilldown.",
+      description:
+        "Returns a compact summary for a single individual transaction. Use for exact transaction inspection after a drilldown.",
       inputSchema: {
         ...planIdSchema,
-        transactionId: requiredIdSchema
+        transactionId: requiredIdSchema,
       },
-      execute: async (input) => getTransaction(ynabClient, input)
+      execute: async (input) => getTransaction(ynabClient, input),
     }),
     defineTool({
       name: "ynab_search_transactions",
       title: "Search YNAB Transactions",
-      description: "Searches YNAB transactions with compact filters, rollups, projections, pagination, and sorting. Use for transaction detail or follow-up drilldowns.",
+      description:
+        "Searches YNAB transactions with compact filters, rollups, projections, pagination, and sorting. Use for transaction detail or follow-up drilldowns.",
       inputSchema: {
         ...planIdSchema,
         fromDate: dateFieldSchema.optional(),
@@ -76,78 +97,84 @@ export function getTransactionToolDefinitions(ynabClient: YnabClient): SliceTool
         ...paginationSchema,
         fields: fieldProjectionSchema(transactionFields),
         ...includeIdsSchema,
-        sort: z.enum(sortableValues).optional()
+        sort: z.enum(sortableValues).optional(),
       },
-      execute: async (input) => searchTransactions(ynabClient, input)
+      execute: async (input) => searchTransactions(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_transactions_by_month",
       title: "Get YNAB Transactions By Month",
-      description: "Lists transactions for a single plan month. Use for month-specific transaction drilldowns after a summary.",
+      description:
+        "Lists transactions for a single plan month. Use for month-specific transaction drilldowns after a summary.",
       inputSchema: {
         ...planIdSchema,
         month: monthFieldSchema,
         ...paginationSchema,
         fields: fieldProjectionSchema(transactionFields),
-        ...includeIdsSchema
+        ...includeIdsSchema,
       },
-      execute: async (input) => getTransactionsByMonth(ynabClient, input)
+      execute: async (input) => getTransactionsByMonth(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_transactions_by_account",
       title: "Get YNAB Transactions By Account",
-      description: "Lists transactions for a single account. Use only when the user explicitly asks for account-specific raw records.",
+      description:
+        "Lists transactions for a single account. Use only when the user explicitly asks for account-specific raw records.",
       inputSchema: {
         ...planIdSchema,
         accountId: requiredIdSchema,
         ...paginationSchema,
         fields: fieldProjectionSchema(transactionFields),
-        ...includeIdsSchema
+        ...includeIdsSchema,
       },
-      execute: async (input) => getTransactionsByAccount(ynabClient, input)
+      execute: async (input) => getTransactionsByAccount(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_transactions_by_category",
       title: "Get YNAB Transactions By Category",
-      description: "Lists transactions for a single category. Use only when the user explicitly asks for category-specific raw records.",
+      description:
+        "Lists transactions for a single category. Use only when the user explicitly asks for category-specific raw records.",
       inputSchema: {
         ...planIdSchema,
         categoryId: requiredIdSchema,
         ...paginationSchema,
         fields: fieldProjectionSchema(transactionFields),
-        ...includeIdsSchema
+        ...includeIdsSchema,
       },
-      execute: async (input) => getTransactionsByCategory(ynabClient, input)
+      execute: async (input) => getTransactionsByCategory(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_transactions_by_payee",
       title: "Get YNAB Transactions By Payee",
-      description: "Lists transactions for a single payee. Use only when the user explicitly asks for payee-specific raw records.",
+      description:
+        "Lists transactions for a single payee. Use only when the user explicitly asks for payee-specific raw records.",
       inputSchema: {
         ...planIdSchema,
         payeeId: requiredIdSchema,
         ...paginationSchema,
         fields: fieldProjectionSchema(transactionFields),
-        ...includeIdsSchema
+        ...includeIdsSchema,
       },
-      execute: async (input) => getTransactionsByPayee(ynabClient, input)
+      execute: async (input) => getTransactionsByPayee(ynabClient, input),
     }),
     defineTool({
       name: "ynab_list_scheduled_transactions",
       title: "List YNAB Scheduled Transactions",
-      description: "Lists scheduled transactions with optional pagination and compact field projection. Use only when the user explicitly asks for raw scheduled records.",
+      description:
+        "Lists scheduled transactions with optional pagination and compact field projection. Use only when the user explicitly asks for raw scheduled records.",
       inputSchema: paginatedProjectionSchema(scheduledTransactionFields),
-      execute: async (input) => listScheduledTransactions(ynabClient, input)
+      execute: async (input) => listScheduledTransactions(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_scheduled_transaction",
       title: "Get YNAB Scheduled Transaction",
-      description: "Returns a compact summary for a single scheduled transaction.",
+      description:
+        "Returns a compact summary for a single scheduled transaction.",
       inputSchema: {
         ...planIdSchema,
-        scheduledTransactionId: requiredIdSchema
+        scheduledTransactionId: requiredIdSchema,
       },
-      execute: async (input) => getScheduledTransaction(ynabClient, input)
-    })
+      execute: async (input) => getScheduledTransaction(ynabClient, input),
+    }),
   ];
 }

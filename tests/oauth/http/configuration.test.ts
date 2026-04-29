@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createOAuthEnv,
   fetchWorker,
-  MCP_ORIGIN
+  MCP_ORIGIN,
 } from "../../helpers/oauth-provider.js";
 
 describe("oauth provider configuration", () => {
@@ -11,8 +11,8 @@ describe("oauth provider configuration", () => {
     const response = await fetchWorker(
       new Request(`${MCP_ORIGIN}/.well-known/oauth-authorization-server`),
       createOAuthEnv({
-        MCP_OAUTH_ENABLED: "false"
-      } as Partial<Env>)
+        MCP_OAUTH_ENABLED: "false",
+      } as Partial<Env>),
     );
 
     expect(response.status).toBe(404);
@@ -23,14 +23,14 @@ describe("oauth provider configuration", () => {
       new Request(`${MCP_ORIGIN}/.well-known/oauth-authorization-server`),
       createOAuthEnv({
         CF_ACCESS_AUD: "access-app-audience",
-        CF_ACCESS_TEAM_DOMAIN: "https://access-team.example.com"
-      } as Partial<Env>)
+        CF_ACCESS_TEAM_DOMAIN: "https://access-team.example.com",
+      } as Partial<Env>),
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       issuer: MCP_ORIGIN,
-      registration_endpoint: `${MCP_ORIGIN}/register`
+      registration_endpoint: `${MCP_ORIGIN}/register`,
     });
   });
 });

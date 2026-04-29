@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   createDurableObjectOAuthKvNamespace,
   createDurableObjectOAuthStore,
-  type AtomicOAuthKvNamespace
+  type AtomicOAuthKvNamespace,
 } from "../../src/durable-objects/oauth-state-client.js";
 import {
   createMemoryOAuthStateStorage,
-  handleOAuthStateRequest
+  handleOAuthStateRequest,
 } from "../../src/durable-objects/oauth-state-handler.js";
 
 function createStore() {
@@ -15,10 +15,11 @@ function createStore() {
 
   return createDurableObjectOAuthStore({
     async fetch(input, init) {
-      const request = input instanceof Request ? input : new Request(input, init);
+      const request =
+        input instanceof Request ? input : new Request(input, init);
 
       return handleOAuthStateRequest(storage, request);
-    }
+    },
   });
 }
 
@@ -27,10 +28,11 @@ function createKvNamespace() {
 
   return createDurableObjectOAuthKvNamespace({
     async fetch(input, init) {
-      const request = input instanceof Request ? input : new Request(input, init);
+      const request =
+        input instanceof Request ? input : new Request(input, init);
 
       return handleOAuthStateRequest(storage, request);
-    }
+    },
   }) as AtomicOAuthKvNamespace;
 }
 
@@ -46,7 +48,7 @@ describe("oauth state store contract", () => {
       redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
       responseTypes: ["code"],
       scopes: ["mcp"],
-      tokenEndpointAuthMethod: "none"
+      tokenEndpointAuthMethod: "none",
     });
     await store.issueAccessToken({
       audience: "https://mcp.example.com/mcp",
@@ -56,16 +58,16 @@ describe("oauth state store contract", () => {
       issuer: "https://mcp.example.com/",
       jti: "jti-1",
       scopes: ["mcp"],
-      token: "access-1"
+      token: "access-1",
     });
 
     await expect(store.getRegisteredClient("client-1")).resolves.toMatchObject({
       clientId: "client-1",
-      scopes: ["mcp"]
+      scopes: ["mcp"],
     });
     await expect(store.getAccessToken("access-1")).resolves.toMatchObject({
       token: "access-1",
-      clientId: "client-1"
+      clientId: "client-1",
     });
   });
 
@@ -81,16 +83,16 @@ describe("oauth state store contract", () => {
       resource: "https://mcp.example.com/mcp",
       redirectUri: "https://claude.ai/api/mcp/auth_callback",
       scopes: ["mcp"],
-      used: false
+      used: false,
     });
 
     await expect(store.getAuthorizationCode("code-1")).resolves.toMatchObject({
       code: "code-1",
-      used: false
+      used: false,
     });
     await expect(store.useAuthorizationCode("code-1")).resolves.toMatchObject({
       code: "code-1",
-      used: false
+      used: false,
     });
     await expect(store.useAuthorizationCode("code-1")).resolves.toBeUndefined();
   });
@@ -107,14 +109,16 @@ describe("oauth state store contract", () => {
       resource: "https://mcp.example.com/mcp",
       redirectUri: "https://claude.ai/api/mcp/auth_callback",
       scopes: ["mcp"],
-      used: false
+      used: false,
     });
 
     const results = await Promise.all([
       store.useAuthorizationCode("code-parallel-1"),
-      store.useAuthorizationCode("code-parallel-1")
+      store.useAuthorizationCode("code-parallel-1"),
     ]);
-    const successfulRedemptions = results.filter((entry) => entry?.code === "code-parallel-1");
+    const successfulRedemptions = results.filter(
+      (entry) => entry?.code === "code-parallel-1",
+    );
     const rejectedRedemptions = results.filter((entry) => entry === undefined);
 
     expect(successfulRedemptions).toHaveLength(1);
@@ -132,7 +136,7 @@ describe("oauth state store contract", () => {
       resource: "https://mcp.example.com/mcp",
       scopes: ["mcp"],
       token: "refresh-1",
-      used: false
+      used: false,
     });
 
     await expect(store.rotateRefreshToken("refresh-1")).resolves.toEqual({
@@ -143,15 +147,15 @@ describe("oauth state store contract", () => {
         resource: "https://mcp.example.com/mcp",
         scopes: ["mcp"],
         token: "refresh-1",
-        used: false
+        used: false,
       },
-      status: "rotated"
+      status: "rotated",
     });
     await expect(store.rotateRefreshToken("refresh-1")).resolves.toMatchObject({
-      status: "replay_detected"
+      status: "replay_detected",
     });
     await expect(store.rotateRefreshToken("refresh-1")).resolves.toMatchObject({
-      status: "replay_detected"
+      status: "replay_detected",
     });
   });
 
@@ -166,15 +170,17 @@ describe("oauth state store contract", () => {
       resource: "https://mcp.example.com/mcp",
       scopes: ["mcp"],
       token: "refresh-parallel-1",
-      used: false
+      used: false,
     });
 
     const results = await Promise.all([
       store.rotateRefreshToken("refresh-parallel-1"),
-      store.rotateRefreshToken("refresh-parallel-1")
+      store.rotateRefreshToken("refresh-parallel-1"),
     ]);
     const rotated = results.filter((entry) => entry.status === "rotated");
-    const replayDetected = results.filter((entry) => entry.status === "replay_detected");
+    const replayDetected = results.filter(
+      (entry) => entry.status === "replay_detected",
+    );
 
     expect(rotated).toHaveLength(1);
     expect(replayDetected).toHaveLength(1);
@@ -184,11 +190,14 @@ describe("oauth state store contract", () => {
     // DEFECT: Access OIDC pending auth state can be reused if consume is implemented as separate get and delete calls.
     const kv = createKvNamespace();
 
-    await kv.put("pending-access-auth-1", JSON.stringify({ clientId: "client-1" }));
+    await kv.put(
+      "pending-access-auth-1",
+      JSON.stringify({ clientId: "client-1" }),
+    );
 
     const results = await Promise.all([
       kv.consume("pending-access-auth-1", { type: "json" }),
-      kv.consume("pending-access-auth-1", { type: "json" })
+      kv.consume("pending-access-auth-1", { type: "json" }),
     ]);
     const winners = results.filter((entry) => entry !== null);
     const losers = results.filter((entry) => entry === null);

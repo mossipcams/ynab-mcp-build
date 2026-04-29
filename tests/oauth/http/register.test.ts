@@ -6,7 +6,7 @@ import {
   MCP_ORIGIN,
   MCP_RESOURCE,
   REDIRECT_URI,
-  registerClient
+  registerClient,
 } from "../../helpers/oauth-provider.js";
 
 describe("oauth http register and metadata", () => {
@@ -22,14 +22,14 @@ describe("oauth http register and metadata", () => {
       grant_types: ["authorization_code", "refresh_token"],
       redirect_uris: [REDIRECT_URI],
       response_types: ["code"],
-      token_endpoint_auth_method: "none"
+      token_endpoint_auth_method: "none",
     });
   });
 
   it("publishes the authorization server endpoints MCP clients need", async () => {
     const response = await fetchWorker(
       new Request(`${MCP_ORIGIN}/.well-known/oauth-authorization-server`),
-      createOAuthEnv()
+      createOAuthEnv(),
     );
 
     expect(response.status).toBe(200);
@@ -38,21 +38,21 @@ describe("oauth http register and metadata", () => {
       code_challenge_methods_supported: ["S256"],
       registration_endpoint: `${MCP_ORIGIN}/register`,
       scopes_supported: ["mcp"],
-      token_endpoint: `${MCP_ORIGIN}/token`
+      token_endpoint: `${MCP_ORIGIN}/token`,
     });
   });
 
   it("publishes MCP protected-resource metadata for bearer-token clients", async () => {
     const response = await fetchWorker(
       new Request(`${MCP_ORIGIN}/.well-known/oauth-protected-resource/mcp`),
-      createOAuthEnv()
+      createOAuthEnv(),
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       authorization_servers: [MCP_ORIGIN],
       bearer_methods_supported: ["header"],
-      resource: MCP_RESOURCE
+      resource: MCP_RESOURCE,
     });
   });
 });

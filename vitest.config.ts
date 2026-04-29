@@ -13,7 +13,7 @@ const unitIncludes = [
   "tests/platform/ynab/schemas.test.ts",
   "tests/shared/**/*.test.ts",
   "src/slices/**/*.spec.ts",
-  "tests/slices/**/{service,mappers,schemas,helpers}.test.ts"
+  "tests/slices/**/{service,mappers,schemas,helpers}.test.ts",
 ];
 
 const workersIncludes = [
@@ -27,7 +27,7 @@ const workersIncludes = [
   "tests/integration/**/*.test.ts",
   "tests/mcp/**/*.test.ts",
   "tests/oauth/http/**/*.test.ts",
-  "tests/security/**/*.test.ts"
+  "tests/security/**/*.test.ts",
 ];
 
 export default defineConfig({
@@ -37,22 +37,22 @@ export default defineConfig({
       defineProject({
         test: {
           include: unitIncludes,
-          name: "unit"
-        }
+          name: "unit",
+        },
       }),
       defineProject({
         plugins: [
           cloudflareTest({
             wrangler: {
-              configPath: "./wrangler.jsonc"
-            }
-          })
+              configPath: "./wrangler.jsonc",
+            },
+          }),
         ],
         test: {
           include: workersIncludes,
-          name: "workers"
-        }
-      })
-    ]
-  }
+          name: "workers",
+        },
+      }),
+    ],
+  },
 });

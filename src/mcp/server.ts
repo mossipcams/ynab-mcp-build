@@ -6,11 +6,11 @@ import { registerSlices } from "./register-slices.js";
 
 export function createMcpServer(
   env: AppEnv,
-  toolDefinitions: SliceToolDefinition[]
+  toolDefinitions: SliceToolDefinition[],
 ) {
   const server = new McpServer({
     name: env.mcpServerName,
-    version: env.mcpServerVersion
+    version: env.mcpServerVersion,
   });
 
   registerSlices(server, toolDefinitions);

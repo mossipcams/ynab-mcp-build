@@ -22,7 +22,7 @@ describe("mutation test tooling", () => {
     expect(strykerConfig.thresholds).toEqual({
       break: 86,
       high: 86,
-      low: 86
+      low: 86,
     });
     expect(strykerConfig.mutate).toEqual([
       "src/mcp/discovery.ts",
@@ -36,7 +36,7 @@ describe("mutation test tooling", () => {
       "src/shared/tool-definition.ts",
       "src/slices/db-money-movements/service.ts",
       "src/slices/financial-health/helpers.ts",
-      "src/slices/meta/service.ts"
+      "src/slices/meta/service.ts",
     ]);
   });
 
@@ -60,7 +60,7 @@ describe("mutation test tooling", () => {
       "tests/platform/ynab/mappers.test.ts",
       "tests/platform/ynab/schemas.test.ts",
       "tests/shared/**/*.test.ts",
-      "tests/slices/**/{service,mappers,schemas,helpers}.test.ts"
+      "tests/slices/**/{service,mappers,schemas,helpers}.test.ts",
     ]);
   });
 });

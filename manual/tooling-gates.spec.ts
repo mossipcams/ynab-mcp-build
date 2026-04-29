@@ -19,7 +19,7 @@ describe("manual resilience tooling gates", () => {
     const chaosConfig = readRootFile("vitest.chaos.config.ts");
 
     expect(packageJson.scripts).toMatchObject({
-      "test:chaos": "vitest run --config vitest.chaos.config.ts"
+      "test:chaos": "vitest run --config vitest.chaos.config.ts",
     });
     expect(chaosConfig).toContain('"src/chaos/**/*.spec.ts"');
     expect(chaosConfig).toContain("cloudflareTest");
@@ -41,7 +41,7 @@ describe("manual resilience tooling gates", () => {
     expect(strykerConfig.thresholds).toEqual({
       break: 86,
       high: 86,
-      low: 86
+      low: 86,
     });
     expect(strykerConfig.mutate).toEqual([
       "src/mcp/discovery.ts",
@@ -55,7 +55,7 @@ describe("manual resilience tooling gates", () => {
       "src/shared/tool-definition.ts",
       "src/slices/db-money-movements/service.ts",
       "src/slices/financial-health/helpers.ts",
-      "src/slices/meta/service.ts"
+      "src/slices/meta/service.ts",
     ]);
   });
 });

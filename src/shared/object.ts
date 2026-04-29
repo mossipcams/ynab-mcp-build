@@ -10,6 +10,6 @@ export function compactObject(input: Record<string, unknown>) {
       }
 
       return true;
-    })
+    }),
   );
 }

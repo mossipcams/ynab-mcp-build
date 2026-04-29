@@ -5,7 +5,7 @@ import {
   createOAuthEnv,
   exchangeCode,
   exchangeRefreshToken,
-  registerClient
+  registerClient,
 } from "../../helpers/oauth-provider.js";
 
 describe("oauth http token", () => {
@@ -14,12 +14,16 @@ describe("oauth http token", () => {
     const { registration } = await registerClient(env);
     const { code } = await authorizeClient(env, registration.client_id);
 
-    const { payload, response } = await exchangeCode(env, registration.client_id, code ?? "");
+    const { payload, response } = await exchangeCode(
+      env,
+      registration.client_id,
+      code ?? "",
+    );
 
     expect(response.status).toBe(200);
     expect(payload).toMatchObject({
       scope: "mcp",
-      token_type: "bearer"
+      token_type: "bearer",
     });
     expect(payload.access_token).toEqual(expect.any(String));
     expect(payload.access_token).not.toHaveLength(0);
@@ -35,14 +39,14 @@ describe("oauth http token", () => {
     const refreshed = await exchangeRefreshToken(
       env,
       registration.client_id,
-      initial.payload.refresh_token ?? ""
+      initial.payload.refresh_token ?? "",
     );
 
     expect(initial.response.status).toBe(200);
     expect(refreshed.response.status).toBe(200);
     expect(refreshed.payload).toMatchObject({
       scope: "mcp",
-      token_type: "bearer"
+      token_type: "bearer",
     });
     expect(refreshed.payload.access_token).toEqual(expect.any(String));
   });

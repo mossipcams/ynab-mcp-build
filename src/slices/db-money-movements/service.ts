@@ -1,8 +1,12 @@
 import type {
   MoneyMovementGroupRow,
-  MoneyMovementRow
+  MoneyMovementRow,
 } from "../../platform/ynab/read-model/money-movements-repository.js";
-import { formatAmountMilliunits, paginateEntries, shouldPaginateEntries } from "../../shared/collections.js";
+import {
+  formatAmountMilliunits,
+  paginateEntries,
+  shouldPaginateEntries,
+} from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 
 export type DbMoneyMovementsInput = {
@@ -18,8 +22,14 @@ export type DbMoneyMovementsByMonthInput = DbMoneyMovementsInput & {
 type DbMoneyMovementsDependencies = {
   defaultPlanId?: string;
   moneyMovementsRepository: {
-    listMoneyMovementGroups(input: { planId: string; month?: string }): Promise<MoneyMovementGroupRow[]>;
-    listMoneyMovements(input: { planId: string; month?: string }): Promise<MoneyMovementRow[]>;
+    listMoneyMovementGroups(input: {
+      planId: string;
+      month?: string;
+    }): Promise<MoneyMovementGroupRow[]>;
+    listMoneyMovements(input: {
+      planId: string;
+      month?: string;
+    }): Promise<MoneyMovementRow[]>;
   };
 };
 
@@ -33,7 +43,9 @@ function resolvePlanId(input: { planId?: string }, defaultPlanId?: string) {
   const planId = defaultPlanId?.trim();
 
   if (!planId) {
-    throw new Error("planId is required when YNAB_DEFAULT_PLAN_ID is not configured.");
+    throw new Error(
+      "planId is required when YNAB_DEFAULT_PLAN_ID is not configured.",
+    );
   }
 
   return planId;
@@ -52,7 +64,7 @@ function toDisplayMoneyMovement(row: MoneyMovementRow) {
     to_category_id: row.to_category_id,
     to_category_name: row.to_category_name,
     money_movement_group_id: row.money_movement_group_id,
-    performed_by_user_id: row.performed_by_user_id
+    performed_by_user_id: row.performed_by_user_id,
   });
 }
 
@@ -65,7 +77,7 @@ function toDisplayMoneyMovementGroup(row: MoneyMovementGroupRow) {
     performed_by_user_id: row.performed_by_user_id,
     movement_count: row.movement_count,
     total_amount: formatAmountMilliunits(row.total_amount_milliunits),
-    total_amount_milliunits: row.total_amount_milliunits
+    total_amount_milliunits: row.total_amount_milliunits,
   });
 }
 
@@ -74,13 +86,13 @@ function buildCollectionResult<TEntry>(
   input: DbMoneyMovementsInput,
   entryKey: "money_movements" | "money_movement_groups",
   countKey: "movement_count" | "group_count",
-  extra: Record<string, unknown> = {}
+  extra: Record<string, unknown> = {},
 ) {
   if (!shouldPaginateEntries(entries, input)) {
     return {
       [entryKey]: entries,
       [countKey]: entries.length,
-      ...extra
+      ...extra,
     };
   }
 
@@ -90,59 +102,76 @@ function buildCollectionResult<TEntry>(
     [entryKey]: pagedEntries.entries,
     [countKey]: entries.length,
     ...pagedEntries.metadata,
-    ...extra
+    ...extra,
   };
 }
 
 export async function getDbMoneyMovements(
   dependencies: DbMoneyMovementsDependencies,
-  input: DbMoneyMovementsInput
+  input: DbMoneyMovementsInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const rows = await dependencies.moneyMovementsRepository.listMoneyMovements({ planId });
+  const rows = await dependencies.moneyMovementsRepository.listMoneyMovements({
+    planId,
+  });
 
-  return buildCollectionResult(rows.map(toDisplayMoneyMovement), input, "money_movements", "movement_count");
+  return buildCollectionResult(
+    rows.map(toDisplayMoneyMovement),
+    input,
+    "money_movements",
+    "movement_count",
+  );
 }
 
 export async function getDbMoneyMovementsByMonth(
   dependencies: DbMoneyMovementsDependencies,
-  input: DbMoneyMovementsByMonthInput
+  input: DbMoneyMovementsByMonthInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
   const rows = await dependencies.moneyMovementsRepository.listMoneyMovements({
     month: input.month,
-    planId
+    planId,
   });
 
-  return buildCollectionResult(rows.map(toDisplayMoneyMovement), input, "money_movements", "movement_count", {
-    month: input.month
-  });
+  return buildCollectionResult(
+    rows.map(toDisplayMoneyMovement),
+    input,
+    "money_movements",
+    "movement_count",
+    {
+      month: input.month,
+    },
+  );
 }
 
 export async function getDbMoneyMovementGroups(
   dependencies: DbMoneyMovementsDependencies,
-  input: DbMoneyMovementsInput
+  input: DbMoneyMovementsInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const rows = await dependencies.moneyMovementsRepository.listMoneyMovementGroups({ planId });
+  const rows =
+    await dependencies.moneyMovementsRepository.listMoneyMovementGroups({
+      planId,
+    });
 
   return buildCollectionResult(
     rows.map(toDisplayMoneyMovementGroup),
     input,
     "money_movement_groups",
-    "group_count"
+    "group_count",
   );
 }
 
 export async function getDbMoneyMovementGroupsByMonth(
   dependencies: DbMoneyMovementsDependencies,
-  input: DbMoneyMovementsByMonthInput
+  input: DbMoneyMovementsByMonthInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const rows = await dependencies.moneyMovementsRepository.listMoneyMovementGroups({
-    month: input.month,
-    planId
-  });
+  const rows =
+    await dependencies.moneyMovementsRepository.listMoneyMovementGroups({
+      month: input.month,
+      planId,
+    });
 
   return buildCollectionResult(
     rows.map(toDisplayMoneyMovementGroup),
@@ -150,7 +179,7 @@ export async function getDbMoneyMovementGroupsByMonth(
     "money_movement_groups",
     "group_count",
     {
-      month: input.month
-    }
+      month: input.month,
+    },
   );
 }

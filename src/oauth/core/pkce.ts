@@ -18,7 +18,10 @@ export async function createCodeChallenge(codeVerifier: string) {
   return toBase64Url(new Uint8Array(digest));
 }
 
-export async function verifyPkceCodeVerifier(codeVerifier: string, expectedChallenge: string) {
+export async function verifyPkceCodeVerifier(
+  codeVerifier: string,
+  expectedChallenge: string,
+) {
   const actualChallenge = await createCodeChallenge(codeVerifier);
 
   if (actualChallenge !== expectedChallenge) {

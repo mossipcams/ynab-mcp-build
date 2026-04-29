@@ -6,12 +6,12 @@ export function getMcpVersion(metadata: {
 }) {
   return {
     name: metadata.mcpServerName,
-    version: metadata.mcpServerVersion
+    version: metadata.mcpServerVersion,
   };
 }
 
 export async function getUser(ynabClient: YnabClient) {
   return {
-    user: await ynabClient.getUser()
+    user: await ynabClient.getUser(),
   };
 }

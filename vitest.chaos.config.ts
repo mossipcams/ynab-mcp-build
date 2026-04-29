@@ -5,13 +5,13 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: {
-        configPath: "./wrangler.jsonc"
-      }
-    })
+        configPath: "./wrangler.jsonc",
+      },
+    }),
   ],
   test: {
     globals: true,
     include: ["src/chaos/**/*.spec.ts"],
-    name: "chaos"
-  }
+    name: "chaos",
+  },
 });

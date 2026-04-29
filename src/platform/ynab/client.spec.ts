@@ -19,10 +19,10 @@ function transactionResponse() {
           id: "txn-1",
           payee_id: "payee-1",
           payee_name: "Market",
-          transfer_account_id: null
-        }
-      ]
-    }
+          transfer_account_id: null,
+        },
+      ],
+    },
   };
 }
 
@@ -31,19 +31,20 @@ describe("ynab scoped transaction client methods", () => {
     const client = createYnabClient({
       accessToken: "pat-secret",
       baseUrl: "https://api.ynab.com/v1",
-      fetchFn: async () => Response.json({
-        data: {
-          transactions: [
-            {
-              id: "txn-1"
-            }
-          ]
-        }
-      })
+      fetchFn: async () =>
+        Response.json({
+          data: {
+            transactions: [
+              {
+                id: "txn-1",
+              },
+            ],
+          },
+        }),
     });
 
     await expect(client.listTransactions("plan-1")).rejects.toThrow(
-      "YNAB API response did not match expected schema."
+      "YNAB API response did not match expected schema.",
     );
   });
 
@@ -56,7 +57,7 @@ describe("ynab scoped transaction client methods", () => {
         requests.push(input);
 
         return Response.json(transactionResponse());
-      }
+      },
     });
 
     await client.listTransactionsByAccount("plan-1", "account-1");
@@ -66,7 +67,7 @@ describe("ynab scoped transaction client methods", () => {
     expect(requests.map(String)).toEqual([
       "https://api.ynab.com/v1/plans/plan-1/accounts/account-1/transactions",
       "https://api.ynab.com/v1/plans/plan-1/categories/category-1/transactions",
-      "https://api.ynab.com/v1/plans/plan-1/payees/payee-1/transactions"
+      "https://api.ynab.com/v1/plans/plan-1/payees/payee-1/transactions",
     ]);
   });
 });
@@ -76,35 +77,43 @@ describe("ynab category client methods", () => {
     const client = createYnabClient({
       accessToken: "pat-secret",
       baseUrl: "https://api.ynab.com/v1",
-      fetchFn: async () => Response.json({
-        data: {
-          category: {
-            id: "category-1",
-            name: "Groceries",
-            hidden: false,
-            deleted: false,
-            balance: 12000,
-            goal_type: null,
-            goal_target: null
-          }
-        }
-      })
+      fetchFn: async () =>
+        Response.json({
+          data: {
+            category: {
+              id: "category-1",
+              name: "Groceries",
+              hidden: false,
+              deleted: false,
+              balance: 12000,
+              goal_type: null,
+              goal_target: null,
+            },
+          },
+        }),
     });
 
-    await expect(client.getCategory("plan-1", "category-1")).resolves.toMatchObject({
+    await expect(
+      client.getCategory("plan-1", "category-1"),
+    ).resolves.toMatchObject({
       id: "category-1",
-      name: "Groceries"
+      name: "Groceries",
     });
-    await expect(client.getMonthCategory("plan-1", "2026-04-01", "category-1")).resolves.toMatchObject({
+    await expect(
+      client.getMonthCategory("plan-1", "2026-04-01", "category-1"),
+    ).resolves.toMatchObject({
       id: "category-1",
-      name: "Groceries"
+      name: "Groceries",
     });
   });
 });
 
 describe("ynab client endpoint contracts", () => {
   it("uses encoded /plans endpoints for the plan-scoped client surface", async () => {
-    const requests: Array<{ input: string | URL | Request; init?: RequestInit }> = [];
+    const requests: Array<{
+      input: string | URL | Request;
+      init?: RequestInit;
+    }> = [];
     const client = createYnabClient({
       accessToken: "pat-secret",
       baseUrl: "https://api.ynab.com/v1/",
@@ -120,9 +129,9 @@ describe("ynab client endpoint contracts", () => {
                 name: "Plan",
                 accounts: [{ id: "account-1" }],
                 category_groups: [{ id: "group-1" }],
-                payees: [{ id: "payee-1" }]
-              }
-            }
+                payees: [{ id: "payee-1" }],
+              },
+            },
           });
         }
 
@@ -136,16 +145,16 @@ describe("ynab client endpoint contracts", () => {
                       deleted: false,
                       hidden: false,
                       id: "category-1",
-                      name: "Groceries"
-                    }
+                      name: "Groceries",
+                    },
                   ],
                   deleted: false,
                   hidden: false,
                   id: "group-1",
-                  name: "Everyday"
-                }
-              ]
-            }
+                  name: "Everyday",
+                },
+              ],
+            },
           });
         }
 
@@ -156,9 +165,9 @@ describe("ynab client endpoint contracts", () => {
                 balance: 12000,
                 hidden: false,
                 id: "category-1",
-                name: "Groceries"
-              }
-            }
+                name: "Groceries",
+              },
+            },
           });
         }
 
@@ -168,13 +177,13 @@ describe("ynab client endpoint contracts", () => {
               settings: {
                 currency_format: {
                   iso_code: "USD",
-                  decimal_digits: 2
+                  decimal_digits: 2,
                 },
                 date_format: {
-                  format: "MM/DD/YYYY"
-                }
-              }
-            }
+                  format: "MM/DD/YYYY",
+                },
+              },
+            },
           });
         }
 
@@ -186,10 +195,10 @@ describe("ynab client endpoint contracts", () => {
                   activity: -12000,
                   budgeted: 50000,
                   income: 100000,
-                  month: "2026-04-01"
-                }
-              ]
-            }
+                  month: "2026-04-01",
+                },
+              ],
+            },
           });
         }
 
@@ -203,12 +212,12 @@ describe("ynab client endpoint contracts", () => {
                     balance: 12000,
                     hidden: false,
                     id: "category-1",
-                    name: "Groceries"
-                  }
+                    name: "Groceries",
+                  },
                 ],
-                month: "2026-04-01"
-              }
-            }
+                month: "2026-04-01",
+              },
+            },
           });
         }
 
@@ -220,9 +229,9 @@ describe("ynab client endpoint contracts", () => {
                 closed: false,
                 id: "account-1",
                 name: "Checking",
-                type: "checking"
-              }
-            }
+                type: "checking",
+              },
+            },
           });
         }
 
@@ -233,8 +242,8 @@ describe("ynab client endpoint contracts", () => {
         if (url.includes("/transactions/txn%201")) {
           return Response.json({
             data: {
-              transaction: transactionResponse().data.transactions[0]
-            }
+              transaction: transactionResponse().data.transactions[0],
+            },
           });
         }
 
@@ -244,9 +253,9 @@ describe("ynab client endpoint contracts", () => {
               scheduled_transaction: {
                 amount: -45000,
                 date_first: "2026-04-01",
-                id: "scheduled-1"
-              }
-            }
+                id: "scheduled-1",
+              },
+            },
           });
         }
 
@@ -257,10 +266,10 @@ describe("ynab client endpoint contracts", () => {
                 {
                   amount: -45000,
                   date_first: "2026-04-01",
-                  id: "scheduled-1"
-                }
-              ]
-            }
+                  id: "scheduled-1",
+                },
+              ],
+            },
           });
         }
 
@@ -270,10 +279,10 @@ describe("ynab client endpoint contracts", () => {
               payee_locations: [
                 {
                   id: "location-1",
-                  payee_id: "payee-1"
-                }
-              ]
-            }
+                  payee_id: "payee-1",
+                },
+              ],
+            },
           });
         }
 
@@ -282,9 +291,9 @@ describe("ynab client endpoint contracts", () => {
             data: {
               payee: {
                 id: "payee-1",
-                name: "Market"
-              }
-            }
+                name: "Market",
+              },
+            },
           });
         }
 
@@ -294,10 +303,10 @@ describe("ynab client endpoint contracts", () => {
               payees: [
                 {
                   id: "payee-1",
-                  name: "Market"
-                }
-              ]
-            }
+                  name: "Market",
+                },
+              ],
+            },
           });
         }
 
@@ -306,9 +315,9 @@ describe("ynab client endpoint contracts", () => {
             data: {
               payee_location: {
                 id: "location-1",
-                payee_id: "payee-1"
-              }
-            }
+                payee_id: "payee-1",
+              },
+            },
           });
         }
 
@@ -318,66 +327,86 @@ describe("ynab client endpoint contracts", () => {
               payee_locations: [
                 {
                   id: "location-1",
-                  payee_id: "payee-1"
-                }
-              ]
-            }
+                  payee_id: "payee-1",
+                },
+              ],
+            },
           });
         }
 
         throw new Error(`Unexpected URL ${url}`);
-      }
+      },
     });
 
     await expect(client.getPlan("plan 1")).resolves.toMatchObject({
       accountCount: 1,
       categoryGroupCount: 1,
-      payeeCount: 1
+      payeeCount: 1,
     });
     await expect(client.listCategories("plan 1")).resolves.toHaveLength(1);
-    await expect(client.getCategory("plan 1", "category 1")).resolves.toMatchObject({
-      balance: 12000
+    await expect(
+      client.getCategory("plan 1", "category 1"),
+    ).resolves.toMatchObject({
+      balance: 12000,
     });
-    await expect(client.getMonthCategory("plan 1", "2026-04-01", "category 1")).resolves.toMatchObject({
-      balance: 12000
+    await expect(
+      client.getMonthCategory("plan 1", "2026-04-01", "category 1"),
+    ).resolves.toMatchObject({
+      balance: 12000,
     });
     await expect(client.getPlanSettings("plan 1")).resolves.toMatchObject({
       currencyFormat: {
-        isoCode: "USD"
+        isoCode: "USD",
       },
       dateFormat: {
-        format: "MM/DD/YYYY"
-      }
+        format: "MM/DD/YYYY",
+      },
     });
     await expect(client.listPlanMonths("plan 1")).resolves.toMatchObject([
       {
-        month: "2026-04-01"
-      }
+        month: "2026-04-01",
+      },
     ]);
-    await expect(client.getPlanMonth("plan 1", "2026-04-01")).resolves.toMatchObject({
+    await expect(
+      client.getPlanMonth("plan 1", "2026-04-01"),
+    ).resolves.toMatchObject({
       ageOfMoney: 12,
-      categoryCount: 1
+      categoryCount: 1,
     });
-    await expect(client.getAccount("plan 1", "account 1")).resolves.toMatchObject({
-      balance: 12000
+    await expect(
+      client.getAccount("plan 1", "account 1"),
+    ).resolves.toMatchObject({
+      balance: 12000,
     });
-    await expect(client.listTransactions("plan 1", "2026-04-01")).resolves.toHaveLength(1);
-    await expect(client.getTransaction("plan 1", "txn 1")).resolves.toMatchObject({
-      id: "txn-1"
+    await expect(
+      client.listTransactions("plan 1", "2026-04-01"),
+    ).resolves.toHaveLength(1);
+    await expect(
+      client.getTransaction("plan 1", "txn 1"),
+    ).resolves.toMatchObject({
+      id: "txn-1",
     });
-    await expect(client.listScheduledTransactions("plan 1")).resolves.toHaveLength(1);
-    await expect(client.getScheduledTransaction("plan 1", "scheduled 1")).resolves.toMatchObject({
-      id: "scheduled-1"
+    await expect(
+      client.listScheduledTransactions("plan 1"),
+    ).resolves.toHaveLength(1);
+    await expect(
+      client.getScheduledTransaction("plan 1", "scheduled 1"),
+    ).resolves.toMatchObject({
+      id: "scheduled-1",
     });
     await expect(client.listPayees("plan 1")).resolves.toHaveLength(1);
     await expect(client.getPayee("plan 1", "payee 1")).resolves.toMatchObject({
-      id: "payee-1"
+      id: "payee-1",
     });
     await expect(client.listPayeeLocations("plan 1")).resolves.toHaveLength(1);
-    await expect(client.getPayeeLocation("plan 1", "location 1")).resolves.toMatchObject({
-      id: "location-1"
+    await expect(
+      client.getPayeeLocation("plan 1", "location 1"),
+    ).resolves.toMatchObject({
+      id: "location-1",
     });
-    await expect(client.getPayeeLocationsByPayee("plan 1", "payee 1")).resolves.toHaveLength(1);
+    await expect(
+      client.getPayeeLocationsByPayee("plan 1", "payee 1"),
+    ).resolves.toHaveLength(1);
 
     expect(requests.map(({ input }) => String(input))).toEqual([
       "https://api.ynab.com/v1/plans/plan%201",
@@ -396,10 +425,15 @@ describe("ynab client endpoint contracts", () => {
       "https://api.ynab.com/v1/plans/plan%201/payees/payee%201",
       "https://api.ynab.com/v1/plans/plan%201/payee_locations",
       "https://api.ynab.com/v1/plans/plan%201/payee_locations/location%201",
-      "https://api.ynab.com/v1/plans/plan%201/payees/payee%201/payee_locations"
+      "https://api.ynab.com/v1/plans/plan%201/payees/payee%201/payee_locations",
     ]);
-    expect(requests.every(({ init }) => (init?.headers as Record<string, string>).Authorization === "Bearer pat-secret"))
-      .toBe(true);
+    expect(
+      requests.every(
+        ({ init }) =>
+          (init?.headers as Record<string, string>).Authorization ===
+          "Bearer pat-secret",
+      ),
+    ).toBe(true);
   });
 
   it("maps fetch failures into retryable upstream errors", async () => {
@@ -408,12 +442,12 @@ describe("ynab client endpoint contracts", () => {
       baseUrl: "https://api.ynab.com/v1",
       fetchFn: async () => {
         throw new Error("network down");
-      }
+      },
     });
 
     await expect(client.getUser()).rejects.toMatchObject({
       category: "upstream",
-      retryable: true
+      retryable: true,
     });
   });
 });
@@ -436,11 +470,11 @@ describe("ynab money movement client methods", () => {
                   id: "group-1",
                   month: "2026-04-01",
                   note: "rebalance",
-                  performed_by_user_id: "user-1"
-                }
+                  performed_by_user_id: "user-1",
+                },
               ],
-              server_knowledge: 45
-            }
+              server_knowledge: 45,
+            },
           });
         }
 
@@ -454,13 +488,13 @@ describe("ynab money movement client methods", () => {
                 money_movement_group_id: "group-1",
                 month: "2026-04-01",
                 moved_at: "2026-04-28T12:01:00.000Z",
-                to_category_id: "category-2"
-              }
+                to_category_id: "category-2",
+              },
             ],
-            server_knowledge: 46
-          }
+            server_knowledge: 46,
+          },
         });
-      }
+      },
     });
 
     await expect(client.listMoneyMovements("plan-1")).resolves.toMatchObject({
@@ -470,25 +504,27 @@ describe("ynab money movement client methods", () => {
           fromCategoryId: "category-1",
           id: "movement-1",
           moneyMovementGroupId: "group-1",
-          toCategoryId: "category-2"
-        }
+          toCategoryId: "category-2",
+        },
       ],
-      serverKnowledge: 46
+      serverKnowledge: 46,
     });
-    await expect(client.listMoneyMovementGroups("plan-1")).resolves.toMatchObject({
+    await expect(
+      client.listMoneyMovementGroups("plan-1"),
+    ).resolves.toMatchObject({
       moneyMovementGroups: [
         {
           groupCreatedAt: "2026-04-28T12:00:00.000Z",
           id: "group-1",
           month: "2026-04-01",
-          note: "rebalance"
-        }
+          note: "rebalance",
+        },
       ],
-      serverKnowledge: 45
+      serverKnowledge: 45,
     });
     expect(requests.map(String)).toEqual([
       "https://api.ynab.com/v1/plans/plan-1/money_movements",
-      "https://api.ynab.com/v1/plans/plan-1/money_movement_groups"
+      "https://api.ynab.com/v1/plans/plan-1/money_movement_groups",
     ]);
   });
 });

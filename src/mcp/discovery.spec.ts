@@ -7,23 +7,23 @@ describe("MCP discovery document", () => {
   it("publishes server identity, streamable HTTP endpoints, and a copy of tool names", () => {
     const document = buildDiscoveryDocument({
       mcpServerName: "ynab-mcp-test",
-      mcpServerVersion: "1.2.3"
+      mcpServerVersion: "1.2.3",
     } as AppEnv);
 
     expect(document).toEqual({
       name: "ynab-mcp-test",
       version: "1.2.3",
       protocol: {
-        transport: "streamable-http"
+        transport: "streamable-http",
       },
       endpoints: {
         mcp: "/mcp",
-        wellKnown: "/.well-known/mcp.json"
+        wellKnown: "/.well-known/mcp.json",
       },
       tools: {
         count: DISCOVERY_TOOL_NAMES.length,
-        names: [...DISCOVERY_TOOL_NAMES]
-      }
+        names: [...DISCOVERY_TOOL_NAMES],
+      },
     });
     expect(document.tools.names).not.toBe(DISCOVERY_TOOL_NAMES);
   });

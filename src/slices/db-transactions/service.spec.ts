@@ -10,8 +10,8 @@ describe("DB-backed transaction service", () => {
         topPayees: [],
         totals: {
           inflowMilliunits: 0,
-          outflowMilliunits: 12000
-        }
+          outflowMilliunits: 12000,
+        },
       })),
       searchTransactions: vi.fn(async () => ({
         rows: [
@@ -20,42 +20,44 @@ describe("DB-backed transaction service", () => {
             date: "2026-04-12",
             deleted: 0,
             id: "txn-601",
-            payee_name: "Market"
-          }
+            payee_name: "Market",
+          },
         ],
-        totalCount: 650
-      }))
+        totalCount: 650,
+      })),
     };
     const freshness = {
       getFreshness: vi.fn(async () => ({
         health_status: "ok",
         last_synced_at: "2026-04-28T12:00:00.000Z",
         stale: false,
-        warning: null
-      }))
+        warning: null,
+      })),
     };
 
     const result = await searchTransactions(
       { defaultPlanId: "plan-1", freshness, transactionsRepository },
       {
         limit: 25,
-        offset: 600
-      }
+        offset: 600,
+      },
     );
 
-    expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith(expect.objectContaining({
-      limit: 25,
-      offset: 600
-    }));
+    expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 25,
+        offset: 600,
+      }),
+    );
     expect(result).toMatchObject({
       data: {
         has_more: true,
         limit: 25,
         match_count: 650,
         offset: 600,
-        returned_count: 1
+        returned_count: 1,
       },
-      status: "ok"
+      status: "ok",
     });
   });
 
@@ -85,19 +87,19 @@ describe("DB-backed transaction service", () => {
             import_payee_name: "MKT",
             import_payee_name_original: "Market Original",
             debt_transaction_type: "payment",
-            deleted: 0
-          }
+            deleted: 0,
+          },
         ],
-        totalCount: 1
-      }))
+        totalCount: 1,
+      })),
     };
     const freshness = {
       getFreshness: vi.fn(async () => ({
         health_status: "ok",
         last_synced_at: "2026-04-28T12:00:00.000Z",
         stale: false,
-        warning: null
-      }))
+        warning: null,
+      })),
     };
 
     const result = await searchTransactions(
@@ -108,8 +110,8 @@ describe("DB-backed transaction service", () => {
         fromDate: "2026-04-01",
         limit: 999,
         payeeId: "payee-1",
-        toDate: "2026-04-30"
-      }
+        toDate: "2026-04-30",
+      },
     );
 
     expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith({
@@ -122,9 +124,11 @@ describe("DB-backed transaction service", () => {
       offset: 0,
       payeeIds: ["payee-1"],
       planId: "plan-1",
-      startDate: "2026-04-01"
+      startDate: "2026-04-01",
     });
-    expect(freshness.getFreshness).toHaveBeenCalledWith("plan-1", ["transactions"]);
+    expect(freshness.getFreshness).toHaveBeenCalledWith("plan-1", [
+      "transactions",
+    ]);
     expect(result).toEqual({
       status: "ok",
       data_freshness: {
@@ -132,7 +136,7 @@ describe("DB-backed transaction service", () => {
         last_synced_at: "2026-04-28T12:00:00.000Z",
         required_endpoints: ["transactions"],
         stale: false,
-        warning: null
+        warning: null,
       },
       data: {
         filters: {
@@ -142,7 +146,7 @@ describe("DB-backed transaction service", () => {
           include_transfers: false,
           payee_id: "payee-1",
           sort: "date_desc",
-          to_date: "2026-04-30"
+          to_date: "2026-04-30",
         },
         has_more: false,
         limit: 999,
@@ -172,10 +176,10 @@ describe("DB-backed transaction service", () => {
             payee_id: "payee-1",
             payee_name: "Market",
             transfer_account_id: null,
-            transfer_transaction_id: "transfer-txn-1"
-          }
-        ]
-      }
+            transfer_transaction_id: "transfer-txn-1",
+          },
+        ],
+      },
     });
   });
 
@@ -186,8 +190,8 @@ describe("DB-backed transaction service", () => {
         topPayees: [],
         totals: {
           inflowMilliunits: 0,
-          outflowMilliunits: 12000
-        }
+          outflowMilliunits: 12000,
+        },
       })),
       searchTransactions: vi.fn(async () => ({
         rows: [
@@ -204,19 +208,19 @@ describe("DB-backed transaction service", () => {
             category_id: "category-1",
             category_name: "Groceries",
             transfer_account_id: null,
-            deleted: 0
-          }
+            deleted: 0,
+          },
         ],
-        totalCount: 2
-      }))
+        totalCount: 2,
+      })),
     };
     const freshness = {
       getFreshness: vi.fn(async () => ({
         health_status: "ok",
         last_synced_at: "2026-04-28T12:00:00.000Z",
         stale: false,
-        warning: null
-      }))
+        warning: null,
+      })),
     };
 
     const result = await searchTransactions(
@@ -229,8 +233,8 @@ describe("DB-backed transaction service", () => {
         includeSummary: true,
         limit: 1,
         offset: 1,
-        sort: "amount_asc"
-      }
+        sort: "amount_asc",
+      },
     );
 
     expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith(
@@ -240,15 +244,17 @@ describe("DB-backed transaction service", () => {
         includeTransfers: false,
         limit: 1,
         offset: 1,
-        sort: "amount_asc"
-      })
+        sort: "amount_asc",
+      }),
     );
-    expect(transactionsRepository.summarizeTransactions).toHaveBeenCalledWith(expect.objectContaining({
-      approved: true,
-      cleared: "cleared",
-      includeTransfers: false,
-      planId: "plan-1"
-    }));
+    expect(transactionsRepository.summarizeTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approved: true,
+        cleared: "cleared",
+        includeTransfers: false,
+        planId: "plan-1",
+      }),
+    );
     expect(result).toMatchObject({
       status: "ok",
       data: {
@@ -257,7 +263,7 @@ describe("DB-backed transaction service", () => {
           cleared: "cleared",
           include_transfers: false,
           include_summary: true,
-          sort: "amount_asc"
+          sort: "amount_asc",
         },
         limit: 1,
         offset: 1,
@@ -267,35 +273,35 @@ describe("DB-backed transaction service", () => {
           {
             amount: "-3.00",
             date: "2026-04-12",
-            payee_name: "Market"
-          }
+            payee_name: "Market",
+          },
         ],
         totals: {
           total_inflow: "0.00",
           total_outflow: "12.00",
-          net: "-12.00"
-        }
-      }
+          net: "-12.00",
+        },
+      },
     });
     expect(result.data?.transactions[0]).not.toHaveProperty("id");
   });
 
   it("returns an unhealthy error without querying transactions when required sync never completed", async () => {
     const transactionsRepository = {
-      searchTransactions: vi.fn()
+      searchTransactions: vi.fn(),
     };
     const freshness = {
       getFreshness: vi.fn(async () => ({
         health_status: "never_synced",
         last_synced_at: null,
         stale: true,
-        warning: "Required endpoint transactions has never synced."
-      }))
+        warning: "Required endpoint transactions has never synced.",
+      })),
     };
 
     const result = await searchTransactions(
       { defaultPlanId: "plan-1", freshness, transactionsRepository },
-      {}
+      {},
     );
 
     expect(transactionsRepository.searchTransactions).not.toHaveBeenCalled();
@@ -306,13 +312,14 @@ describe("DB-backed transaction service", () => {
         last_synced_at: null,
         required_endpoints: ["transactions"],
         stale: true,
-        warning: "Required endpoint transactions has never synced."
+        warning: "Required endpoint transactions has never synced.",
       },
       next_action: {
         code: "sync_read_model",
-        message: "Run the scheduled YNAB read-model sync for plan-1, then retry after endpoints are healthy: transactions."
+        message:
+          "Run the scheduled YNAB read-model sync for plan-1, then retry after endpoints are healthy: transactions.",
       },
-      data: null
+      data: null,
     });
   });
 });

@@ -10,14 +10,14 @@ export const CI_COMMANDS = [
   "npm run check:deps",
   "npm run check:duplication",
   "npm run check:knip",
-  "npm test"
+  "npm test",
 ];
 
 export const runCommand = (command, args, options = {}) => {
   const result = spawnSync(command, args, {
     stdio: "inherit",
     shell: false,
-    ...options
+    ...options,
   });
 
   if (result.error) {
@@ -29,7 +29,7 @@ export const runCommand = (command, args, options = {}) => {
 
 export const runShellCommand = (command) =>
   runCommand(command, [], {
-    shell: true
+    shell: true,
   });
 
 export const runCi = () => {

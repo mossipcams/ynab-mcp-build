@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { getAccount, listAccounts } from "../../../src/slices/accounts/service.js";
+import {
+  getAccount,
+  listAccounts,
+} from "../../../src/slices/accounts/service.js";
 import { getAccountToolDefinitions } from "../../../src/slices/accounts/tools.js";
 
 describe("accounts service", () => {
@@ -15,7 +18,7 @@ describe("accounts service", () => {
           type: "checking",
           closed: false,
           deleted: false,
-          balance: 123450
+          balance: 123450,
         },
         {
           id: "account-2",
@@ -23,13 +26,13 @@ describe("accounts service", () => {
           type: "savings",
           closed: true,
           deleted: true,
-          balance: 0
-        }
+          balance: 0,
+        },
       ]),
       listPlans: vi.fn().mockResolvedValue({
         plans: [{ id: "plan-1", name: "Household" }],
-        defaultPlan: { id: "plan-1", name: "Household" }
-      })
+        defaultPlan: { id: "plan-1", name: "Household" },
+      }),
     };
 
     await expect(listAccounts(ynabClient as never, {})).resolves.toEqual({
@@ -39,10 +42,10 @@ describe("accounts service", () => {
           name: "Checking",
           type: "checking",
           closed: false,
-          balance: "123.45"
-        }
+          balance: "123.45",
+        },
       ],
-      account_count: 1
+      account_count: 1,
     });
     expect(ynabClient.listPlans).toHaveBeenCalledOnce();
     expect(ynabClient.listAccounts).toHaveBeenCalledWith("plan-1");
@@ -58,7 +61,7 @@ describe("accounts service", () => {
           type: "checking",
           closed: false,
           deleted: false,
-          balance: 123450
+          balance: 123450,
         },
         {
           id: "account-2",
@@ -66,10 +69,10 @@ describe("accounts service", () => {
           type: "savings",
           closed: false,
           deleted: false,
-          balance: 999000
-        }
+          balance: 999000,
+        },
       ]),
-      listPlans: vi.fn()
+      listPlans: vi.fn(),
     };
 
     await expect(
@@ -78,20 +81,20 @@ describe("accounts service", () => {
         limit: 1,
         offset: 1,
         fields: ["name", "balance"],
-        includeIds: false
-      })
+        includeIds: false,
+      }),
     ).resolves.toEqual({
       accounts: [
         {
           name: "Savings",
-          balance: "999.00"
-        }
+          balance: "999.00",
+        },
       ],
       account_count: 2,
       limit: 1,
       offset: 1,
       returned_count: 1,
-      has_more: false
+      has_more: false,
     });
     expect(ynabClient.listPlans).not.toHaveBeenCalled();
     expect(ynabClient.listAccounts).toHaveBeenCalledWith("plan-1");
@@ -106,18 +109,18 @@ describe("accounts service", () => {
         type: "checking",
         onBudget: true,
         closed: false,
-        balance: 123450
+        balance: 123450,
       }),
       listPlans: vi.fn().mockResolvedValue({
         plans: [{ id: "plan-1", name: "Household" }],
-        defaultPlan: { id: "plan-1", name: "Household" }
-      })
+        defaultPlan: { id: "plan-1", name: "Household" },
+      }),
     };
 
     await expect(
       getAccount(ynabClient as never, {
-        accountId: "account-1"
-      })
+        accountId: "account-1",
+      }),
     ).resolves.toEqual({
       account: {
         id: "account-1",
@@ -125,8 +128,8 @@ describe("accounts service", () => {
         type: "checking",
         on_budget: true,
         closed: false,
-        balance: "123.45"
-      }
+        balance: "123.45",
+      },
     });
     expect(ynabClient.getAccount).toHaveBeenCalledWith("plan-1", "account-1");
   });
@@ -140,23 +143,25 @@ describe("accounts service", () => {
         type: "checking",
         onBudget: true,
         closed: false,
-        balance: 123450
+        balance: 123450,
       }),
       listAccounts: vi.fn(),
       listPlans: vi.fn().mockResolvedValue({
         plans: [{ id: "plan-1", name: "Household" }],
-        defaultPlan: { id: "plan-1", name: "Household" }
-      })
+        defaultPlan: { id: "plan-1", name: "Household" },
+      }),
     };
     const definitions = getAccountToolDefinitions(ynabClient as never);
-    const accountTool = definitions.find((definition) => definition.name === "ynab_get_account");
+    const accountTool = definitions.find(
+      (definition) => definition.name === "ynab_get_account",
+    );
 
     expect(accountTool).toBeDefined();
     expect(() => z.object(accountTool?.inputSchema ?? {}).parse({})).toThrow();
     await expect(
       accountTool?.execute({
-        accountId: "account-1"
-      })
+        accountId: "account-1",
+      }),
     ).resolves.toEqual({
       account: {
         id: "account-1",
@@ -164,8 +169,8 @@ describe("accounts service", () => {
         type: "checking",
         on_budget: true,
         closed: false,
-        balance: "123.45"
-      }
+        balance: "123.45",
+      },
     });
   });
 });

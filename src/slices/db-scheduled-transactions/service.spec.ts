@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   getDbScheduledTransaction,
-  listDbScheduledTransactions
+  listDbScheduledTransactions,
 } from "./service.js";
 
 const repository = {
   getScheduledTransaction: vi.fn(),
-  listScheduledTransactions: vi.fn()
+  listScheduledTransactions: vi.fn(),
 };
 
 describe("DB-backed scheduled transaction service", () => {
@@ -23,7 +23,7 @@ describe("DB-backed scheduled transaction service", () => {
         account_name: "Checking",
         flag_color: "blue",
         flag_name: "review",
-        deleted: 0
+        deleted: 0,
       },
       {
         id: "scheduled-2",
@@ -35,38 +35,38 @@ describe("DB-backed scheduled transaction service", () => {
         account_name: "Credit Card",
         flag_color: null,
         flag_name: null,
-        deleted: 0
-      }
+        deleted: 0,
+      },
     ]);
 
     await expect(
       listDbScheduledTransactions(
         {
           defaultPlanId: "plan-1",
-          scheduledTransactionsRepository: repository
+          scheduledTransactionsRepository: repository,
         },
         {
           fields: ["date_next", "amount", "payee_name"],
           includeIds: false,
-          limit: 1
-        }
-      )
+          limit: 1,
+        },
+      ),
     ).resolves.toEqual({
       scheduled_transactions: [
         {
           date_next: "2026-05-01",
           amount: "-45.00",
-          payee_name: "Rent"
-        }
+          payee_name: "Rent",
+        },
       ],
       scheduled_transaction_count: 2,
       limit: 1,
       offset: 0,
       returned_count: 1,
-      has_more: true
+      has_more: true,
     });
     expect(repository.listScheduledTransactions).toHaveBeenCalledWith({
-      planId: "plan-1"
+      planId: "plan-1",
     });
   });
 
@@ -81,19 +81,19 @@ describe("DB-backed scheduled transaction service", () => {
       account_name: "Checking",
       flag_color: "blue",
       flag_name: "review",
-      deleted: 0
+      deleted: 0,
     });
 
     await expect(
       getDbScheduledTransaction(
         {
           defaultPlanId: "plan-1",
-          scheduledTransactionsRepository: repository
+          scheduledTransactionsRepository: repository,
         },
         {
-          scheduledTransactionId: "scheduled-1"
-        }
-      )
+          scheduledTransactionId: "scheduled-1",
+        },
+      ),
     ).resolves.toEqual({
       scheduled_transaction: {
         id: "scheduled-1",
@@ -104,12 +104,12 @@ describe("DB-backed scheduled transaction service", () => {
         category_name: "Housing",
         account_name: "Checking",
         flag_color: "blue",
-        flag_name: "review"
-      }
+        flag_name: "review",
+      },
     });
     expect(repository.getScheduledTransaction).toHaveBeenCalledWith({
       planId: "plan-1",
-      scheduledTransactionId: "scheduled-1"
+      scheduledTransactionId: "scheduled-1",
     });
   });
 
@@ -119,15 +119,15 @@ describe("DB-backed scheduled transaction service", () => {
     await listDbScheduledTransactions(
       {
         defaultPlanId: "plan-1",
-        scheduledTransactionsRepository: repository
+        scheduledTransactionsRepository: repository,
       },
       {
-        planId: "   "
-      }
+        planId: "   ",
+      },
     );
 
     expect(repository.listScheduledTransactions).toHaveBeenLastCalledWith({
-      planId: "plan-1"
+      planId: "plan-1",
     });
   });
 });

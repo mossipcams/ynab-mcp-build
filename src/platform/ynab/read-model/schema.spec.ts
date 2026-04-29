@@ -3,7 +3,11 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const migrationPath = join(process.cwd(), "migrations", "0001_ynab_read_model.sql");
+const migrationPath = join(
+  process.cwd(),
+  "migrations",
+  "0001_ynab_read_model.sql",
+);
 
 function readMigration() {
   return readFileSync(migrationPath, "utf8");
@@ -12,7 +16,7 @@ function readMigration() {
 function tableSql(sql: string, tableName: string) {
   const match = new RegExp(
     `CREATE TABLE IF NOT EXISTS ${tableName} \\((?<body>[\\s\\S]*?)\\n\\);`,
-    "u"
+    "u",
   ).exec(sql);
 
   expect(match, `${tableName} table should exist`).not.toBeNull();
@@ -24,7 +28,7 @@ function expectColumns(sql: string, tableName: string, columnNames: string[]) {
 
   for (const columnName of columnNames) {
     expect(body, `${tableName} should include ${columnName}`).toMatch(
-      new RegExp(`\\b${columnName}\\b`, "u")
+      new RegExp(`\\b${columnName}\\b`, "u"),
     );
   }
 }
@@ -62,9 +66,11 @@ describe("YNAB D1 read model schema", () => {
       "ynab_scheduled_transactions",
       "ynab_scheduled_subtransactions",
       "ynab_money_movements",
-      "ynab_money_movement_groups"
+      "ynab_money_movement_groups",
     ]) {
-      expect(sql).toMatch(new RegExp(`CREATE TABLE IF NOT EXISTS ${tableName}`, "u"));
+      expect(sql).toMatch(
+        new RegExp(`CREATE TABLE IF NOT EXISTS ${tableName}`, "u"),
+      );
     }
   });
 
@@ -88,9 +94,11 @@ describe("YNAB D1 read model schema", () => {
       "idx_ynab_month_categories_plan_month_category",
       "idx_ynab_payees_plan_name",
       "idx_ynab_accounts_plan",
-      "idx_ynab_categories_plan"
+      "idx_ynab_categories_plan",
     ]) {
-      expect(sql).toMatch(new RegExp(`CREATE INDEX IF NOT EXISTS ${indexName}`, "u"));
+      expect(sql).toMatch(
+        new RegExp(`CREATE INDEX IF NOT EXISTS ${indexName}`, "u"),
+      );
     }
   });
 
@@ -104,7 +112,7 @@ describe("YNAB D1 read model schema", () => {
       "transfer_payee_id",
       "direct_import_linked",
       "direct_import_in_error",
-      "last_reconciled_at"
+      "last_reconciled_at",
     ]);
   });
 
@@ -122,7 +130,7 @@ describe("YNAB D1 read model schema", () => {
       "goal_months_to_budget",
       "goal_under_funded_milliunits",
       "goal_overall_funded_milliunits",
-      "goal_overall_left_milliunits"
+      "goal_overall_left_milliunits",
     ]);
     expectColumns(sql, "ynab_months", ["note"]);
     expectColumns(sql, "ynab_month_categories", [
@@ -135,7 +143,7 @@ describe("YNAB D1 read model schema", () => {
       "goal_percentage_complete",
       "goal_months_to_budget",
       "goal_overall_funded_milliunits",
-      "goal_overall_left_milliunits"
+      "goal_overall_left_milliunits",
     ]);
   });
 
@@ -149,7 +157,7 @@ describe("YNAB D1 read model schema", () => {
       "import_id",
       "import_payee_name",
       "import_payee_name_original",
-      "debt_transaction_type"
+      "debt_transaction_type",
     ]);
     expectColumns(sql, "ynab_subtransactions", ["transfer_transaction_id"]);
   });
@@ -157,7 +165,10 @@ describe("YNAB D1 read model schema", () => {
   it("keeps API-backed scheduled transaction fields needed for DB-backed read tools", () => {
     const sql = readMigration();
 
-    expectColumns(sql, "ynab_scheduled_transactions", ["flag_color", "flag_name"]);
+    expectColumns(sql, "ynab_scheduled_transactions", [
+      "flag_color",
+      "flag_name",
+    ]);
   });
 
   it("models money movements as category movements from the YNAB API", () => {
@@ -171,13 +182,13 @@ describe("YNAB D1 read model schema", () => {
       "performed_by_user_id",
       "from_category_id",
       "to_category_id",
-      "amount_milliunits"
+      "amount_milliunits",
     ]);
     expectColumns(sql, "ynab_money_movement_groups", [
       "group_created_at",
       "month",
       "note",
-      "performed_by_user_id"
+      "performed_by_user_id",
     ]);
   });
 });

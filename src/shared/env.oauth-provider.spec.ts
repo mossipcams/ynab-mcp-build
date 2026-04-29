@@ -10,7 +10,7 @@ describe("OAuth provider environment", () => {
       MCP_OAUTH_ENABLED: "true",
       MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
       OAUTH_KV: oauthKv,
-      YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+      YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     } as unknown as Env);
 
     expect(env.oauthKvNamespace).toBe(oauthKv);
@@ -21,10 +21,10 @@ describe("OAuth provider environment", () => {
       resolveAppEnv({
         MCP_OAUTH_ENABLED: "true",
         MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
-        YNAB_API_BASE_URL: "https://api.ynab.com/v1"
-      } as unknown as Env)
+        YNAB_API_BASE_URL: "https://api.ynab.com/v1",
+      } as unknown as Env),
     ).toThrowError(
-      "OAuth requires a Durable Object namespace or an injected OAuth KV store when MCP_OAUTH_ENABLED is true."
+      "OAuth requires a Durable Object namespace or an injected OAuth KV store when MCP_OAUTH_ENABLED is true.",
     );
   });
 
@@ -35,7 +35,7 @@ describe("OAuth provider environment", () => {
       MCP_OAUTH_ENABLED: "true",
       MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
       OAUTH_STATE: oauthState,
-      YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+      YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     } as unknown as Env);
 
     expect(env.oauthStateNamespace).toBe(oauthState);
@@ -49,14 +49,15 @@ describe("OAuth provider environment", () => {
       MCP_OAUTH_ENABLED: "true",
       MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
       OAUTH_KV: {} as KVNamespace,
-      YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+      YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     } as unknown as Env);
 
     expect(env.accessOidc).toMatchObject({
       clientId: "access-client-id",
       clientSecret: "access-client-secret",
-      discoveryUrl: "https://access-team.example.com/cdn-cgi/access/sso/oidc/access-client-id/.well-known/openid-configuration",
-      teamDomain: "access-team.example.com"
+      discoveryUrl:
+        "https://access-team.example.com/cdn-cgi/access/sso/oidc/access-client-id/.well-known/openid-configuration",
+      teamDomain: "access-team.example.com",
     });
   });
 
@@ -71,13 +72,13 @@ describe("OAuth provider environment", () => {
       MCP_OAUTH_ENABLED: "true",
       MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
       OAUTH_KV: {} as KVNamespace,
-      YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+      YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     } as unknown as Env);
 
     expect(env.accessOidc).toMatchObject({
       authorizationUrl: "https://access.example.com/authorize",
       jwksUrl: "https://access.example.com/certs",
-      tokenUrl: "https://access.example.com/token"
+      tokenUrl: "https://access.example.com/token",
     });
   });
 });

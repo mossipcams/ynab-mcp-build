@@ -3,7 +3,7 @@ import type {
   OAuthAuthorizationCode,
   OAuthRefreshTokenRotationResult,
   OAuthRegisteredClient,
-  OAuthStore
+  OAuthStore,
 } from "../oauth/core/store.js";
 
 type FetchLike = {
@@ -11,7 +11,10 @@ type FetchLike = {
 };
 
 export type AtomicOAuthKvNamespace = KVNamespace & {
-  consume<T = unknown>(key: string, options?: { type?: string }): Promise<T | null>;
+  consume<T = unknown>(
+    key: string,
+    options?: { type?: string },
+  ): Promise<T | null>;
 };
 
 function expectOk(response: Response) {
@@ -30,12 +33,15 @@ async function postJson(fetcher: FetchLike, path: string, payload: unknown) {
   return expectOk(
     await fetcher.fetch(`https://oauth-state${path}`, {
       body: JSON.stringify(payload),
-      method: "POST"
-    })
+      method: "POST",
+    }),
   );
 }
 
-async function getJson<T>(fetcher: FetchLike, path: string): Promise<T | undefined> {
+async function getJson<T>(
+  fetcher: FetchLike,
+  path: string,
+): Promise<T | undefined> {
   const response = expectOk(await fetcher.fetch(`https://oauth-state${path}`));
 
   if (response.status === 404) {
@@ -52,13 +58,22 @@ function parseJson(value: string): unknown {
 export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
   return {
     getAccessToken(token) {
-      return getJson<OAuthAccessToken>(fetcher, `/access-tokens/${encodeURIComponent(token)}`);
+      return getJson<OAuthAccessToken>(
+        fetcher,
+        `/access-tokens/${encodeURIComponent(token)}`,
+      );
     },
     getAuthorizationCode(code) {
-      return getJson<OAuthAuthorizationCode>(fetcher, `/authorization-codes/${encodeURIComponent(code)}`);
+      return getJson<OAuthAuthorizationCode>(
+        fetcher,
+        `/authorization-codes/${encodeURIComponent(code)}`,
+      );
     },
     getRegisteredClient(clientId) {
-      return getJson<OAuthRegisteredClient>(fetcher, `/clients/${encodeURIComponent(clientId)}`);
+      return getJson<OAuthRegisteredClient>(
+        fetcher,
+        `/clients/${encodeURIComponent(clientId)}`,
+      );
     },
     async issueAccessToken(record) {
       await postJson(fetcher, "/access-tokens", record);
@@ -73,30 +88,36 @@ export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
       await postJson(fetcher, "/clients", record);
     },
     async rotateRefreshToken(token) {
-      const response = await postJson(fetcher, "/refresh-tokens/rotate", { token });
+      const response = await postJson(fetcher, "/refresh-tokens/rotate", {
+        token,
+      });
 
       return response.json() as Promise<OAuthRefreshTokenRotationResult>;
     },
     async useAuthorizationCode(code) {
-      const response = await postJson(fetcher, "/authorization-codes/use", { code });
+      const response = await postJson(fetcher, "/authorization-codes/use", {
+        code,
+      });
 
       if (response.status === 404) {
         return undefined;
       }
 
       return response.json() as Promise<OAuthAuthorizationCode>;
-    }
+    },
   };
 }
 
-export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNamespace {
+export function createDurableObjectOAuthKvNamespace(
+  fetcher: FetchLike,
+): KVNamespace {
   return {
     async consume(key: string, options?: { type?: string }) {
       const response = expectOk(
         await fetcher.fetch("https://oauth-state/kv/consume", {
           body: JSON.stringify({ key }),
-          method: "POST"
-        })
+          method: "POST",
+        }),
       );
 
       if (response.status === 404) {
@@ -113,7 +134,9 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
     },
     async get(key: string, options?: { type?: string }) {
       const response = expectOk(
-        await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`)
+        await fetcher.fetch(
+          `https://oauth-state/kv/${encodeURIComponent(key)}`,
+        ),
       );
 
       if (response.status === 404) {
@@ -128,25 +151,37 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
 
       return value;
     },
-    async put(key: string, value: string, options?: { expirationTtl?: number }) {
+    async put(
+      key: string,
+      value: string,
+      options?: { expirationTtl?: number },
+    ) {
       const requestInit: RequestInit = {
         body: value,
-        method: "PUT"
+        method: "PUT",
       };
 
       if (options?.expirationTtl) {
-        requestInit.headers = { "x-expiration-ttl": String(options.expirationTtl) };
+        requestInit.headers = {
+          "x-expiration-ttl": String(options.expirationTtl),
+        };
       }
 
       expectOk(
-        await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`, requestInit)
+        await fetcher.fetch(
+          `https://oauth-state/kv/${encodeURIComponent(key)}`,
+          requestInit,
+        ),
       );
     },
     async delete(key: string) {
       expectOk(
-        await fetcher.fetch(`https://oauth-state/kv/${encodeURIComponent(key)}`, {
-          method: "DELETE"
-        })
+        await fetcher.fetch(
+          `https://oauth-state/kv/${encodeURIComponent(key)}`,
+          {
+            method: "DELETE",
+          },
+        ),
       );
     },
     async list(options?: { prefix?: string }) {
@@ -158,10 +193,12 @@ export function createDurableObjectOAuthKvNamespace(fetcher: FetchLike): KVNames
 
       const query = params.toString();
       const response = expectOk(
-        await fetcher.fetch(`https://oauth-state/kv${query ? `?${query}` : ""}`)
+        await fetcher.fetch(
+          `https://oauth-state/kv${query ? `?${query}` : ""}`,
+        ),
       );
 
       return response.json();
-    }
+    },
   } as unknown as AtomicOAuthKvNamespace;
 }

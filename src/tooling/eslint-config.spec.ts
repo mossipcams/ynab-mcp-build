@@ -9,7 +9,7 @@ const requiredRules = [
   "@typescript-eslint/no-unsafe-call",
   "@typescript-eslint/restrict-template-expressions",
   "@typescript-eslint/switch-exhaustiveness-check",
-  "@typescript-eslint/consistent-type-imports"
+  "@typescript-eslint/consistent-type-imports",
 ] as const;
 
 describe("eslint config", () => {
@@ -20,7 +20,7 @@ describe("eslint config", () => {
     }>;
     const enabledRules = Object.assign(
       {},
-      ...configEntries.map((entry) => entry.rules ?? {})
+      ...configEntries.map((entry) => entry.rules ?? {}),
     ) as Record<string, unknown>;
 
     for (const ruleName of requiredRules) {

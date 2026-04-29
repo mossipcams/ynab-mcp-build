@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { listTransactions, searchTransactions } from "../../../src/slices/transactions/service.js";
+import {
+  listTransactions,
+  searchTransactions,
+} from "../../../src/slices/transactions/service.js";
 import { getTransactionToolDefinitions } from "../../../src/slices/transactions/tools.js";
 
 describe("transactions service", () => {
@@ -23,7 +26,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: "account-2"
+          transferAccountId: "account-2",
         },
         {
           id: "txn-spend",
@@ -38,15 +41,15 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
-        }
-      ])
+          transferAccountId: null,
+        },
+      ]),
     };
 
     await expect(
       searchTransactions(ynabClient as never, {
-        planId: "plan-1"
-      })
+        planId: "plan-1",
+      }),
     ).resolves.toEqual({
       transactions: [
         {
@@ -57,17 +60,20 @@ describe("transactions service", () => {
           category_name: "Groceries",
           account_name: "Checking",
           approved: true,
-          cleared: "cleared"
-        }
+          cleared: "cleared",
+        },
       ],
       match_count: 1,
       filters: {
         include_transfers: false,
-        sort: "date_desc"
-      }
+        sort: "date_desc",
+      },
     });
     expect(ynabClient.listPlans).not.toHaveBeenCalled();
-    expect(ynabClient.listTransactions).toHaveBeenCalledWith("plan-1", undefined);
+    expect(ynabClient.listTransactions).toHaveBeenCalledWith(
+      "plan-1",
+      undefined,
+    );
   });
 
   it("includes transfer transactions when includeTransfers is explicitly true", async () => {
@@ -88,16 +94,16 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: "account-2"
-        }
-      ])
+          transferAccountId: "account-2",
+        },
+      ]),
     };
 
     await expect(
       searchTransactions(ynabClient as never, {
         planId: "plan-1",
-        includeTransfers: true
-      })
+        includeTransfers: true,
+      }),
     ).resolves.toEqual({
       transactions: [
         {
@@ -108,14 +114,14 @@ describe("transactions service", () => {
           category_name: null,
           account_name: "Checking",
           approved: true,
-          cleared: "cleared"
-        }
+          cleared: "cleared",
+        },
       ],
       match_count: 1,
       filters: {
         include_transfers: true,
-        sort: "date_desc"
-      }
+        sort: "date_desc",
+      },
     });
   });
 
@@ -137,7 +143,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-deleted",
@@ -152,7 +158,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: true,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-wrong-payee",
@@ -167,7 +173,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-wrong-account",
@@ -182,7 +188,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-wrong-category",
@@ -197,7 +203,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-unapproved",
@@ -212,7 +218,7 @@ describe("transactions service", () => {
           approved: false,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-uncleared",
@@ -227,7 +233,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "uncleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-too-small",
@@ -242,7 +248,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-too-large",
@@ -257,7 +263,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-match",
@@ -272,9 +278,9 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
-        }
-      ])
+          transferAccountId: null,
+        },
+      ]),
     };
 
     await expect(
@@ -288,16 +294,16 @@ describe("transactions service", () => {
         cleared: "cleared",
         minAmount: -2500,
         maxAmount: -2500,
-        fields: ["date", "amount", "payee_name"]
-      })
+        fields: ["date", "amount", "payee_name"],
+      }),
     ).resolves.toEqual({
       transactions: [
         {
           id: "txn-match",
           date: "2026-04-12",
           amount: "-2.50",
-          payee_name: "Exact Match"
-        }
+          payee_name: "Exact Match",
+        },
       ],
       match_count: 1,
       filters: {
@@ -310,10 +316,13 @@ describe("transactions service", () => {
         min_amount: "-2.50",
         max_amount: "-2.50",
         include_transfers: false,
-        sort: "date_desc"
-      }
+        sort: "date_desc",
+      },
     });
-    expect(ynabClient.listTransactions).toHaveBeenCalledWith("plan-1", undefined);
+    expect(ynabClient.listTransactions).toHaveBeenCalledWith(
+      "plan-1",
+      undefined,
+    );
   });
 
   it("sorts transactions by date ascending and uses ids as the final tie-breaker", async () => {
@@ -334,7 +343,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-a",
@@ -349,7 +358,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-c",
@@ -364,9 +373,9 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
-        }
-      ])
+          transferAccountId: null,
+        },
+      ]),
     };
 
     await expect(
@@ -374,28 +383,28 @@ describe("transactions service", () => {
         planId: "plan-1",
         sort: "date_asc",
         fields: ["date", "payee_name"],
-        includeIds: false
-      })
+        includeIds: false,
+      }),
     ).resolves.toEqual({
       transactions: [
         {
           date: "2026-04-10",
-          payee_name: "Taxi"
+          payee_name: "Taxi",
         },
         {
           date: "2026-04-12",
-          payee_name: "Bakery"
+          payee_name: "Bakery",
         },
         {
           date: "2026-04-12",
-          payee_name: "Coffee"
-        }
+          payee_name: "Coffee",
+        },
       ],
       match_count: 3,
       filters: {
         include_transfers: false,
-        sort: "date_asc"
-      }
+        sort: "date_asc",
+      },
     });
   });
 
@@ -417,7 +426,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-2",
@@ -432,7 +441,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-3",
@@ -447,7 +456,7 @@ describe("transactions service", () => {
           approved: false,
           cleared: "uncleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-4",
@@ -462,9 +471,9 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
-        }
-      ])
+          transferAccountId: null,
+        },
+      ]),
     };
 
     await expect(
@@ -473,15 +482,15 @@ describe("transactions service", () => {
         sort: "amount_asc",
         limit: 1,
         offset: 2,
-        fields: ["date", "amount"]
-      })
+        fields: ["date", "amount"],
+      }),
     ).resolves.toEqual({
       transactions: [
         {
           id: "txn-4",
           date: "2026-04-09",
-          amount: "-1.20"
-        }
+          amount: "-1.20",
+        },
       ],
       match_count: 4,
       limit: 1,
@@ -490,8 +499,8 @@ describe("transactions service", () => {
       has_more: true,
       filters: {
         include_transfers: false,
-        sort: "amount_asc"
-      }
+        sort: "amount_asc",
+      },
     });
   });
 
@@ -513,7 +522,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-a",
@@ -528,7 +537,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-c",
@@ -543,7 +552,7 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: false,
-          transferAccountId: null
+          transferAccountId: null,
         },
         {
           id: "txn-deleted",
@@ -558,12 +567,14 @@ describe("transactions service", () => {
           approved: true,
           cleared: "cleared",
           deleted: true,
-          transferAccountId: null
-        }
-      ])
+          transferAccountId: null,
+        },
+      ]),
     };
 
-    await expect(listTransactions(ynabClient as never, { planId: "plan-1" })).resolves.toEqual({
+    await expect(
+      listTransactions(ynabClient as never, { planId: "plan-1" }),
+    ).resolves.toEqual({
       transactions: [
         {
           id: "txn-a",
@@ -573,7 +584,7 @@ describe("transactions service", () => {
           category_name: "Dining",
           account_name: "Checking",
           approved: true,
-          cleared: "cleared"
+          cleared: "cleared",
         },
         {
           id: "txn-b",
@@ -583,7 +594,7 @@ describe("transactions service", () => {
           category_name: "Dining",
           account_name: "Checking",
           approved: true,
-          cleared: "cleared"
+          cleared: "cleared",
         },
         {
           id: "txn-c",
@@ -593,10 +604,10 @@ describe("transactions service", () => {
           category_name: "Transport",
           account_name: "Checking",
           approved: true,
-          cleared: "cleared"
-        }
+          cleared: "cleared",
+        },
       ],
-      transaction_count: 3
+      transaction_count: 3,
     });
   });
 
@@ -604,16 +615,18 @@ describe("transactions service", () => {
     // DEFECT: the transaction search tool can accept unsupported sort values and leave downstream handlers with ambiguous ordering behavior.
     const ynabClient = {
       listPlans: vi.fn(),
-      listTransactions: vi.fn()
+      listTransactions: vi.fn(),
     };
     const definitions = getTransactionToolDefinitions(ynabClient as never);
-    const searchTool = definitions.find((definition) => definition.name === "ynab_search_transactions");
+    const searchTool = definitions.find(
+      (definition) => definition.name === "ynab_search_transactions",
+    );
 
     expect(searchTool).toBeDefined();
     expect(() =>
       z.object(searchTool?.inputSchema ?? {}).parse({
-        sort: "newest_first"
-      })
+        sort: "newest_first",
+      }),
     ).toThrow();
   });
 });

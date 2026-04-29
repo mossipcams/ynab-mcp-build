@@ -4,7 +4,7 @@ import {
   createOAuthEnv,
   fetchWorker,
   MCP_ORIGIN,
-  MCP_RESOURCE
+  MCP_RESOURCE,
 } from "../helpers/oauth-provider.js";
 
 describe("discovery integration", () => {
@@ -12,11 +12,11 @@ describe("discovery integration", () => {
     const env = createOAuthEnv();
     const protectedResourceResponse = await fetchWorker(
       new Request(`${MCP_ORIGIN}/.well-known/oauth-protected-resource/mcp`),
-      env
+      env,
     );
     const authorizationServerResponse = await fetchWorker(
       new Request(`${MCP_ORIGIN}/.well-known/oauth-authorization-server`),
-      env
+      env,
     );
 
     expect(protectedResourceResponse.status).toBe(200);
@@ -24,13 +24,13 @@ describe("discovery integration", () => {
     await expect(protectedResourceResponse.json()).resolves.toMatchObject({
       authorization_servers: [MCP_ORIGIN],
       bearer_methods_supported: ["header"],
-      resource: MCP_RESOURCE
+      resource: MCP_RESOURCE,
     });
     await expect(authorizationServerResponse.json()).resolves.toMatchObject({
       authorization_endpoint: `${MCP_ORIGIN}/authorize`,
       issuer: MCP_ORIGIN,
       registration_endpoint: `${MCP_ORIGIN}/register`,
-      token_endpoint: `${MCP_ORIGIN}/token`
+      token_endpoint: `${MCP_ORIGIN}/token`,
     });
   });
 });

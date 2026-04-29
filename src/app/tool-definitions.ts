@@ -5,7 +5,10 @@ import { createMoneyMovementsRepository } from "../platform/ynab/read-model/mone
 import { createScheduledTransactionsRepository } from "../platform/ynab/read-model/scheduled-transactions-repository.js";
 import { createTransactionsRepository } from "../platform/ynab/read-model/transactions-repository.js";
 import type { AppEnv } from "../shared/env.js";
-import { defineTool, type SliceToolDefinition } from "../shared/tool-definition.js";
+import {
+  defineTool,
+  type SliceToolDefinition,
+} from "../shared/tool-definition.js";
 import { getAccountToolDefinitions } from "../slices/accounts/index.js";
 import { getDbMoneyMovementToolDefinitions } from "../slices/db-money-movements/index.js";
 import { getDbScheduledTransactionToolDefinitions } from "../slices/db-scheduled-transactions/index.js";
@@ -16,9 +19,7 @@ import { getPayeeToolDefinitions } from "../slices/payees/index.js";
 import { getPlanToolDefinitions } from "../slices/plans/index.js";
 import { getTransactionToolDefinitions } from "../slices/transactions/index.js";
 
-const DEFINITIONS_WITH_OWN_FRESHNESS = new Set([
-  "ynab_search_transactions"
-]);
+const DEFINITIONS_WITH_OWN_FRESHNESS = new Set(["ynab_search_transactions"]);
 
 const REQUIRED_ENDPOINTS_BY_TOOL = {
   ynab_get_budget_cleanup_summary: ["categories", "months", "transactions"],
@@ -27,8 +28,17 @@ const REQUIRED_ENDPOINTS_BY_TOOL = {
   ynab_get_cash_runway: ["accounts", "months", "scheduled_transactions"],
   ynab_get_category_trend_summary: ["categories", "months"],
   ynab_get_debt_summary: ["accounts"],
-  ynab_get_emergency_fund_coverage: ["accounts", "months", "scheduled_transactions"],
-  ynab_get_financial_health_check: ["accounts", "categories", "months", "transactions"],
+  ynab_get_emergency_fund_coverage: [
+    "accounts",
+    "months",
+    "scheduled_transactions",
+  ],
+  ynab_get_financial_health_check: [
+    "accounts",
+    "categories",
+    "months",
+    "transactions",
+  ],
   ynab_get_financial_snapshot: ["accounts", "categories", "months"],
   ynab_get_goal_progress_summary: ["categories", "months"],
   ynab_get_income_summary: ["months", "transactions"],
@@ -42,10 +52,13 @@ const REQUIRED_ENDPOINTS_BY_TOOL = {
   ynab_get_recurring_expense_summary: ["transactions"],
   ynab_get_spending_anomalies: ["categories", "months"],
   ynab_get_spending_summary: ["categories", "months", "transactions"],
-  ynab_get_upcoming_obligations: ["scheduled_transactions"]
+  ynab_get_upcoming_obligations: ["scheduled_transactions"],
 } satisfies Record<string, readonly string[]>;
 
-export function getRegisteredToolDefinitions(env: AppEnv, dependencies: AppDependencies) {
+export function getRegisteredToolDefinitions(
+  env: AppEnv,
+  dependencies: AppDependencies,
+) {
   if (!env.ynabDatabase) {
     throw new Error("YNAB_DB is required when YNAB_READ_SOURCE=d1.");
   }
@@ -53,45 +66,58 @@ export function getRegisteredToolDefinitions(env: AppEnv, dependencies: AppDepen
   const now = () => new Date(dependencies.now?.() ?? Date.now()).toISOString();
   const freshness = createReadModelFreshness(env.ynabDatabase, {
     now,
-    staleAfterMinutes: env.ynabStaleAfterMinutes
+    staleAfterMinutes: env.ynabStaleAfterMinutes,
   });
   const defaultPlanDependencies = env.ynabDefaultPlanId
     ? { defaultPlanId: env.ynabDefaultPlanId }
     : {};
-  const ynabClient = createYnabReadModelClient(env.ynabDatabase, defaultPlanDependencies);
+  const ynabClient = createYnabReadModelClient(
+    env.ynabDatabase,
+    defaultPlanDependencies,
+  );
   const baseDependencies = defaultPlanDependencies;
   const definitions: SliceToolDefinition[] = [
     defineTool({
       name: "ynab_get_mcp_version",
       title: "YNAB MCP Version",
-      description: "Returns the MCP server name and version for this deployment.",
+      description:
+        "Returns the MCP server name and version for this deployment.",
       inputSchema: {},
-      execute: () => Promise.resolve({
-        name: env.mcpServerName,
-        version: env.mcpServerVersion
-      })
+      execute: () =>
+        Promise.resolve({
+          name: env.mcpServerName,
+          version: env.mcpServerVersion,
+        }),
     }),
-    ...getMetaToolDefinitions(env, ynabClient).filter((definition) => definition.name !== "ynab_get_mcp_version"),
+    ...getMetaToolDefinitions(env, ynabClient).filter(
+      (definition) => definition.name !== "ynab_get_mcp_version",
+    ),
     ...getPlanToolDefinitions(ynabClient),
     ...getAccountToolDefinitions(ynabClient),
     ...getTransactionToolDefinitions(ynabClient).filter(
-      (definition) => !definition.name.includes("scheduled") && definition.name !== "ynab_search_transactions"
+      (definition) =>
+        !definition.name.includes("scheduled") &&
+        definition.name !== "ynab_search_transactions",
     ),
     ...getDbTransactionToolDefinitions({
       ...baseDependencies,
       freshness,
-      transactionsRepository: createTransactionsRepository(env.ynabDatabase)
+      transactionsRepository: createTransactionsRepository(env.ynabDatabase),
     }),
     ...getDbScheduledTransactionToolDefinitions({
       ...baseDependencies,
-      scheduledTransactionsRepository: createScheduledTransactionsRepository(env.ynabDatabase)
+      scheduledTransactionsRepository: createScheduledTransactionsRepository(
+        env.ynabDatabase,
+      ),
     }),
     ...getPayeeToolDefinitions(ynabClient),
     ...getDbMoneyMovementToolDefinitions({
       ...baseDependencies,
-      moneyMovementsRepository: createMoneyMovementsRepository(env.ynabDatabase)
+      moneyMovementsRepository: createMoneyMovementsRepository(
+        env.ynabDatabase,
+      ),
     }),
-    ...getFinancialHealthToolDefinitions(ynabClient)
+    ...getFinancialHealthToolDefinitions(ynabClient),
   ];
 
   return definitions.map((definition) =>
@@ -99,15 +125,18 @@ export function getRegisteredToolDefinitions(env: AppEnv, dependencies: AppDepen
       ? definition
       : withReadModelFreshness(definition, {
           ...baseDependencies,
-          freshness
-        })
+          freshness,
+        }),
   );
 }
 
 type FreshnessDependencies = {
   defaultPlanId?: string;
   freshness: {
-    getFreshness(planId: string, requiredEndpoints: readonly string[]): Promise<{
+    getFreshness(
+      planId: string,
+      requiredEndpoints: readonly string[],
+    ): Promise<{
       health_status: string;
       last_synced_at: string | null;
       stale: boolean;
@@ -117,13 +146,18 @@ type FreshnessDependencies = {
 };
 
 function requiredEndpointsForTool(name: string) {
-  const explicitEndpoints = REQUIRED_ENDPOINTS_BY_TOOL[name as keyof typeof REQUIRED_ENDPOINTS_BY_TOOL];
+  const explicitEndpoints =
+    REQUIRED_ENDPOINTS_BY_TOOL[name as keyof typeof REQUIRED_ENDPOINTS_BY_TOOL];
 
   if (explicitEndpoints) {
     return explicitEndpoints;
   }
 
-  if (name === "ynab_get_mcp_version" || name === "ynab_get_user" || name === "ynab_list_plans") {
+  if (
+    name === "ynab_get_mcp_version" ||
+    name === "ynab_get_user" ||
+    name === "ynab_list_plans"
+  ) {
     return [];
   }
 
@@ -151,7 +185,11 @@ function requiredEndpointsForTool(name: string) {
     return ["plan_settings"];
   }
 
-  if (name.includes("category") || name.includes("month") || name.includes("goal")) {
+  if (
+    name.includes("category") ||
+    name.includes("month") ||
+    name.includes("goal")
+  ) {
     return ["categories", "months"];
   }
 
@@ -159,10 +197,19 @@ function requiredEndpointsForTool(name: string) {
     return ["plans"];
   }
 
-  return ["accounts", "categories", "months", "transactions", "scheduled_transactions"];
+  return [
+    "accounts",
+    "categories",
+    "months",
+    "transactions",
+    "scheduled_transactions",
+  ];
 }
 
-function resolveFreshnessPlanId(input: unknown, defaultPlanId: string | undefined) {
+function resolveFreshnessPlanId(
+  input: unknown,
+  defaultPlanId: string | undefined,
+) {
   if (input && typeof input === "object" && "planId" in input) {
     const planId = (input as { planId?: unknown }).planId;
 
@@ -175,23 +222,31 @@ function resolveFreshnessPlanId(input: unknown, defaultPlanId: string | undefine
     return defaultPlanId;
   }
 
-  throw new Error("planId is required when YNAB_DEFAULT_PLAN_ID is not configured.");
+  throw new Error(
+    "planId is required when YNAB_DEFAULT_PLAN_ID is not configured.",
+  );
 }
 
 function isUnhealthy(freshness: { health_status: string }) {
-  return freshness.health_status === "never_synced" || freshness.health_status === "unhealthy";
+  return (
+    freshness.health_status === "never_synced" ||
+    freshness.health_status === "unhealthy"
+  );
 }
 
-function buildReadModelSyncNextAction(planId: string, requiredEndpoints: readonly string[]) {
+function buildReadModelSyncNextAction(
+  planId: string,
+  requiredEndpoints: readonly string[],
+) {
   return {
     code: "sync_read_model",
-    message: `Run the scheduled YNAB read-model sync for ${planId}, then retry after endpoints are healthy: ${requiredEndpoints.join(", ")}.`
+    message: `Run the scheduled YNAB read-model sync for ${planId}, then retry after endpoints are healthy: ${requiredEndpoints.join(", ")}.`,
   };
 }
 
 function withReadModelFreshness(
   definition: SliceToolDefinition,
-  dependencies: FreshnessDependencies
+  dependencies: FreshnessDependencies,
 ): SliceToolDefinition {
   const requiredEndpoints = requiredEndpointsForTool(definition.name);
 
@@ -203,10 +258,13 @@ function withReadModelFreshness(
     ...definition,
     execute: async (input) => {
       const planId = resolveFreshnessPlanId(input, dependencies.defaultPlanId);
-      const freshness = await dependencies.freshness.getFreshness(planId, requiredEndpoints);
+      const freshness = await dependencies.freshness.getFreshness(
+        planId,
+        requiredEndpoints,
+      );
       const dataFreshness = {
         ...freshness,
-        required_endpoints: requiredEndpoints
+        required_endpoints: requiredEndpoints,
       };
 
       if (isUnhealthy(freshness)) {
@@ -214,7 +272,7 @@ function withReadModelFreshness(
           status: "unhealthy",
           data_freshness: dataFreshness,
           next_action: buildReadModelSyncNextAction(planId, requiredEndpoints),
-          data: null
+          data: null,
         };
       }
 
@@ -223,8 +281,8 @@ function withReadModelFreshness(
       return {
         status: freshness.stale ? "stale" : "ok",
         data_freshness: dataFreshness,
-        data
+        data,
       };
-    }
+    },
   };
 }

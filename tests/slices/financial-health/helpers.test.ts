@@ -5,7 +5,7 @@ import {
   buildAccountSnapshotSummary,
   buildAssignedSpentSummary,
   buildVisibleCategoryHealthSummary,
-  toSpentMilliunits
+  toSpentMilliunits,
 } from "../../../src/slices/financial-health/helpers.js";
 import { getFinancialHealthToolDefinitions } from "../../../src/slices/financial-health/tools.js";
 
@@ -19,7 +19,7 @@ describe("financial health helpers", () => {
         balance: 100_000,
         deleted: false,
         closed: false,
-        onBudget: true
+        onBudget: true,
       },
       {
         id: "account-2",
@@ -27,7 +27,7 @@ describe("financial health helpers", () => {
         balance: -25_000,
         deleted: false,
         closed: false,
-        onBudget: true
+        onBudget: true,
       },
       {
         id: "account-3",
@@ -35,8 +35,8 @@ describe("financial health helpers", () => {
         balance: 500_000,
         deleted: true,
         closed: false,
-        onBudget: true
-      }
+        onBudget: true,
+      },
     ]);
 
     expect(summary.netWorthMilliunits).toBe(75_000);
@@ -56,7 +56,7 @@ describe("financial health helpers", () => {
         balance: 100_000,
         hidden: false,
         deleted: false,
-        goalUnderFunded: 0
+        goalUnderFunded: 0,
       },
       {
         id: "category-2",
@@ -64,7 +64,7 @@ describe("financial health helpers", () => {
         balance: -5_000,
         hidden: false,
         deleted: false,
-        goalUnderFunded: 2_000
+        goalUnderFunded: 2_000,
       },
       {
         id: "category-3",
@@ -72,13 +72,17 @@ describe("financial health helpers", () => {
         balance: -99_000,
         hidden: true,
         deleted: false,
-        goalUnderFunded: 99_000
-      }
+        goalUnderFunded: 99_000,
+      },
     ]);
 
     expect(summary.availableTotalMilliunits).toBe(100_000);
-    expect(summary.overspentCategories.map((category) => category.id)).toEqual(["category-2"]);
-    expect(summary.underfundedCategories.map((category) => category.id)).toEqual(["category-2"]);
+    expect(summary.overspentCategories.map((category) => category.id)).toEqual([
+      "category-2",
+    ]);
+    expect(
+      summary.underfundedCategories.map((category) => category.id),
+    ).toEqual(["category-2"]);
   });
 
   it("converts assigned and spent milliunits into compact display summaries", () => {
@@ -88,7 +92,7 @@ describe("financial health helpers", () => {
     expect(buildAssignedSpentSummary(50_000, 12_500)).toEqual({
       assigned: "50.00",
       spent: "12.50",
-      assigned_vs_spent: "37.50"
+      assigned_vs_spent: "37.50",
     });
   });
 
@@ -96,16 +100,32 @@ describe("financial health helpers", () => {
     // DEFECT: the spending-anomalies tool can lose its required anchor month and run against an undefined time window.
     const ynabClient = {
       getAccount: async () => ({ id: "account-1" }),
-      getCategory: async () => ({ id: "category-1", hidden: false, name: "Category" }),
-      getMonthCategory: async () => ({ id: "category-1", hidden: false, name: "Category" }),
+      getCategory: async () => ({
+        id: "category-1",
+        hidden: false,
+        name: "Category",
+      }),
+      getMonthCategory: async () => ({
+        id: "category-1",
+        hidden: false,
+        name: "Category",
+      }),
       getPayee: async () => ({ id: "payee-1", name: "Payee" }),
       getPayeeLocation: async () => ({ id: "location-1" }),
       getPayeeLocationsByPayee: async () => [],
       getPlan: async () => ({ id: "plan-1", name: "Plan" }),
       getPlanMonth: async () => ({ month: "2026-04-01" }),
       getPlanSettings: async () => ({}),
-      getScheduledTransaction: async () => ({ amount: 0, dateFirst: "2026-04-01", id: "sched-1" }),
-      getTransaction: async () => ({ amount: 0, date: "2026-04-01", id: "txn-1" }),
+      getScheduledTransaction: async () => ({
+        amount: 0,
+        dateFirst: "2026-04-01",
+        id: "sched-1",
+      }),
+      getTransaction: async () => ({
+        amount: 0,
+        date: "2026-04-01",
+        id: "txn-1",
+      }),
       getUser: async () => ({ id: "user-1", name: "User" }),
       listAccounts: async () => [],
       listCategories: async () => [],
@@ -114,14 +134,16 @@ describe("financial health helpers", () => {
       listPlanMonths: async () => [],
       listPlans: async () => ({ defaultPlan: null, plans: [] }),
       listScheduledTransactions: async () => [],
-      listTransactions: async () => []
+      listTransactions: async () => [],
     };
     const definitions = getFinancialHealthToolDefinitions(ynabClient as never);
     const anomaliesTool = definitions.find(
-      (definition) => definition.name === "ynab_get_spending_anomalies"
+      (definition) => definition.name === "ynab_get_spending_anomalies",
     );
 
     expect(anomaliesTool).toBeDefined();
-    expect(() => z.object(anomaliesTool?.inputSchema ?? {}).parse({})).toThrow();
+    expect(() =>
+      z.object(anomaliesTool?.inputSchema ?? {}).parse({}),
+    ).toThrow();
   });
 });

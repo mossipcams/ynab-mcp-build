@@ -3,7 +3,9 @@ import type { YnabDefaultPlan, YnabPlanList } from "../platform/ynab/client.js";
 
 const defaultPlanIdByClient = new WeakMap<YnabClient, Promise<string>>();
 
-export function getKnownDefaultPlan(plans: YnabPlanList): YnabDefaultPlan | null {
+export function getKnownDefaultPlan(
+  plans: YnabPlanList,
+): YnabDefaultPlan | null {
   if (plans.defaultPlan?.id) {
     return plans.defaultPlan;
   }
@@ -17,7 +19,7 @@ export function getKnownDefaultPlan(plans: YnabPlanList): YnabDefaultPlan | null
 
     return {
       id: onlyPlan.id,
-      name: onlyPlan.name
+      name: onlyPlan.name,
     };
   }
 
@@ -31,7 +33,8 @@ function resolveDefaultPlanId(ynabClient: YnabClient) {
     return cachedPlanId;
   }
 
-  const planId = ynabClient.listPlans()
+  const planId = ynabClient
+    .listPlans()
     .then((plans) => {
       const defaultPlan = getKnownDefaultPlan(plans);
 
@@ -51,7 +54,10 @@ function resolveDefaultPlanId(ynabClient: YnabClient) {
   return planId;
 }
 
-export async function resolvePlanId(ynabClient: YnabClient, planId: string | undefined) {
+export async function resolvePlanId(
+  ynabClient: YnabClient,
+  planId: string | undefined,
+) {
   const explicitPlanId = planId?.trim();
 
   if (explicitPlanId) {

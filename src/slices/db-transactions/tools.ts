@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { defineTool, type SliceToolDefinition } from "../../shared/tool-definition.js";
+import {
+  defineTool,
+  type SliceToolDefinition,
+} from "../../shared/tool-definition.js";
 import {
   amountFilterSchema,
   clearedStatusSchema,
@@ -8,23 +11,39 @@ import {
   fieldProjectionSchema,
   includeIdsSchema,
   paginationSchema,
-  planIdSchema
+  planIdSchema,
 } from "../../shared/tool-inputs.js";
 import { searchTransactions } from "./service.js";
 
-export type DbTransactionToolDependencies = Parameters<typeof searchTransactions>[0];
+export type DbTransactionToolDependencies = Parameters<
+  typeof searchTransactions
+>[0];
 
-const transactionFields = ["date", "amount", "payee_name", "category_name", "account_name", "approved", "cleared"] as const;
-const sortableValues = ["date_asc", "date_desc", "amount_asc", "amount_desc"] as const;
+const transactionFields = [
+  "date",
+  "amount",
+  "payee_name",
+  "category_name",
+  "account_name",
+  "approved",
+  "cleared",
+] as const;
+const sortableValues = [
+  "date_asc",
+  "date_desc",
+  "amount_asc",
+  "amount_desc",
+] as const;
 
 export function getDbTransactionToolDefinitions(
-  dependencies: DbTransactionToolDependencies
+  dependencies: DbTransactionToolDependencies,
 ): SliceToolDefinition[] {
   return [
     defineTool({
       name: "ynab_search_transactions",
       title: "Search YNAB Transactions",
-      description: "Searches synced YNAB transactions from the D1 read model with freshness metadata.",
+      description:
+        "Searches synced YNAB transactions from the D1 read model with freshness metadata.",
       inputSchema: {
         ...planIdSchema,
         fromDate: dateFieldSchema.optional(),
@@ -42,9 +61,9 @@ export function getDbTransactionToolDefinitions(
         ...paginationSchema,
         fields: fieldProjectionSchema(transactionFields),
         ...includeIdsSchema,
-        sort: z.enum(sortableValues).optional()
+        sort: z.enum(sortableValues).optional(),
       },
-      execute: async (input) => searchTransactions(dependencies, input)
-    })
+      execute: async (input) => searchTransactions(dependencies, input),
+    }),
   ];
 }

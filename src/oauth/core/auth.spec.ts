@@ -6,20 +6,24 @@ import { createInMemoryOAuthStore } from "./store.js";
 
 const protectedResource = "https://mcp.example.com/mcp";
 
-function createCore(options: {
-  ids?: string[];
-  now?: number;
-  store?: ReturnType<typeof createInMemoryOAuthStore>;
-} = {}) {
-  const ids = [...(options.ids ?? [
-    "client-1",
-    "code-1",
-    "access-jti-1",
-    "refresh-family-1",
-    "refresh-token-1",
-    "access-jti-2",
-    "refresh-token-2"
-  ])];
+function createCore(
+  options: {
+    ids?: string[];
+    now?: number;
+    store?: ReturnType<typeof createInMemoryOAuthStore>;
+  } = {},
+) {
+  const ids = [
+    ...(options.ids ?? [
+      "client-1",
+      "code-1",
+      "access-jti-1",
+      "refresh-family-1",
+      "refresh-token-1",
+      "access-jti-2",
+      "refresh-token-2",
+    ]),
+  ];
 
   return createOAuthCore({
     createId: () => ids.shift() ?? "fallback-id",
@@ -28,7 +32,7 @@ function createCore(options: {
     now: () => options.now ?? 1_700_000_000_000,
     protectedResource,
     scopesSupported: ["mcp", "offline_access"],
-    store: options.store ?? createInMemoryOAuthStore()
+    store: options.store ?? createInMemoryOAuthStore(),
   });
 }
 
@@ -38,7 +42,7 @@ async function registerClient(core = createCore()) {
     grantTypes: ["authorization_code", "refresh_token"],
     redirectUris: ["http://localhost:3000/callback"],
     responseTypes: ["code"],
-    tokenEndpointAuthMethod: "none"
+    tokenEndpointAuthMethod: "none",
   });
 }
 
@@ -53,7 +57,7 @@ describe("OAuth core", () => {
       grant_types: ["authorization_code", "refresh_token"],
       redirect_uris: ["http://localhost:3000/callback"],
       response_types: ["code"],
-      token_endpoint_auth_method: "none"
+      token_endpoint_auth_method: "none",
     });
   });
 
@@ -65,9 +69,11 @@ describe("OAuth core", () => {
         grantTypes: ["authorization_code"],
         redirectUris: ["http://example.com/callback"],
         responseTypes: ["code"],
-        tokenEndpointAuthMethod: "none"
-      })
-    ).rejects.toThrow("redirect_uris must use https unless they target a loopback host over http.");
+        tokenEndpointAuthMethod: "none",
+      }),
+    ).rejects.toThrow(
+      "redirect_uris must use https unless they target a loopback host over http.",
+    );
   });
 
   it("issues authorization codes with requested scopes and preserves redirect state", async () => {
@@ -85,11 +91,11 @@ describe("OAuth core", () => {
         resource: protectedResource,
         responseType: "code",
         scope: "mcp",
-        state: "state-1"
-      })
+        state: "state-1",
+      }),
     ).resolves.toEqual({
       code: "code-1",
-      redirectTo: "http://localhost:3000/callback?code=code-1&state=state-1"
+      redirectTo: "http://localhost:3000/callback?code=code-1&state=state-1",
     });
   });
 
@@ -106,7 +112,7 @@ describe("OAuth core", () => {
       redirectUri: client.redirect_uris[0]!,
       resource: protectedResource,
       responseType: "code",
-      scope: "mcp offline_access"
+      scope: "mcp offline_access",
     });
 
     const token = await core.exchangeAuthorizationCode({
@@ -114,20 +120,20 @@ describe("OAuth core", () => {
       code: authorization.code,
       codeVerifier,
       redirectUri: client.redirect_uris[0]!,
-      resource: protectedResource
+      resource: protectedResource,
     });
 
     expect(token).toMatchObject({
       expires_in: 86_400,
       scope: "mcp offline_access",
-      token_type: "Bearer"
+      token_type: "Bearer",
     });
     expect(token.access_token).toEqual(expect.any(String));
     expect(token.refresh_token).toBe("refresh-token-1");
     await expect(core.verifyAccessToken(token.access_token)).resolves.toEqual({
       clientId: client.client_id,
       scopes: ["mcp", "offline_access"],
-      token: token.access_token
+      token: token.access_token,
     });
     await expect(
       core.exchangeAuthorizationCode({
@@ -135,9 +141,11 @@ describe("OAuth core", () => {
         code: authorization.code,
         codeVerifier,
         redirectUri: client.redirect_uris[0]!,
-        resource: protectedResource
-      })
-    ).rejects.toThrow("Authorization code is invalid or has already been used.");
+        resource: protectedResource,
+      }),
+    ).rejects.toThrow(
+      "Authorization code is invalid or has already been used.",
+    );
   });
 
   it("rotates refresh tokens and rejects replayed token families", async () => {
@@ -152,40 +160,40 @@ describe("OAuth core", () => {
       codeChallengeMethod: "S256",
       redirectUri: client.redirect_uris[0]!,
       resource: protectedResource,
-      responseType: "code"
+      responseType: "code",
     });
     const initial = await core.exchangeAuthorizationCode({
       clientId: client.client_id,
       code: authorization.code,
       codeVerifier,
       redirectUri: client.redirect_uris[0]!,
-      resource: protectedResource
+      resource: protectedResource,
     });
 
     const refreshed = await core.refreshAccessToken({
       clientId: client.client_id,
       refreshToken: initial.refresh_token,
-      resource: protectedResource
+      resource: protectedResource,
     });
 
     expect(refreshed).toMatchObject({
       refresh_token: "refresh-token-2",
       scope: "mcp offline_access",
-      token_type: "Bearer"
+      token_type: "Bearer",
     });
     await expect(
       core.refreshAccessToken({
         clientId: client.client_id,
         refreshToken: initial.refresh_token,
-        resource: protectedResource
-      })
+        resource: protectedResource,
+      }),
     ).rejects.toThrow("Refresh token replay detected; token family revoked.");
     await expect(
       core.refreshAccessToken({
         clientId: client.client_id,
         refreshToken: refreshed.refresh_token,
-        resource: protectedResource
-      })
+        resource: protectedResource,
+      }),
     ).rejects.toThrow("Refresh token replay detected; token family revoked.");
   });
 
@@ -201,16 +209,16 @@ describe("OAuth core", () => {
       response_types_supported: ["code"],
       scopes_supported: ["mcp", "offline_access"],
       token_endpoint: "https://mcp.example.com/token",
-      token_endpoint_auth_methods_supported: ["none"]
+      token_endpoint_auth_methods_supported: ["none"],
     });
     expect(core.getOpenIdConfiguration()).toMatchObject({
       issuer: "https://mcp.example.com/",
-      subject_types_supported: ["public"]
+      subject_types_supported: ["public"],
     });
     expect(core.getProtectedResourceMetadata()).toEqual({
       authorization_servers: ["https://mcp.example.com/"],
       bearer_methods_supported: ["header"],
-      resource: protectedResource
+      resource: protectedResource,
     });
   });
 });

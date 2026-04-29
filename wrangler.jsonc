@@ -13,36 +13,41 @@
     "YNAB_API_BASE_URL": "https://api.ynab.com/v1",
     "YNAB_READ_SOURCE": "d1",
     "YNAB_STALE_AFTER_MINUTES": "360",
-    "YNAB_SYNC_MAX_ROWS_PER_RUN": "100"
+    "YNAB_SYNC_MAX_ROWS_PER_RUN": "100",
   },
   "secrets": {
-    "required": ["ACCESS_CLIENT_ID", "ACCESS_CLIENT_SECRET", "ACCESS_TEAM_DOMAIN", "YNAB_ACCESS_TOKEN"]
+    "required": [
+      "ACCESS_CLIENT_ID",
+      "ACCESS_CLIENT_SECRET",
+      "ACCESS_TEAM_DOMAIN",
+      "YNAB_ACCESS_TOKEN",
+    ],
   },
   "durable_objects": {
     "bindings": [
       {
         "class_name": "OAuthStateDO",
-        "name": "OAUTH_STATE"
-      }
-    ]
+        "name": "OAUTH_STATE",
+      },
+    ],
   },
   "migrations": [
     {
       "new_sqlite_classes": ["OAuthStateDO"],
-      "tag": "v1"
-    }
+      "tag": "v1",
+    },
   ],
   "d1_databases": [
     {
       "binding": "YNAB_DB",
       "database_name": "ynab-mcp-read-model",
-      "database_id": "6bc7b73e-009d-483f-a493-0409ba310c88"
-    }
+      "database_id": "6bc7b73e-009d-483f-a493-0409ba310c88",
+    },
   ],
   "triggers": {
-    "crons": ["0 * * * *"]
+    "crons": ["0 * * * *"],
   },
   "observability": {
-    "enabled": true
-  }
+    "enabled": true,
+  },
 }

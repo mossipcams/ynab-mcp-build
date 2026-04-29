@@ -4,7 +4,10 @@ import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 import type { AppDependencies } from "../../app/dependencies.js";
 import { verifyCfAccessJwt } from "../core/cf-access-jwt.js";
 import { resolveAppEnv } from "../../shared/env.js";
-import { createAccessOidcClient, resolveAccessOidcEndpoints } from "./access-oidc.js";
+import {
+  createAccessOidcClient,
+  resolveAccessOidcEndpoints,
+} from "./access-oidc.js";
 import { createOAuthProviderApi } from "./provider.js";
 
 const ACCESS_OIDC_CALLBACK_PATH = "/oidc/callback";
@@ -18,7 +21,10 @@ type PendingAccessAuthorization = {
 };
 
 type PendingAccessAuthorizationStore = KVNamespace & {
-  consume?<T = unknown>(key: string, options?: { type?: string }): Promise<T | null>;
+  consume?<T = unknown>(
+    key: string,
+    options?: { type?: string },
+  ): Promise<T | null>;
 };
 
 function sanitizeOAuthErrorDescription(errorDescription: string) {
@@ -29,15 +35,19 @@ function sanitizeOAuthErrorDescription(errorDescription: string) {
     .replace(/[A-Za-z]:\\[^\s"]+/gu, "[REDACTED_PATH]");
 }
 
-function writeOAuthError(error: string, errorDescription: string, status = 400) {
+function writeOAuthError(
+  error: string,
+  errorDescription: string,
+  status = 400,
+) {
   return Response.json(
     {
       error,
-      error_description: sanitizeOAuthErrorDescription(errorDescription)
+      error_description: sanitizeOAuthErrorDescription(errorDescription),
     },
     {
-      status
-    }
+      status,
+    },
   );
 }
 
@@ -86,21 +96,26 @@ function pendingAccessAuthorizationKey(state: string) {
 async function storePendingAccessAuthorization(
   kv: PendingAccessAuthorizationStore,
   state: string,
-  pending: PendingAccessAuthorization
+  pending: PendingAccessAuthorization,
 ) {
   await kv.put(pendingAccessAuthorizationKey(state), JSON.stringify(pending), {
-    expirationTtl: PENDING_ACCESS_AUTH_TTL_SECONDS
+    expirationTtl: PENDING_ACCESS_AUTH_TTL_SECONDS,
   });
 }
 
-async function consumePendingAccessAuthorization(kv: PendingAccessAuthorizationStore, state: string) {
+async function consumePendingAccessAuthorization(
+  kv: PendingAccessAuthorizationStore,
+  state: string,
+) {
   const key = pendingAccessAuthorizationKey(state);
   const pending = kv.consume
     ? await kv.consume<PendingAccessAuthorization>(key, { type: "json" })
     : await kv.get<PendingAccessAuthorization>(key, { type: "json" });
 
   if (!pending) {
-    throw new Error("Access OIDC authorization state is invalid or has expired.");
+    throw new Error(
+      "Access OIDC authorization state is invalid or has expired.",
+    );
   }
 
   if (!kv.consume) {
@@ -129,10 +144,13 @@ function getAccessOidcAuthorizationRedirect(options: {
 
 const accessOidcFetch: typeof fetch = (input, init) => fetch(input, init);
 
-async function validateCloudflareAccessRequest(request: Request, env: {
-  cfAccessAudience?: string;
-  cfAccessTeamDomain?: string;
-}) {
+async function validateCloudflareAccessRequest(
+  request: Request,
+  env: {
+    cfAccessAudience?: string;
+    cfAccessTeamDomain?: string;
+  },
+) {
   if (!env.cfAccessAudience || !env.cfAccessTeamDomain) {
     return;
   }
@@ -145,7 +163,7 @@ async function validateCloudflareAccessRequest(request: Request, env: {
 
   try {
     await verifyCfAccessJwt(token, env.cfAccessTeamDomain, {
-      audience: env.cfAccessAudience
+      audience: env.cfAccessAudience,
     });
   } catch {
     throw new Error("Cloudflare Access JWT is invalid.");
@@ -171,14 +189,14 @@ function getOpenIdConfiguration(publicUrl: string) {
     token_endpoint_auth_methods_supported: [
       "client_secret_basic",
       "client_secret_post",
-      "none"
-    ]
+      "none",
+    ],
   };
 }
 
 export function registerOAuthHttpRoutes(
   app: Hono<{ Bindings: Env }>,
-  _dependencies: AppDependencies = {}
+  _dependencies: AppDependencies = {},
 ) {
   app.get("/.well-known/openid-configuration", (context) => {
     const env = resolveAppEnv(context.env, context.req.raw);
@@ -207,19 +225,23 @@ export function registerOAuthHttpRoutes(
 
       if (env.accessOidc) {
         const state = crypto.randomUUID();
-        const kv = env.oauthKvNamespace ?? (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
+        const kv =
+          env.oauthKvNamespace ??
+          (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
         const accessEndpoints = await resolveAccessOidcEndpoints({
           config: env.accessOidc,
-          fetch: accessOidcFetch
+          fetch: accessOidcFetch,
         });
 
         if (!kv) {
-          throw new Error("OAuth KV storage is required for Access OIDC authorization.");
+          throw new Error(
+            "OAuth KV storage is required for Access OIDC authorization.",
+          );
         }
 
         await storePendingAccessAuthorization(kv, state, {
           request,
-          scope
+          scope,
         });
 
         return context.redirect(
@@ -227,22 +249,22 @@ export function registerOAuthHttpRoutes(
             authorizationUrl: accessEndpoints.authorizationUrl,
             clientId: env.accessOidc.clientId,
             redirectUri: getAccessOidcCallbackUrl(env.publicUrl!),
-            state
+            state,
           }),
-          302
+          302,
         );
       }
 
       const result = await oauth.completeAuthorization({
         metadata: {
-          clientName: "ynab-mcp-build"
+          clientName: "ynab-mcp-build",
         },
         props: {
-          userId: "ynab-mcp-user"
+          userId: "ynab-mcp-user",
         },
         request,
         scope,
-        userId: "ynab-mcp-user"
+        userId: "ynab-mcp-user",
       });
 
       return context.redirect(result.redirectTo, 302);
@@ -253,7 +275,9 @@ export function registerOAuthHttpRoutes(
       return writeOAuthError(
         requiresAccessJwt ? "unauthorized" : "invalid_request",
         message,
-        requiresAccessJwt && message.startsWith("Cloudflare Access JWT") ? 401 : 400
+        requiresAccessJwt && message.startsWith("Cloudflare Access JWT")
+          ? 401
+          : 400,
       );
     }
   });
@@ -269,49 +293,63 @@ export function registerOAuthHttpRoutes(
     const state = context.req.query("state");
 
     if (!code || !state) {
-      return writeOAuthError("invalid_request", "Access OIDC callback requires code and state.");
+      return writeOAuthError(
+        "invalid_request",
+        "Access OIDC callback requires code and state.",
+      );
     }
 
     try {
-      const kv = env.oauthKvNamespace ?? (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
+      const kv =
+        env.oauthKvNamespace ??
+        (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
       const accessEndpoints = await resolveAccessOidcEndpoints({
         config: env.accessOidc,
-        fetch: accessOidcFetch
+        fetch: accessOidcFetch,
       });
 
       if (!kv) {
-        throw new Error("OAuth KV storage is required for Access OIDC authorization.");
+        throw new Error(
+          "OAuth KV storage is required for Access OIDC authorization.",
+        );
       }
 
       const pending = await consumePendingAccessAuthorization(kv, state);
       const identity = await createAccessOidcClient({
         clientId: env.accessOidc.clientId,
         clientSecret: env.accessOidc.clientSecret,
-        ...(accessEndpoints.issuer ? { expectedIssuer: accessEndpoints.issuer } : {}),
+        ...(accessEndpoints.issuer
+          ? { expectedIssuer: accessEndpoints.issuer }
+          : {}),
         fetch: accessOidcFetch,
         jwksUrl: accessEndpoints.jwksUrl,
         redirectUri: getAccessOidcCallbackUrl(env.publicUrl!),
-        tokenUrl: accessEndpoints.tokenUrl
+        tokenUrl: accessEndpoints.tokenUrl,
       }).authenticate(code);
       const userId = identity.email ?? identity.sub;
-      const result = await createOAuthProviderApi(context.env).completeAuthorization({
+      const result = await createOAuthProviderApi(
+        context.env,
+      ).completeAuthorization({
         metadata: {
           clientName: "ynab-mcp-build",
-          upstream: "cloudflare-access"
+          upstream: "cloudflare-access",
         },
         props: {
           email: identity.email,
           sub: identity.sub,
-          userId
+          userId,
         },
         request: pending.request,
         scope: pending.scope,
-        userId
+        userId,
       });
 
       return context.redirect(result.redirectTo, 302);
     } catch (error) {
-      return writeOAuthError("invalid_grant", error instanceof Error ? error.message : String(error));
+      return writeOAuthError(
+        "invalid_grant",
+        error instanceof Error ? error.message : String(error),
+      );
     }
   });
 }

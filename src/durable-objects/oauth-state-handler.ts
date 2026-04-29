@@ -39,14 +39,20 @@ function readJson(request: Request) {
   return request.json() as Promise<Record<string, unknown>>;
 }
 
-async function runStorageCriticalSection<T>(storage: StorageLike, action: () => Promise<T>) {
+async function runStorageCriticalSection<T>(
+  storage: StorageLike,
+  action: () => Promise<T>,
+) {
   const previous = storageLocks.get(storage) ?? Promise.resolve();
   let release!: () => void;
   const next = new Promise<void>((resolve) => {
     release = resolve;
   });
 
-  storageLocks.set(storage, previous.then(() => next));
+  storageLocks.set(
+    storage,
+    previous.then(() => next),
+  );
 
   await previous;
 
@@ -76,8 +82,8 @@ export function createMemoryOAuthStateStorage(): StorageLike {
     list(options) {
       const records = new Map(
         [...values.entries()].filter(([key]) =>
-          options?.prefix ? key.startsWith(options.prefix) : true
-        )
+          options?.prefix ? key.startsWith(options.prefix) : true,
+        ),
       ) as never;
 
       return Promise.resolve(records);
@@ -86,7 +92,7 @@ export function createMemoryOAuthStateStorage(): StorageLike {
       values.set(key, value);
 
       return Promise.resolve();
-    }
+    },
   };
 }
 
@@ -116,34 +122,43 @@ async function getKvRecord(storage: StorageLike, key: string) {
   return record;
 }
 
-export async function handleOAuthStateRequest(storage: StorageLike, request: Request) {
+export async function handleOAuthStateRequest(
+  storage: StorageLike,
+  request: Request,
+) {
   try {
     return await handleOAuthStateRequestUnsafe(storage, request);
   } catch (error) {
     return jsonResponse(
       {
         error: "oauth_state_store_unavailable",
-        error_description: error instanceof Error ? error.message : "OAuth state store unavailable."
+        error_description:
+          error instanceof Error
+            ? error.message
+            : "OAuth state store unavailable.",
       },
-      500
+      500,
     );
   }
 }
 
-async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Request) {
+async function handleOAuthStateRequestUnsafe(
+  storage: StorageLike,
+  request: Request,
+) {
   const url = new URL(request.url);
 
   if (request.method === "GET" && url.pathname === "/kv") {
     const prefix = url.searchParams.get("prefix") ?? "";
     const records = await storage.list?.<KvRecord>({
-      prefix: kvRecordKey(prefix)
+      prefix: kvRecordKey(prefix),
     });
     const keys = [];
 
     for (const [key, record] of records ?? new Map<string, KvRecord>()) {
       if (!isExpired(record)) {
         keys.push({
-          name: key.slice("kv:".length)
+          name: key.slice("kv:".length),
         });
       } else {
         await storage.delete?.(key);
@@ -152,7 +167,7 @@ async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Requ
 
     return jsonResponse({
       keys,
-      list_complete: true
+      list_complete: true,
     });
   }
 
@@ -179,7 +194,9 @@ async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Requ
     if (request.method === "GET") {
       const record = await getKvRecord(storage, key);
 
-      return record ? new Response(record.value) : new Response(null, { status: 404 });
+      return record
+        ? new Response(record.value)
+        : new Response(null, { status: 404 });
     }
 
     if (request.method === "PUT") {
@@ -191,7 +208,7 @@ async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Requ
         ...(ttlSeconds && Number.isFinite(ttlSeconds)
           ? { expiresAt: Date.now() + ttlSeconds * 1000 }
           : {}),
-        value
+        value,
       });
 
       return new Response(null, { status: 204 });
@@ -227,20 +244,28 @@ async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Requ
     return new Response(null, { status: 204 });
   }
 
-  if (request.method === "GET" && url.pathname.startsWith("/authorization-codes/")) {
-    const code = decodeURIComponent(url.pathname.slice("/authorization-codes/".length));
+  if (
+    request.method === "GET" &&
+    url.pathname.startsWith("/authorization-codes/")
+  ) {
+    const code = decodeURIComponent(
+      url.pathname.slice("/authorization-codes/".length),
+    );
     const record = await storage.get(authorizationCodeKey(code));
 
     return record ? jsonResponse(record) : new Response(null, { status: 404 });
   }
 
-  if (request.method === "POST" && url.pathname === "/authorization-codes/use") {
+  if (
+    request.method === "POST" &&
+    url.pathname === "/authorization-codes/use"
+  ) {
     return runStorageCriticalSection(storage, async () => {
       const body = await readJson(request);
       const code = String(body.code);
-      const record = await storage.get<Record<string, unknown> & { used?: boolean }>(
-        authorizationCodeKey(code)
-      );
+      const record = await storage.get<
+        Record<string, unknown> & { used?: boolean }
+      >(authorizationCodeKey(code));
 
       if (!record || record.used) {
         return new Response(null, { status: 404 });
@@ -248,7 +273,7 @@ async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Requ
 
       await storage.put(authorizationCodeKey(code), {
         ...record,
-        used: true
+        used: true,
       });
 
       return jsonResponse(record);
@@ -264,7 +289,9 @@ async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Requ
   }
 
   if (request.method === "GET" && url.pathname.startsWith("/access-tokens/")) {
-    const token = decodeURIComponent(url.pathname.slice("/access-tokens/".length));
+    const token = decodeURIComponent(
+      url.pathname.slice("/access-tokens/".length),
+    );
     const record = await storage.get(accessTokenKey(token));
 
     return record ? jsonResponse(record) : new Response(null, { status: 404 });
@@ -282,21 +309,25 @@ async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Requ
     return runStorageCriticalSection(storage, async () => {
       const body = await readJson(request);
       const token = String(body.token);
-      const record = await storage.get<Record<string, unknown> & { familyId?: string; used?: boolean }>(refreshTokenKey(token));
+      const record = await storage.get<
+        Record<string, unknown> & { familyId?: string; used?: boolean }
+      >(refreshTokenKey(token));
 
       if (!record) {
         return jsonResponse({
-          status: "not_found"
+          status: "not_found",
         });
       }
 
       if (record.familyId) {
-        const familyRevoked = await storage.get<boolean>(refreshTokenFamilyKey(record.familyId));
+        const familyRevoked = await storage.get<boolean>(
+          refreshTokenFamilyKey(record.familyId),
+        );
 
         if (familyRevoked) {
           return jsonResponse({
             record,
-            status: "replay_detected"
+            status: "replay_detected",
           });
         }
       }
@@ -308,18 +339,18 @@ async function handleOAuthStateRequestUnsafe(storage: StorageLike, request: Requ
 
         return jsonResponse({
           record,
-          status: "replay_detected"
+          status: "replay_detected",
         });
       }
 
       await storage.put(refreshTokenKey(token), {
         ...record,
-        used: true
+        used: true,
       });
 
       return jsonResponse({
         record,
-        status: "rotated"
+        status: "rotated",
       });
     });
   }

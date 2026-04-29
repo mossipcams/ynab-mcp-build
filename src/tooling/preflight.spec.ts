@@ -27,7 +27,7 @@ describe("repository preflight tooling", () => {
       "npm run check:deps",
       "npm run check:duplication",
       "npm run check:knip",
-      "npm test"
+      "npm test",
     ]);
   });
 
@@ -53,7 +53,7 @@ describe("repository preflight tooling", () => {
       noImplicitOverride: true,
       noImplicitReturns: true,
       noUncheckedIndexedAccess: true,
-      strict: true
+      strict: true,
     });
   });
 
@@ -75,7 +75,7 @@ describe("repository preflight tooling", () => {
 
     expect(packageJson.devDependencies).toHaveProperty("knip");
     expect(packageJson.scripts).toMatchObject({
-      "check:knip": "knip"
+      "check:knip": "knip",
     });
   });
 
@@ -96,7 +96,9 @@ describe("repository preflight tooling", () => {
       devDependencies?: Record<string, string>;
     };
 
-    expect(packageJson.devDependencies).toHaveProperty("@typescript/native-preview");
+    expect(packageJson.devDependencies).toHaveProperty(
+      "@typescript/native-preview",
+    );
     expect(packageJson.devDependencies).toHaveProperty("oxlint");
     expect(packageJson.devDependencies).toHaveProperty("oxlint-tsgolint");
   });
@@ -113,7 +115,7 @@ describe("repository preflight tooling", () => {
       ci: "node scripts/run-ci.mjs",
       "hooks:install": "husky",
       prepare: "husky",
-      pr: "node scripts/pre-pr.mjs"
+      pr: "node scripts/pre-pr.mjs",
     });
   });
 
@@ -124,7 +126,7 @@ describe("repository preflight tooling", () => {
     };
 
     expect(packageJson.scripts).toMatchObject({
-      "check:duplication": "jscpd"
+      "check:duplication": "jscpd",
     });
   });
 
@@ -137,7 +139,7 @@ describe("repository preflight tooling", () => {
     expect(packageJson.scripts).toMatchObject({
       lint: "npm run lint:fast && npm run lint:eslint",
       "lint:eslint": "eslint .",
-      "lint:fast": "oxlint --type-aware"
+      "lint:fast": "oxlint --type-aware",
     });
   });
 
@@ -151,7 +153,7 @@ describe("repository preflight tooling", () => {
       "pretypecheck:tsgo": "npm run cf-typegen",
       typecheck: "npm run typecheck:tsgo",
       "typecheck:tsc": "tsc --noEmit -p tsconfig.json",
-      "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json"
+      "typecheck:tsgo": "tsgo --noEmit -p tsconfig.json",
     });
   });
 
@@ -167,8 +169,13 @@ describe("repository preflight tooling", () => {
 
   it("configures the required type-aware ESLint rules", async () => {
     // DEFECT: unsafe any usage, floating promises, and non-exhaustive switches can slip through generated code.
-    const config = await importRootModule<{ default: Array<{ rules?: Record<string, unknown> }> }>("eslint.config.mjs");
-    const mergedRules = Object.assign({}, ...config.default.map((entry) => entry.rules ?? {}));
+    const config = await importRootModule<{
+      default: Array<{ rules?: Record<string, unknown> }>;
+    }>("eslint.config.mjs");
+    const mergedRules = Object.assign(
+      {},
+      ...config.default.map((entry) => entry.rules ?? {}),
+    );
 
     expect(mergedRules).toMatchObject({
       "@typescript-eslint/await-thenable": "error",
@@ -181,7 +188,7 @@ describe("repository preflight tooling", () => {
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/no-unsafe-return": "error",
       "@typescript-eslint/require-await": "error",
-      "@typescript-eslint/switch-exhaustiveness-check": "error"
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
     });
   });
 
@@ -195,7 +202,7 @@ describe("repository preflight tooling", () => {
 
     expect(jscpdConfig).toMatchObject({
       format: ["typescript"],
-      path: ["src"]
+      path: ["src"],
     });
     expect(jscpdConfig.ignore).toContain("**/*.spec.ts");
   });
@@ -227,7 +234,7 @@ describe("repository preflight tooling", () => {
     const prePrScript = readRootFile("scripts/pre-pr.mjs");
 
     expect(prePrScript.indexOf("const ciStatus = runCi();")).toBeLessThan(
-      prePrScript.indexOf("gh pr create")
+      prePrScript.indexOf("gh pr create"),
     );
   });
 
@@ -246,9 +253,15 @@ describe("repository preflight tooling", () => {
     // DEFECT: stale DB-backed documentation can tell operators that production tools are unavailable.
     const readme = readRootFile("README.md");
 
-    expect(readme).toContain("All advertised normal MCP tools are registered in D1 mode");
-    expect(readme).not.toContain("Only `ynab_search_transactions` is rebuilt against D1 so far.");
-    expect(readme).not.toContain("return a clear “not available yet in DB-backed read mode” error");
+    expect(readme).toContain(
+      "All advertised normal MCP tools are registered in D1 mode",
+    );
+    expect(readme).not.toContain(
+      "Only `ynab_search_transactions` is rebuilt against D1 so far.",
+    );
+    expect(readme).not.toContain(
+      "return a clear “not available yet in DB-backed read mode” error",
+    );
   });
 
   it("keeps JSON-RPC tool-call validation in the MCP layer", () => {
@@ -256,18 +269,26 @@ describe("repository preflight tooling", () => {
     const httpMcpRoute = readRootFile("src/http/routes/mcp.ts");
 
     expect(httpMcpRoute).not.toContain('from "zod"');
-    expect(readRootFile("src/mcp/json-rpc-validation.ts")).toContain("validateToolCallRequest");
+    expect(readRootFile("src/mcp/json-rpc-validation.ts")).toContain(
+      "validateToolCallRequest",
+    );
   });
 
   it("keeps a single MCP tool registration implementation", () => {
     // DEFECT: duplicate MCP registration modules can diverge on result formatting and schema handling.
     expect(() => readRootFile("src/mcp/tools.ts")).toThrow();
-    expect(readRootFile("src/mcp/tool-registry.ts")).toContain("registerToolDefinitions");
+    expect(readRootFile("src/mcp/tool-registry.ts")).toContain(
+      "registerToolDefinitions",
+    );
   });
 
   it("validates OAuth JSON token payloads with Zod", () => {
     // DEFECT: JWT and JWKS payload casts can trust malformed external JSON before signature and claim checks.
-    for (const path of ["src/oauth/core/jwt.ts", "src/oauth/core/oidc.ts", "src/oauth/core/cf-access-jwt.ts"]) {
+    for (const path of [
+      "src/oauth/core/jwt.ts",
+      "src/oauth/core/oidc.ts",
+      "src/oauth/core/cf-access-jwt.ts",
+    ]) {
       const source = readRootFile(path);
 
       expect(source).toContain('from "zod"');

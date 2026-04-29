@@ -6,5 +6,9 @@ if (ciStatus !== 0) {
   process.exitCode = ciStatus;
 } else {
   console.log("\n> gh pr create");
-  process.exitCode = runCommand("gh", ["pr", "create", ...process.argv.slice(2)]);
+  process.exitCode = runCommand("gh", [
+    "pr",
+    "create",
+    ...process.argv.slice(2),
+  ]);
 }

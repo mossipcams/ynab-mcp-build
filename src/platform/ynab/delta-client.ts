@@ -22,7 +22,7 @@ import {
   type YnabPlanMonthDetail,
   type YnabPlanMonthRecord,
   type YnabScheduledTransaction,
-  type YnabScheduledTransactionRecord
+  type YnabScheduledTransactionRecord,
 } from "./client.js";
 
 export type YnabDeltaResponse<TRecord> = {
@@ -73,31 +73,31 @@ export type YnabDeltaSubtransactionRecord = {
 export interface YnabDeltaClient {
   listAccountsDelta(
     planId: string,
-    serverKnowledge?: number
+    serverKnowledge?: number,
   ): Promise<YnabDeltaResponse<YnabAccountSummary>>;
   listCategoriesDelta(
     planId: string,
-    serverKnowledge?: number
+    serverKnowledge?: number,
   ): Promise<YnabDeltaResponse<YnabCategoryGroupSummary>>;
   listMonthsDelta(
     planId: string,
-    serverKnowledge?: number
+    serverKnowledge?: number,
   ): Promise<YnabDeltaResponse<YnabPlanMonthDetail>>;
   listPayeesDelta(
     planId: string,
-    serverKnowledge?: number
+    serverKnowledge?: number,
   ): Promise<YnabDeltaResponse<YnabPayee>>;
   listPayeeLocationsDelta(
     planId: string,
-    serverKnowledge?: number
+    serverKnowledge?: number,
   ): Promise<YnabDeltaResponse<YnabPayeeLocation>>;
   listScheduledTransactionsDelta(
     planId: string,
-    serverKnowledge?: number
+    serverKnowledge?: number,
   ): Promise<YnabDeltaResponse<YnabScheduledTransaction>>;
   listTransactionsDelta(
     planId: string,
-    serverKnowledge?: number
+    serverKnowledge?: number,
   ): Promise<YnabDeltaResponse<YnabDeltaTransactionRecord>>;
 }
 
@@ -123,29 +123,46 @@ type YnabCategoriesDeltaEnvelope = {
   };
 };
 
-const YnabErrorResponseSchema = z.object({
-  error: z.object({
-    detail: z.string().optional()
-  }).optional()
-}).passthrough();
+const YnabErrorResponseSchema = z
+  .object({
+    error: z
+      .object({
+        detail: z.string().optional(),
+      })
+      .optional(),
+  })
+  .passthrough();
 
 const deltaEnvelopeSchema = <TDataKey extends string>(dataKey: TDataKey) =>
-  z.object({
-    data: z.object({
-      server_knowledge: z.number(),
-      [dataKey]: z.array(z.unknown())
-    }).passthrough()
-  }).passthrough() as unknown as z.ZodType<YnabDeltaEnvelope<TDataKey, unknown>>;
+  z
+    .object({
+      data: z
+        .object({
+          server_knowledge: z.number(),
+          [dataKey]: z.array(z.unknown()),
+        })
+        .passthrough(),
+    })
+    .passthrough() as unknown as z.ZodType<
+    YnabDeltaEnvelope<TDataKey, unknown>
+  >;
 
-const YnabCategoriesDeltaEnvelopeSchema = z.object({
-  data: z.object({
-    server_knowledge: z.number(),
-    category_groups: z.array(z.unknown()),
-    categories: z.array(z.unknown()).optional()
-  }).passthrough()
-}).passthrough() as z.ZodType<YnabCategoriesDeltaEnvelope>;
+const YnabCategoriesDeltaEnvelopeSchema = z
+  .object({
+    data: z
+      .object({
+        server_knowledge: z.number(),
+        category_groups: z.array(z.unknown()),
+        categories: z.array(z.unknown()).optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough() as z.ZodType<YnabCategoriesDeltaEnvelope>;
 
-async function getJson<T>(response: Response, schema: z.ZodType<unknown>): Promise<T> {
+async function getJson<T>(
+  response: Response,
+  schema: z.ZodType<unknown>,
+): Promise<T> {
   if (!response.ok) {
     let detail = response.statusText;
 
@@ -153,16 +170,20 @@ async function getJson<T>(response: Response, schema: z.ZodType<unknown>): Promi
       const rawPayload: unknown = await response.json();
       const payload = YnabErrorResponseSchema.parse(rawPayload);
 
-      if (typeof payload.error?.detail === "string" && payload.error.detail.length > 0) {
+      if (
+        typeof payload.error?.detail === "string" &&
+        payload.error.detail.length > 0
+      ) {
         detail = payload.error.detail;
       }
     } catch {
       // Preserve the status-based fallback when YNAB does not return JSON.
     }
 
-    const message = typeof detail === "string" && detail.length > 0
-      ? `YNAB API request failed with ${response.status}: ${detail}`
-      : `YNAB API request failed with ${response.status}`;
+    const message =
+      typeof detail === "string" && detail.length > 0
+        ? `YNAB API request failed with ${response.status}: ${detail}`
+        : `YNAB API request failed with ${response.status}`;
 
     if (response.status === 429) {
       throw new YnabClientError(message, "rate_limit", true);
@@ -180,7 +201,11 @@ async function getJson<T>(response: Response, schema: z.ZodType<unknown>): Promi
     const result = schema.safeParse(rawPayload);
 
     if (!result.success) {
-      throw new YnabClientError("YNAB API response did not match expected schema.", "upstream", true);
+      throw new YnabClientError(
+        "YNAB API response did not match expected schema.",
+        "upstream",
+        true,
+      );
     }
 
     return result.data as T;
@@ -190,9 +215,11 @@ async function getJson<T>(response: Response, schema: z.ZodType<unknown>): Promi
     }
 
     throw new YnabClientError(
-      error instanceof Error ? error.message : "YNAB API returned malformed JSON.",
+      error instanceof Error
+        ? error.message
+        : "YNAB API returned malformed JSON.",
       "upstream",
-      true
+      true,
     );
   }
 }
@@ -203,21 +230,26 @@ function applyServerKnowledge(url: URL, serverKnowledge: number | undefined) {
   }
 }
 
-export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): YnabDeltaClient {
+export function createYnabDeltaClient(
+  options: CreateYnabDeltaClientOptions,
+): YnabDeltaClient {
   const fetchFn = options.fetchFn ?? fetch;
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const authorizationHeaders = {
-    Authorization: `Bearer ${options.accessToken}`
+    Authorization: `Bearer ${options.accessToken}`,
   };
 
   async function authorizedFetch(input: string) {
     for (let attempt = 1; attempt <= YNAB_REQUEST_ATTEMPTS; attempt += 1) {
       try {
         const response = await fetchFn(input, {
-          headers: authorizationHeaders
+          headers: authorizationHeaders,
         });
 
-        if (attempt < YNAB_REQUEST_ATTEMPTS && (response.status === 429 || response.status >= 500)) {
+        if (
+          attempt < YNAB_REQUEST_ATTEMPTS &&
+          (response.status === 429 || response.status >= 500)
+        ) {
           continue;
         }
 
@@ -228,61 +260,91 @@ export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): Yn
         }
 
         throw new YnabClientError(
-          error instanceof Error ? error.message : "YNAB API request failed before a response was received.",
+          error instanceof Error
+            ? error.message
+            : "YNAB API request failed before a response was received.",
           "upstream",
-          true
+          true,
         );
       }
     }
 
-    throw new YnabClientError("YNAB API request failed before a response was received.", "upstream", true);
+    throw new YnabClientError(
+      "YNAB API request failed before a response was received.",
+      "upstream",
+      true,
+    );
   }
 
   async function getDelta<TDataKey extends string, TRecord>(
     planId: string,
     endpoint: string,
     dataKey: TDataKey,
-    serverKnowledge: number | undefined
+    serverKnowledge: number | undefined,
   ): Promise<YnabDeltaResponse<TRecord>> {
-    const url = new URL(`${baseUrl}/plans/${encodeURIComponent(planId)}/${endpoint}`);
+    const url = new URL(
+      `${baseUrl}/plans/${encodeURIComponent(planId)}/${endpoint}`,
+    );
     applyServerKnowledge(url, serverKnowledge);
 
     const response = await authorizedFetch(url.toString());
-    const payload = await getJson<YnabDeltaEnvelope<TDataKey, TRecord>>(response, deltaEnvelopeSchema(dataKey));
+    const payload = await getJson<YnabDeltaEnvelope<TDataKey, TRecord>>(
+      response,
+      deltaEnvelopeSchema(dataKey),
+    );
 
     return {
       serverKnowledge: payload.data.server_knowledge,
-      records: payload.data[dataKey]
+      records: payload.data[dataKey],
     };
   }
 
-  async function getMappedDelta<TDataKey extends string, TRecord, TMappedRecord>(
+  async function getMappedDelta<
+    TDataKey extends string,
+    TRecord,
+    TMappedRecord,
+  >(
     planId: string,
     endpoint: string,
     dataKey: TDataKey,
     serverKnowledge: number | undefined,
-    mapRecord: (record: TRecord) => TMappedRecord
+    mapRecord: (record: TRecord) => TMappedRecord,
   ): Promise<YnabDeltaResponse<TMappedRecord>> {
-    const delta = await getDelta<TDataKey, TRecord>(planId, endpoint, dataKey, serverKnowledge);
+    const delta = await getDelta<TDataKey, TRecord>(
+      planId,
+      endpoint,
+      dataKey,
+      serverKnowledge,
+    );
 
     return {
       records: delta.records.map(mapRecord),
-      serverKnowledge: delta.serverKnowledge
+      serverKnowledge: delta.serverKnowledge,
     };
   }
 
-  async function listCategoriesDelta(planId: string, serverKnowledge: number | undefined) {
-    const url = new URL(`${baseUrl}/plans/${encodeURIComponent(planId)}/categories`);
+  async function listCategoriesDelta(
+    planId: string,
+    serverKnowledge: number | undefined,
+  ) {
+    const url = new URL(
+      `${baseUrl}/plans/${encodeURIComponent(planId)}/categories`,
+    );
     applyServerKnowledge(url, serverKnowledge);
 
     const response = await authorizedFetch(url.toString());
-    const payload = await getJson<YnabCategoriesDeltaEnvelope>(response, YnabCategoriesDeltaEnvelopeSchema);
+    const payload = await getJson<YnabCategoriesDeltaEnvelope>(
+      response,
+      YnabCategoriesDeltaEnvelopeSchema,
+    );
     const categories = (payload.data.categories ?? []).map(toYnabCategory);
     const categoriesByGroupId = groupCategoriesByGroupId(categories);
 
     return {
-      records: payload.data.category_groups.map((group) => toYnabCategoryGroup(group, categoriesByGroupId)),
-      serverKnowledge: payload.data.server_knowledge
+      records: payload.data.category_groups.map((group) =>
+        toYnabCategoryGroup(group, categoriesByGroupId),
+      ),
+      serverKnowledge: payload.data.server_knowledge,
     };
   }
 
@@ -293,7 +355,7 @@ export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): Yn
         "accounts",
         "accounts",
         serverKnowledge,
-        toYnabAccount
+        toYnabAccount,
       );
     },
     listCategoriesDelta,
@@ -303,7 +365,7 @@ export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): Yn
         "months",
         "months",
         serverKnowledge,
-        toYnabMonth
+        toYnabMonth,
       );
     },
     listPayeesDelta(planId, serverKnowledge) {
@@ -312,25 +374,33 @@ export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): Yn
         "payees",
         "payees",
         serverKnowledge,
-        toYnabPayee
+        toYnabPayee,
       );
     },
     listPayeeLocationsDelta(planId, serverKnowledge) {
-      return getMappedDelta<"payee_locations", YnabPayeeLocationRecord, YnabPayeeLocation>(
+      return getMappedDelta<
+        "payee_locations",
+        YnabPayeeLocationRecord,
+        YnabPayeeLocation
+      >(
         planId,
         "payee_locations",
         "payee_locations",
         serverKnowledge,
-        toYnabPayeeLocation
+        toYnabPayeeLocation,
       );
     },
     listScheduledTransactionsDelta(planId, serverKnowledge) {
-      return getMappedDelta<"scheduled_transactions", YnabScheduledTransactionRecord, YnabScheduledTransaction>(
+      return getMappedDelta<
+        "scheduled_transactions",
+        YnabScheduledTransactionRecord,
+        YnabScheduledTransaction
+      >(
         planId,
         "scheduled_transactions",
         "scheduled_transactions",
         serverKnowledge,
-        toYnabScheduledTransaction
+        toYnabScheduledTransaction,
       );
     },
     listTransactionsDelta(planId, serverKnowledge) {
@@ -338,8 +408,8 @@ export function createYnabDeltaClient(options: CreateYnabDeltaClientOptions): Yn
         planId,
         "transactions",
         "transactions",
-        serverKnowledge
+        serverKnowledge,
       );
-    }
+    },
   };
 }

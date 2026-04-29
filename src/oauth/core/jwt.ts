@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 function toBase64Url(input: string | Uint8Array) {
-  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  const bytes =
+    typeof input === "string" ? new TextEncoder().encode(input) : input;
   let binary = "";
 
   for (const byte of bytes) {
@@ -35,10 +36,10 @@ async function importSigningKey(secret: string) {
     new TextEncoder().encode(secret),
     {
       name: "HMAC",
-      hash: "SHA-256"
+      hash: "SHA-256",
     },
     false,
-    ["sign", "verify"]
+    ["sign", "verify"],
   );
 }
 
@@ -52,9 +53,11 @@ export type JwtPayload = {
   sub: string;
 };
 
-const JwtHeaderSchema = z.object({
-  alg: z.string().optional()
-}).passthrough();
+const JwtHeaderSchema = z
+  .object({
+    alg: z.string().optional(),
+  })
+  .passthrough();
 
 const JwtPayloadSchema = z.object({
   aud: z.string(),
@@ -63,26 +66,30 @@ const JwtPayloadSchema = z.object({
   iss: z.string(),
   jti: z.string(),
   scope: z.string(),
-  sub: z.string()
+  sub: z.string(),
 });
 
 async function parseBase64UrlJson<T>(input: string, schema: z.ZodType<T>) {
-  const rawPayload: unknown = await new Response(new TextDecoder().decode(fromBase64Url(input))).json();
+  const rawPayload: unknown = await new Response(
+    new TextDecoder().decode(fromBase64Url(input)),
+  ).json();
 
   return schema.parse(rawPayload);
 }
 
 export async function signJwt(payload: JwtPayload, secret: string) {
-  const headerSegment = toBase64Url(JSON.stringify({
-    alg: "HS256",
-    typ: "JWT"
-  }));
+  const headerSegment = toBase64Url(
+    JSON.stringify({
+      alg: "HS256",
+      typ: "JWT",
+    }),
+  );
   const payloadSegment = toBase64Url(JSON.stringify(payload));
   const signingInput = `${headerSegment}.${payloadSegment}`;
   const signature = await crypto.subtle.sign(
     "HMAC",
     await importSigningKey(secret),
-    new TextEncoder().encode(signingInput)
+    new TextEncoder().encode(signingInput),
   );
 
   return `${signingInput}.${toBase64Url(new Uint8Array(signature))}`;
@@ -105,7 +112,7 @@ export async function verifyJwt(token: string, secret: string) {
     "HMAC",
     await importSigningKey(secret),
     fromBase64Url(signatureSegment),
-    new TextEncoder().encode(`${headerSegment}.${payloadSegment}`)
+    new TextEncoder().encode(`${headerSegment}.${payloadSegment}`),
   );
 
   if (!verified) {
