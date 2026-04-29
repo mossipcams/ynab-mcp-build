@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { getRegisteredToolDefinitions } from "../app/tool-definitions.js";
@@ -129,7 +132,7 @@ describe("DB-backed tool registration", () => {
     ).toThrowError("YNAB_DB is required when YNAB_READ_SOURCE=d1.");
   });
 
-  it("registers existing public tool names in D1 mode without live YNAB dependencies", async () => {
+  it("registers existing public tool names in D1 mode without direct YNAB dependencies", async () => {
     const database = new FakeD1Database();
     const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {
       now: () => Date.parse("2026-04-28T12:01:00.000Z")
@@ -218,19 +221,15 @@ describe("DB-backed tool registration", () => {
     );
   });
 
-  it("keeps the temporary D1 population tool absent in D1 and live modes", () => {
+  it("keeps tool registration D1-only without alternate read-source branches", () => {
+    const source = readFileSync(join(process.cwd(), "src", "app", "tool-definitions.ts"), "utf8");
     const database = new FakeD1Database();
-    const disabledNames = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {})
+    const names = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {})
       .map((definition) => definition.name);
-    const liveNames = getRegisteredToolDefinitions({
-      ...createD1Env(database as unknown as D1Database),
-      ynabReadSource: "live"
-    }, {
-      ynabClient: {} as never
-    }).map((definition) => definition.name);
 
-    expect(disabledNames).not.toContain("ynab_admin_populate_d1");
-    expect(liveNames).not.toContain("ynab_admin_populate_d1");
+    expect(names).not.toContain("ynab_admin_populate_d1");
+    expect(source).not.toContain("resolveYnabClient");
+    expect(source).not.toContain("ynabReadSource");
   });
 
   it("does not register the removed temporary D1 population tool even with old dashboard flags", () => {
@@ -314,5 +313,40 @@ describe("DB-backed tool registration", () => {
 
     expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_months"))).toBe(false);
     expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_transactions"))).toBe(false);
+  });
+
+  it("requires all count sources before reading plan details", async () => {
+    const database = new FakeD1Database();
+    database.endpointHealthStatuses.set("accounts", "unhealthy");
+    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {});
+    const getPlan = definitions.find((definition) => definition.name === "ynab_get_plan");
+
+    await expect(executeToolDefinition(getPlan, {})).resolves.toMatchObject({
+      status: "unhealthy",
+      data_freshness: {
+        health_status: "unhealthy",
+        required_endpoints: ["plans", "accounts", "categories", "payees"]
+      },
+      data: null
+    });
+
+    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_plans"))).toBe(false);
+    expect(database.allCalls.some((call) => call.sql.includes("FROM ynab_accounts"))).toBe(false);
+  });
+
+  it("does not require month sync for category detail tools", async () => {
+    const database = new FakeD1Database();
+    database.endpointHealthStatuses.set("months", "unhealthy");
+    const definitions = getRegisteredToolDefinitions(createD1Env(database as unknown as D1Database), {
+      now: () => Date.parse("2026-04-28T12:01:00.000Z")
+    });
+    const getCategory = definitions.find((definition) => definition.name === "ynab_get_category");
+
+    await expect(executeToolDefinition(getCategory, { categoryId: "category-1" })).resolves.toMatchObject({
+      status: "ok",
+      data_freshness: {
+        required_endpoints: ["categories"]
+      }
+    });
   });
 });

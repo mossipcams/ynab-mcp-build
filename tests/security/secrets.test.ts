@@ -26,41 +26,30 @@ function createPlainEnv(): Env {
     MCP_SERVER_NAME: "ynab-mcp-build",
     MCP_SERVER_VERSION: "0.1.0",
     YNAB_ACCESS_TOKEN,
-    YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+    YNAB_API_BASE_URL: "https://api.ynab.com/v1",
+    YNAB_DB: {} as D1Database,
+    YNAB_READ_SOURCE: "d1"
   } as unknown as Env;
 }
 
-function createFailingYnabClient(message: string) {
+function createFailingD1Database(message: string): D1Database {
   return {
-    getUser: async () => {
-      throw new Error(message);
-    },
-    listPlans: async () => [],
-    getPlan: async () => ({ id: "plan-1", name: "Plan" }),
-    listCategories: async () => [],
-    getCategory: async () => ({ hidden: false, id: "category-1", name: "Category" }),
-    getMonthCategory: async () => ({ hidden: false, id: "category-1", name: "Category" }),
-    getPlanSettings: async () => ({}),
-    listPlanMonths: async () => [],
-    getPlanMonth: async () => ({ month: "2026-04-01" }),
-    listAccounts: async () => [],
-    getAccount: async () => ({ closed: false, id: "account-1", name: "Checking", type: "checking" }),
-    listTransactions: async () => [],
-    getTransaction: async () => ({ amount: 0, date: "2026-04-01", id: "txn-1" }),
-    listScheduledTransactions: async () => [],
-    getScheduledTransaction: async () => ({ amount: 0, dateFirst: "2026-04-01", id: "sched-1" }),
-    listPayees: async () => [],
-    getPayee: async () => ({ id: "payee-1", name: "Payee" }),
-    listPayeeLocations: async () => [],
-    getPayeeLocation: async () => ({ id: "location-1" }),
-    getPayeeLocationsByPayee: async () => []
-  };
+    prepare() {
+      return {
+        bind() {
+          return {
+            async all() {
+              throw new Error(message);
+            }
+          };
+        }
+      };
+    }
+  } as unknown as D1Database;
 }
 
 async function callUserToolWithFailure(message: string) {
-  const app = createApp({
-    ynabClient: createFailingYnabClient(message)
-  });
+  const app = createApp();
 
   return app.request(
     "http://localhost/mcp",
@@ -80,7 +69,10 @@ async function callUserToolWithFailure(message: string) {
         }
       })
     },
-    createPlainEnv()
+    {
+      ...createPlainEnv(),
+      YNAB_DB: createFailingD1Database(message)
+    } as Env
   );
 }
 

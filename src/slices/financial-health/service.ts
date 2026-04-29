@@ -309,6 +309,10 @@ function isNonTransferRangeTransaction(transaction: YnabTransaction, fromMonth: 
   return !transaction.deleted && !transaction.transferAccountId && monthKey >= fromMonth && monthKey <= toMonth;
 }
 
+function isNonTransferScheduledTransaction(transaction: { deleted?: boolean; transferAccountId?: string | null; dateNext?: string | null }) {
+  return !transaction.deleted && !transaction.transferAccountId && Boolean(transaction.dateNext);
+}
+
 function buildCleanupCounts(transactions: YnabTransaction[]) {
   const visibleTransactions = transactions.filter((transaction) => !transaction.deleted);
 
@@ -822,7 +826,7 @@ export async function getCashRunway(ynabClient: YnabClient, input: { planId?: st
   const averageDailyOutflow = averageMonthlySpending / 30;
   const asOfDate = toNextDateFromMonth(input.asOfMonth);
   const scheduledNetNext30d = scheduledTransactions
-    .filter((transaction) => !transaction.deleted && transaction.dateNext)
+    .filter(isNonTransferScheduledTransaction)
     .filter((transaction) => {
       const dueInDays = daysUntil(asOfDate, transaction.dateNext!);
       return dueInDays >= 0 && dueInDays <= 30;
@@ -850,7 +854,7 @@ export async function getUpcomingObligations(
   const asOfDate = input.asOfDate ?? new Date().toISOString().slice(0, 10);
   const topN = resolveTopN(input);
   const scheduledTransactions = (await ynabClient.listScheduledTransactions(planId))
-    .filter((transaction) => !transaction.deleted && transaction.dateNext)
+    .filter(isNonTransferScheduledTransaction)
     .map((transaction) => ({
       id: transaction.id,
       date_next: transaction.dateNext!,
@@ -1075,7 +1079,7 @@ export async function getEmergencyFundCoverage(
     : 0;
   const asOfDate = toNextDateFromMonth(input.asOfMonth);
   const scheduledNetNext30d = scheduledTransactions
-    .filter((transaction) => !transaction.deleted && transaction.dateNext)
+    .filter(isNonTransferScheduledTransaction)
     .filter((transaction) => {
       const dueInDays = daysUntil(asOfDate, transaction.dateNext!);
       return dueInDays >= 0 && dueInDays <= 30;
@@ -1244,7 +1248,7 @@ function summarizeBalances(month: string, balances: Map<string, number>, account
   }));
   const snapshot = buildAccountSnapshotSummary(monthAccounts);
   const debt = monthAccounts
-    .filter((account) => account.balance < 0)
+    .filter((account) => !account.deleted && !account.closed && account.balance < 0)
     .reduce((sum, account) => sum + Math.abs(account.balance), 0);
 
   return {

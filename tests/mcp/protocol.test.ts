@@ -5,11 +5,30 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app/create-app.js";
 import { DISCOVERY_TOOL_NAMES } from "../../src/mcp/discovery.js";
 
-function createEnv(): Env {
+function createFailingD1Database(message: string): D1Database {
+  return {
+    prepare() {
+      return {
+        bind() {
+          return {
+            async all() {
+              throw new Error(message);
+            }
+          };
+        }
+      };
+    }
+  } as unknown as D1Database;
+}
+
+function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     MCP_SERVER_NAME: "ynab-mcp-build",
     MCP_SERVER_VERSION: "0.1.0",
-    YNAB_API_BASE_URL: "https://api.ynab.com/v1"
+    YNAB_API_BASE_URL: "https://api.ynab.com/v1",
+    YNAB_DB: {} as D1Database,
+    YNAB_READ_SOURCE: "d1",
+    ...overrides
   } as unknown as Env;
 }
 
@@ -132,36 +151,13 @@ describe("mcp protocol", () => {
 
   it("formats thrown tool errors as MCP error results with a human-readable message", async () => {
     // DEFECT: slice failures can escape as transport exceptions instead of structured MCP tool errors.
-    const app = createApp({
-      ynabClient: {
-        getUser: async () => {
-          throw new Error("Upstream auth_client failure");
-        },
-        listPlans: async () => [],
-        getPlan: async () => ({ id: "plan-1", name: "Plan" }),
-        listCategories: async () => [],
-        getCategory: async () => ({ id: "category-1", hidden: false, name: "Category" }),
-        getMonthCategory: async () => ({ id: "category-1", hidden: false, name: "Category" }),
-        getPlanSettings: async () => ({}),
-        listPlanMonths: async () => [],
-        getPlanMonth: async () => ({ month: "2026-04-01" }),
-        listAccounts: async () => [],
-        getAccount: async () => ({ closed: false, id: "account-1", name: "Checking", type: "checking" }),
-        listTransactions: async () => [],
-        getTransaction: async () => ({ amount: 0, date: "2026-04-01", id: "txn-1" }),
-        listScheduledTransactions: async () => [],
-        getScheduledTransaction: async () => ({ amount: 0, dateFirst: "2026-04-01", id: "sched-1" }),
-        listPayees: async () => [],
-        getPayee: async () => ({ id: "payee-1", name: "Payee" }),
-        listPayeeLocations: async () => [],
-        getPayeeLocation: async () => ({ id: "location-1" }),
-        getPayeeLocationsByPayee: async () => []
-      }
-    });
+    const app = createApp();
     const transport = new StreamableHTTPClientTransport(new URL("http://localhost/mcp"), {
       fetch: async (input, init) => {
         const request = input instanceof Request ? input : new Request(input, init);
-        return app.fetch(request, createEnv());
+        return app.fetch(request, createEnv({
+          YNAB_DB: createFailingD1Database("Upstream auth_client failure")
+        }));
       }
     });
     const client = new Client({

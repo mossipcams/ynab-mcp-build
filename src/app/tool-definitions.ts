@@ -1,5 +1,4 @@
 import type { AppDependencies } from "./dependencies.js";
-import { resolveYnabClient } from "./dependencies.js";
 import { createYnabReadModelClient } from "../platform/ynab/read-model/client.js";
 import { createReadModelFreshness } from "../platform/ynab/read-model/freshness.js";
 import { createMoneyMovementsRepository } from "../platform/ynab/read-model/money-movements-repository.js";
@@ -13,7 +12,6 @@ import { getDbScheduledTransactionToolDefinitions } from "../slices/db-scheduled
 import { getDbTransactionToolDefinitions } from "../slices/db-transactions/index.js";
 import { getFinancialHealthToolDefinitions } from "../slices/financial-health/index.js";
 import { getMetaToolDefinitions } from "../slices/meta/index.js";
-import { getMoneyMovementToolDefinitions } from "../slices/money-movements/index.js";
 import { getPayeeToolDefinitions } from "../slices/payees/index.js";
 import { getPlanToolDefinitions } from "../slices/plans/index.js";
 import { getTransactionToolDefinitions } from "../slices/transactions/index.js";
@@ -36,6 +34,11 @@ const REQUIRED_ENDPOINTS_BY_TOOL = {
   ynab_get_income_summary: ["months", "transactions"],
   ynab_get_monthly_review: ["categories", "months", "transactions"],
   ynab_get_net_worth_trajectory: ["accounts", "months", "transactions"],
+  ynab_get_category: ["categories"],
+  ynab_get_plan: ["plans", "accounts", "categories", "payees"],
+  ynab_get_plan_settings: ["plan_settings"],
+  ynab_list_categories: ["categories"],
+  ynab_list_plan_months: ["months"],
   ynab_get_recurring_expense_summary: ["transactions"],
   ynab_get_spending_anomalies: ["categories", "months"],
   ynab_get_spending_summary: ["categories", "months", "transactions"],
@@ -43,24 +46,6 @@ const REQUIRED_ENDPOINTS_BY_TOOL = {
 } satisfies Record<string, readonly string[]>;
 
 export function getRegisteredToolDefinitions(env: AppEnv, dependencies: AppDependencies) {
-  if (env.ynabReadSource === "d1") {
-    return getDbBackedToolDefinitions(env, dependencies);
-  }
-
-  const ynabClient = resolveYnabClient(env, dependencies);
-
-  return [
-    ...getMetaToolDefinitions(env, ynabClient),
-    ...getPlanToolDefinitions(ynabClient),
-    ...getAccountToolDefinitions(ynabClient),
-    ...getTransactionToolDefinitions(ynabClient),
-    ...getPayeeToolDefinitions(ynabClient),
-    ...getMoneyMovementToolDefinitions(ynabClient),
-    ...getFinancialHealthToolDefinitions(ynabClient)
-  ];
-}
-
-function getDbBackedToolDefinitions(env: AppEnv, dependencies: AppDependencies) {
   if (!env.ynabDatabase) {
     throw new Error("YNAB_DB is required when YNAB_READ_SOURCE=d1.");
   }
@@ -162,12 +147,12 @@ function requiredEndpointsForTool(name: string) {
     return ["payees"];
   }
 
-  if (name.includes("category") || name.includes("month") || name.includes("goal")) {
-    return ["categories", "months"];
-  }
-
   if (name.includes("plan_settings")) {
     return ["plan_settings"];
+  }
+
+  if (name.includes("category") || name.includes("month") || name.includes("goal")) {
+    return ["categories", "months"];
   }
 
   if (name.includes("plan")) {
