@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { registerToolDefinitions } from "./tool-registry.js";
 
 describe("registerToolDefinitions", () => {
-  it("advertises slice tools as read-only", () => {
+  it("advertises slice tools as approval-free read-only closed-world tools", () => {
     const registerTool = vi.fn();
 
     registerToolDefinitions({ registerTool } as never, [
@@ -22,6 +22,9 @@ describe("registerToolDefinitions", () => {
     expect(registerTool).toHaveBeenCalledTimes(1);
     expect(registerTool.mock.calls[0]?.[1]).toMatchObject({
       annotations: {
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
         readOnlyHint: true,
       },
     });

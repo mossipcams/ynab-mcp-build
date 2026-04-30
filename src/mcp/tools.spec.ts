@@ -30,6 +30,9 @@ describe("registerToolDefinitions", () => {
       title: "Demo Tool",
       description: "Does demo work.",
       annotations: {
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
         readOnlyHint: true,
       },
     });

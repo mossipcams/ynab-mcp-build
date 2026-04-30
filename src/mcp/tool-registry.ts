@@ -3,6 +3,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { SliceToolDefinition } from "../shared/tool-definition.js";
 import { toErrorResult, toTextResult } from "./results.js";
 
+const READ_ONLY_TOOL_ANNOTATIONS = {
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+  readOnlyHint: true,
+} as const;
+
 export function registerToolDefinitions(
   server: McpServer,
   definitions: SliceToolDefinition[],
@@ -14,9 +21,7 @@ export function registerToolDefinitions(
         title: definition.title,
         description: definition.description,
         inputSchema: definition.inputSchema,
-        annotations: {
-          readOnlyHint: true,
-        },
+        annotations: READ_ONLY_TOOL_ANNOTATIONS,
       },
       async (input) => {
         try {
