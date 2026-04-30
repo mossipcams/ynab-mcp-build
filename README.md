@@ -183,7 +183,6 @@ Important environment behavior:
   OAuth-compatible KV store.
 - `ACCESS_TEAM_DOMAIN`, `ACCESS_CLIENT_ID`, and `ACCESS_CLIENT_SECRET` must be
   provided together for Cloudflare Access OIDC.
-- `CF_ACCESS_TEAM_DOMAIN` requires `CF_ACCESS_AUD`.
 - `YNAB_STALE_AFTER_MINUTES` controls the read-model freshness threshold and
   defaults to `360`.
 

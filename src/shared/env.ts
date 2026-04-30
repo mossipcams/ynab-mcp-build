@@ -8,8 +8,6 @@ export type AppEnv = {
     teamDomain: string;
     tokenUrl?: string;
   };
-  cfAccessAudience?: string;
-  cfAccessTeamDomain?: string;
   mcpServerName: string;
   mcpServerVersion: string;
   oauthEnabled: boolean;
@@ -90,8 +88,6 @@ export function resolveAppEnv(
         ACCESS_JWKS_URL?: string;
         ACCESS_TEAM_DOMAIN?: string;
         ACCESS_TOKEN_URL?: string;
-        CF_ACCESS_AUD?: string;
-        CF_ACCESS_TEAM_DOMAIN?: string;
         MCP_OAUTH_ENABLED?: string;
         MCP_PUBLIC_URL?: string;
         MCP_SERVER_NAME?: string;
@@ -157,8 +153,6 @@ export function resolveAppEnv(
           },
         }
       : {}),
-    cfAccessAudience: runtimeEnv?.CF_ACCESS_AUD,
-    cfAccessTeamDomain: runtimeEnv?.CF_ACCESS_TEAM_DOMAIN,
     mcpServerName: runtimeEnv?.MCP_SERVER_NAME ?? DEFAULT_APP_ENV.mcpServerName,
     mcpServerVersion:
       runtimeEnv?.MCP_SERVER_VERSION ?? DEFAULT_APP_ENV.mcpServerVersion,
@@ -194,12 +188,6 @@ export function resolveAppEnv(
   ) {
     throw new Error(
       "OAuth requires a Durable Object namespace or an injected OAuth KV store when MCP_OAUTH_ENABLED is true.",
-    );
-  }
-
-  if (resolvedEnv.cfAccessTeamDomain && !resolvedEnv.cfAccessAudience) {
-    throw new Error(
-      "CF_ACCESS_AUD is required when CF_ACCESS_TEAM_DOMAIN is set.",
     );
   }
 
