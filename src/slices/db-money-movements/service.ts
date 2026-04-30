@@ -23,12 +23,16 @@ type DbMoneyMovementsDependencies = {
   defaultPlanId?: string;
   moneyMovementsRepository: {
     listMoneyMovementGroups(input: {
+      fromMonth?: string;
       planId: string;
       month?: string;
+      toMonth?: string;
     }): Promise<MoneyMovementGroupRow[]>;
     listMoneyMovements(input: {
+      fromMonth?: string;
       planId: string;
       month?: string;
+      toMonth?: string;
     }): Promise<MoneyMovementRow[]>;
   };
 };
@@ -141,8 +145,10 @@ export async function searchDbMoneyMovements(
   if (groupBy === "group") {
     const rows = (
       await dependencies.moneyMovementsRepository.listMoneyMovementGroups({
+        ...(input.fromMonth && !month ? { fromMonth: input.fromMonth } : {}),
         ...(month ? { month } : {}),
         planId,
+        ...(input.toMonth && !month ? { toMonth: input.toMonth } : {}),
       })
     ).filter((row) => matchesMonthRange(row.month, input));
 
@@ -157,8 +163,10 @@ export async function searchDbMoneyMovements(
 
   const rows = (
     await dependencies.moneyMovementsRepository.listMoneyMovements({
+      ...(input.fromMonth && !month ? { fromMonth: input.fromMonth } : {}),
       ...(month ? { month } : {}),
       planId,
+      ...(input.toMonth && !month ? { toMonth: input.toMonth } : {}),
     })
   ).filter((row) => matchesMonthRange(row.month, input));
 
