@@ -343,6 +343,47 @@ describe("DB-backed transaction service", () => {
     });
   });
 
+  it("passes absolute amount filters as decimal currency units", async () => {
+    // DEFECT: users need an explicit absolute-value filter for transactions over or under a size regardless of inflow/outflow sign.
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => ({
+        rows: [],
+        totalCount: 0,
+      })),
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-04-28T12:00:00.000Z",
+        stale: false,
+        warning: null,
+      })),
+    };
+
+    const result = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      {
+        maxAbsAmount: 200,
+        minAbsAmount: 100,
+      },
+    );
+
+    expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxAbsAmountMilliunits: 200000,
+        minAbsAmountMilliunits: 100000,
+      }),
+    );
+    expect(result).toMatchObject({
+      data: {
+        filters: {
+          max_abs_amount: "200.00",
+          min_abs_amount: "100.00",
+        },
+      },
+    });
+  });
+
   it("returns an unhealthy error without querying transactions when required sync never completed", async () => {
     const transactionsRepository = {
       searchTransactions: vi.fn(),

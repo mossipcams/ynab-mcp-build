@@ -170,31 +170,90 @@ describe("money movements read-model repository", () => {
       params: ["plan-1", "2026-04-01", 10, 0],
     });
     expect(db.calls[0]?.sql).toContain(
-      "WHERE movement_group.plan_id = ? AND movement_group.deleted = 0 AND movement_group.month = ?",
+      "WHERE movement.plan_id = ? AND movement.deleted = 0 AND movement.month = ?",
     );
-    expect(db.calls[0]?.sql).toContain("movement_group.month = ?");
+    expect(db.calls[0]?.sql).toContain("movement.month = ?");
     expect(db.calls[0]?.sql).toContain("COUNT(movement.id) AS movement_count");
     expect(db.calls[0]?.sql).toContain(
       "COALESCE(SUM(movement.amount_milliunits), 0)",
     );
     expect(db.calls[0]?.sql).toContain(
-      "GROUP BY movement_group.plan_id, movement_group.id",
+      "GROUP BY movement.plan_id, COALESCE(movement.money_movement_group_id, movement.id)",
     );
     expect(db.calls[1]).toMatchObject({
       params: ["plan-1", "2026-04-01"],
     });
+    expect(db.calls[1]?.sql).toContain("SELECT COUNT(*) AS count");
+    expect(db.calls[1]?.sql).toContain("FROM ynab_money_movements movement");
     expect(db.calls[1]?.sql).toContain(
-      "SELECT COUNT(*) AS count FROM ynab_money_movement_groups movement_group",
-    );
-    expect(db.calls[1]?.sql).toContain(
-      "WHERE movement_group.plan_id = ? AND movement_group.deleted = 0 AND movement_group.month = ?",
+      "GROUP BY movement.plan_id, COALESCE(movement.money_movement_group_id, movement.id)",
     );
     expect(db.calls[2]).toMatchObject({
       params: ["plan-1"],
     });
-    expect(db.calls[2]?.sql).not.toContain("movement_group.month = ?");
+    expect(db.calls[2]?.sql).not.toContain("movement.month = ?");
     expect(db.calls[2]?.sql).toContain(
-      "WHERE movement_group.plan_id = ? AND movement_group.deleted = 0",
+      "WHERE movement.plan_id = ? AND movement.deleted = 0",
+    );
+  });
+
+  it("derives movement groups from movement rows and applies month ranges in SQL", async () => {
+    const db = new FakeD1Database();
+    db.nextResults.push(
+      [
+        {
+          id: "group-1",
+          group_created_at: "2026-04-10T00:00:00Z",
+          month: "2026-04-01",
+          note: null,
+          performed_by_user_id: "user-1",
+          movement_count: 2,
+          total_amount_milliunits: 456000,
+          deleted: 0,
+        },
+      ],
+      [{ count: 1 }],
+    );
+    const repository = createMoneyMovementsRepository(
+      db as unknown as D1Database,
+    );
+
+    await expect(
+      repository.listMoneyMovementGroups({
+        fromMonth: "2026-03-01",
+        planId: "plan-1",
+        toMonth: "2026-04-01",
+      }),
+    ).resolves.toEqual({
+      rows: [
+        {
+          id: "group-1",
+          group_created_at: "2026-04-10T00:00:00Z",
+          month: "2026-04-01",
+          note: null,
+          performed_by_user_id: "user-1",
+          movement_count: 2,
+          total_amount_milliunits: 456000,
+          deleted: 0,
+        },
+      ],
+      totalCount: 1,
+    });
+
+    expect(db.calls[0]).toMatchObject({
+      params: ["plan-1", "2026-03-01", "2026-04-01"],
+    });
+    expect(db.calls[0]?.sql).toContain("FROM ynab_money_movements movement");
+    expect(db.calls[0]?.sql).toContain("movement.month >= ?");
+    expect(db.calls[0]?.sql).toContain("movement.month <= ?");
+    expect(db.calls[0]?.sql).toContain(
+      "COALESCE(movement.money_movement_group_id, movement.id)",
+    );
+    expect(db.calls[1]).toMatchObject({
+      params: ["plan-1", "2026-03-01", "2026-04-01"],
+    });
+    expect(db.calls[1]?.sql).toContain(
+      "GROUP BY movement.plan_id, COALESCE(movement.money_movement_group_id, movement.id)",
     );
   });
 });

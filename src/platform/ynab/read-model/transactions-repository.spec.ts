@@ -218,6 +218,8 @@ describe("transactions repository", () => {
       "account-1",
       "category-1",
       "category-2",
+      "category-1",
+      "category-2",
       "%market%",
       -20000,
       -1000,
@@ -234,11 +236,57 @@ describe("transactions repository", () => {
       "account-1",
       "category-1",
       "category-2",
+      "category-1",
+      "category-2",
       "%market%",
       -20000,
       -1000,
       25,
       50,
+    ]);
+  });
+
+  it("searches by absolute transaction amount when absolute filters are provided", async () => {
+    // DEFECT: signed amount filters are surprising for budget users looking for transactions over or under an absolute size.
+    const db = new FakeD1Database();
+    db.allResults = [[{ count: 0 }], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.searchTransactions({
+      limit: 25,
+      maxAbsAmountMilliunits: 200000,
+      minAbsAmountMilliunits: 100000,
+      planId: "plan-1",
+    });
+
+    expect(db.allCalls[0]?.sql).toContain("ABS(amount_milliunits) >= ?");
+    expect(db.allCalls[0]?.sql).toContain("ABS(amount_milliunits) <= ?");
+    expect(db.allCalls[0]?.params).toEqual(["plan-1", 100000, 200000]);
+  });
+
+  it("matches null transaction categories when filtering by the YNAB Uncategorized category id", async () => {
+    // DEFECT: cleanup can report uncategorized transactions that categoryId drilldown cannot retrieve.
+    const db = new FakeD1Database();
+    db.allResults = [[{ count: 0 }], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.searchTransactions({
+      categoryIds: ["uncategorized-category-id"],
+      limit: 25,
+      planId: "plan-1",
+    });
+
+    expect(db.allCalls[0]?.sql).toContain("category_id IN (?)");
+    expect(db.allCalls[0]?.sql).toContain("category_id IS NULL");
+    expect(db.allCalls[0]?.sql).toContain("cat.name = 'Uncategorized'");
+    expect(db.allCalls[0]?.params).toEqual([
+      "plan-1",
+      "uncategorized-category-id",
+      "uncategorized-category-id",
     ]);
   });
 

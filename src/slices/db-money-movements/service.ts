@@ -102,6 +102,24 @@ function toDisplayMoneyMovementGroup(row: MoneyMovementGroupRow) {
   });
 }
 
+function matchesMonthRange(
+  month: string | null | undefined,
+  input: Pick<DbMoneyMovementsInput, "fromMonth" | "month" | "toMonth">,
+) {
+  if (!month) {
+    return false;
+  }
+
+  if (input.month) {
+    return month === input.month;
+  }
+
+  return (
+    (!input.fromMonth || month >= input.fromMonth) &&
+    (!input.toMonth || month <= input.toMonth)
+  );
+}
+
 function buildCollectionResult<TEntry>(
   entries: TEntry[],
   totalCount: number,
@@ -227,6 +245,18 @@ function normalizeRepositoryResult<TRow>(
   return result;
 }
 
+function maybeFilterRowsByMonthRange<TRow extends { month?: string | null }>(
+  rows: TRow[],
+  input: DbMoneyMovementsInput,
+  options: { useServerPagination: boolean },
+) {
+  if (options.useServerPagination) {
+    return rows;
+  }
+
+  return rows.filter((row) => matchesMonthRange(row.month, input));
+}
+
 export async function searchDbMoneyMovements(
   dependencies: DbMoneyMovementsDependencies,
   input: DbMoneyMovementsInput,
@@ -251,10 +281,13 @@ export async function searchDbMoneyMovements(
         repositoryInput,
       ),
     );
+    const rows = maybeFilterRowsByMonthRange(result.rows, input, {
+      useServerPagination,
+    });
 
     return buildCollectionResult(
-      result.rows.map(toDisplayMoneyMovementGroup),
-      result.totalCount,
+      rows.map(toDisplayMoneyMovementGroup),
+      useServerPagination ? result.totalCount : rows.length,
       input,
       "money_movement_groups",
       "group_count",
@@ -268,10 +301,13 @@ export async function searchDbMoneyMovements(
       repositoryInput,
     ),
   );
+  const rows = maybeFilterRowsByMonthRange(result.rows, input, {
+    useServerPagination,
+  });
 
   return buildCollectionResult(
-    result.rows.map(toDisplayMoneyMovement),
-    result.totalCount,
+    rows.map(toDisplayMoneyMovement),
+    useServerPagination ? result.totalCount : rows.length,
     input,
     "money_movements",
     "movement_count",

@@ -57,6 +57,8 @@ export function getDbTransactionToolDefinitions(
         cleared: clearedStatusSchema.optional(),
         minAmount: amountFilterSchema.optional(),
         maxAmount: amountFilterSchema.optional(),
+        minAbsAmount: amountFilterSchema.optional(),
+        maxAbsAmount: amountFilterSchema.optional(),
         includeTransfers: z.boolean().optional(),
         includeSummary: z.boolean().optional(),
         includeDeleted: z.boolean().optional(),

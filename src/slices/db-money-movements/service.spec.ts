@@ -178,6 +178,29 @@ describe("DB-backed money movement service", () => {
     });
   });
 
+  it("pushes money movement range filters into the repository", async () => {
+    // DEFECT: range searches can fetch all synced money movements and filter them in slice memory.
+    repository.listMoneyMovements.mockResolvedValueOnce([]);
+
+    await searchDbMoneyMovements(
+      {
+        defaultPlanId: "plan-1",
+        moneyMovementsRepository: repository,
+      },
+      {
+        fromMonth: "2026-03-01",
+        toMonth: "2026-04-01",
+      },
+    );
+
+    expect(repository.listMoneyMovements).toHaveBeenCalledWith({
+      fromMonth: "2026-03-01",
+      limit: DEFAULT_LIMIT,
+      planId: "plan-1",
+      toMonth: "2026-04-01",
+    });
+  });
+
   it("falls back to the default plan when input plan ids are blank", async () => {
     repository.listMoneyMovements.mockResolvedValueOnce({
       rows: [],
