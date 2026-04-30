@@ -115,6 +115,12 @@ type YnabDeltaEnvelope<TDataKey extends string, TRecord> = {
   } & Record<TDataKey, TRecord[]>;
 };
 
+type YnabOptionalCursorDeltaEnvelope<TDataKey extends string, TRecord> = {
+  data: {
+    server_knowledge?: number;
+  } & Record<TDataKey, TRecord[]>;
+};
+
 type YnabCategoriesDeltaEnvelope = {
   data: {
     server_knowledge: number;
@@ -145,6 +151,22 @@ const deltaEnvelopeSchema = <TDataKey extends string>(dataKey: TDataKey) =>
     })
     .passthrough() as unknown as z.ZodType<
     YnabDeltaEnvelope<TDataKey, unknown>
+  >;
+
+const optionalCursorDeltaEnvelopeSchema = <TDataKey extends string>(
+  dataKey: TDataKey,
+) =>
+  z
+    .object({
+      data: z
+        .object({
+          server_knowledge: z.number().optional(),
+          [dataKey]: z.array(z.unknown()),
+        })
+        .passthrough(),
+    })
+    .passthrough() as unknown as z.ZodType<
+    YnabOptionalCursorDeltaEnvelope<TDataKey, unknown>
   >;
 
 const YnabCategoriesDeltaEnvelopeSchema = z
@@ -323,6 +345,33 @@ export function createYnabDeltaClient(
     };
   }
 
+  async function getOptionalCursorMappedDelta<
+    TDataKey extends string,
+    TRecord,
+    TMappedRecord,
+  >(
+    planId: string,
+    endpoint: string,
+    dataKey: TDataKey,
+    serverKnowledge: number | undefined,
+    mapRecord: (record: TRecord) => TMappedRecord,
+  ): Promise<YnabDeltaResponse<TMappedRecord>> {
+    const url = new URL(
+      `${baseUrl}/plans/${encodeURIComponent(planId)}/${endpoint}`,
+    );
+    applyServerKnowledge(url, serverKnowledge);
+
+    const response = await authorizedFetch(url.toString());
+    const payload = await getJson<
+      YnabOptionalCursorDeltaEnvelope<TDataKey, TRecord>
+    >(response, optionalCursorDeltaEnvelopeSchema(dataKey));
+
+    return {
+      records: payload.data[dataKey].map(mapRecord),
+      serverKnowledge: payload.data.server_knowledge ?? serverKnowledge ?? 0,
+    };
+  }
+
   async function listCategoriesDelta(
     planId: string,
     serverKnowledge: number | undefined,
@@ -378,7 +427,7 @@ export function createYnabDeltaClient(
       );
     },
     listPayeeLocationsDelta(planId, serverKnowledge) {
-      return getMappedDelta<
+      return getOptionalCursorMappedDelta<
         "payee_locations",
         YnabPayeeLocationRecord,
         YnabPayeeLocation
