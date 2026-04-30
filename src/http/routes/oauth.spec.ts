@@ -3,6 +3,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import worker from "../../index.js";
+import { DISCOVERY_TOOL_NAMES } from "../../mcp/discovery.js";
 
 function createMemoryKvNamespace(): KVNamespace {
   const records = new Map<string, string>();
@@ -430,6 +431,9 @@ describe("oauth routes", () => {
     const result = await client.listTools();
 
     expect(tokenResponse.status).toBe(200);
-    expect(result.tools.map((tool) => tool.name)).toContain("ynab_list_plans");
+    expect(result.tools.map((tool) => tool.name).sort()).toEqual(
+      [...DISCOVERY_TOOL_NAMES].sort(),
+    );
+    expect(result.tools).toHaveLength(27);
   });
 });
