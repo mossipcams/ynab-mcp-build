@@ -51,41 +51,52 @@ describe("money movements read-model repository", () => {
           deleted: 0,
         },
       ],
-      undefined,
+      [{ count: 1 }],
+      [],
+      [{ count: 0 }],
     );
     const repository = createMoneyMovementsRepository(
       db as unknown as D1Database,
     );
 
     await expect(
-      repository.listMoneyMovements({ planId: "plan-1", month: "2026-04-01" }),
-    ).resolves.toEqual([
-      {
-        id: "move-1",
-        month: "2026-04-01",
-        moved_at: "2026-04-10T00:00:00Z",
-        note: "rebalance",
-        money_movement_group_id: "group-1",
-        performed_by_user_id: "user-1",
-        from_category_id: "cat-1",
-        from_category_name: "Dining",
-        to_category_id: "cat-2",
-        to_category_name: "Groceries",
-        amount_milliunits: 123000,
-        deleted: 0,
-      },
-    ]);
+      repository.listMoneyMovements({
+        fromMonth: "2026-04-01",
+        limit: 10,
+        offset: 5,
+        planId: "plan-1",
+        toMonth: "2026-05-01",
+      }),
+    ).resolves.toEqual({
+      rows: [
+        {
+          id: "move-1",
+          month: "2026-04-01",
+          moved_at: "2026-04-10T00:00:00Z",
+          note: "rebalance",
+          money_movement_group_id: "group-1",
+          performed_by_user_id: "user-1",
+          from_category_id: "cat-1",
+          from_category_name: "Dining",
+          to_category_id: "cat-2",
+          to_category_name: "Groceries",
+          amount_milliunits: 123000,
+          deleted: 0,
+        },
+      ],
+      totalCount: 1,
+    });
     await expect(
       repository.listMoneyMovements({ planId: "plan-1" }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ rows: [], totalCount: 0 });
 
     expect(db.calls[0]).toMatchObject({
-      params: ["plan-1", "2026-04-01"],
+      params: ["plan-1", "2026-04-01", "2026-05-01", 10, 5],
     });
     expect(db.calls[0]?.sql).toContain(
-      "WHERE movement.plan_id = ? AND movement.deleted = 0 AND movement.month = ?",
+      "WHERE movement.plan_id = ? AND movement.deleted = 0 AND movement.month >= ? AND movement.month <= ?",
     );
-    expect(db.calls[0]?.sql).toContain("movement.month = ?");
+    expect(db.calls[0]?.sql).toContain("LIMIT ? OFFSET ?");
     expect(db.calls[0]?.sql).toContain(
       "LEFT JOIN ynab_categories from_category",
     );
@@ -93,12 +104,18 @@ describe("money movements read-model repository", () => {
       "ORDER BY movement.moved_at DESC, movement.id",
     );
     expect(db.calls[1]).toMatchObject({
+      params: ["plan-1", "2026-04-01", "2026-05-01"],
+    });
+    expect(db.calls[1]?.sql).toContain(
+      "SELECT COUNT(*) AS count FROM ynab_money_movements movement",
+    );
+    expect(db.calls[1]?.sql).toContain(
+      "WHERE movement.plan_id = ? AND movement.deleted = 0 AND movement.month >= ? AND movement.month <= ?",
+    );
+    expect(db.calls[2]).toMatchObject({
       params: ["plan-1"],
     });
-    expect(db.calls[1]?.sql).not.toContain("movement.month = ?");
-    expect(db.calls[1]?.sql).toContain(
-      "WHERE movement.plan_id = ? AND movement.deleted = 0",
-    );
+    expect(db.calls[2]?.sql).not.toContain("movement.month = ?");
   });
 
   it("queries movement groups with aggregation and optional month filters", async () => {
@@ -116,7 +133,9 @@ describe("money movements read-model repository", () => {
           deleted: 0,
         },
       ],
-      undefined,
+      [{ count: 1 }],
+      [],
+      [{ count: 0 }],
     );
     const repository = createMoneyMovementsRepository(
       db as unknown as D1Database,
@@ -124,27 +143,31 @@ describe("money movements read-model repository", () => {
 
     await expect(
       repository.listMoneyMovementGroups({
+        limit: 10,
         planId: "plan-1",
         month: "2026-04-01",
       }),
-    ).resolves.toEqual([
-      {
-        id: "group-1",
-        group_created_at: "2026-04-10T00:00:00Z",
-        month: "2026-04-01",
-        note: null,
-        performed_by_user_id: "user-1",
-        movement_count: 2,
-        total_amount_milliunits: 456000,
-        deleted: 0,
-      },
-    ]);
+    ).resolves.toEqual({
+      rows: [
+        {
+          id: "group-1",
+          group_created_at: "2026-04-10T00:00:00Z",
+          month: "2026-04-01",
+          note: null,
+          performed_by_user_id: "user-1",
+          movement_count: 2,
+          total_amount_milliunits: 456000,
+          deleted: 0,
+        },
+      ],
+      totalCount: 1,
+    });
     await expect(
       repository.listMoneyMovementGroups({ planId: "plan-1" }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ rows: [], totalCount: 0 });
 
     expect(db.calls[0]).toMatchObject({
-      params: ["plan-1", "2026-04-01"],
+      params: ["plan-1", "2026-04-01", 10, 0],
     });
     expect(db.calls[0]?.sql).toContain(
       "WHERE movement_group.plan_id = ? AND movement_group.deleted = 0 AND movement_group.month = ?",
@@ -158,10 +181,19 @@ describe("money movements read-model repository", () => {
       "GROUP BY movement_group.plan_id, movement_group.id",
     );
     expect(db.calls[1]).toMatchObject({
+      params: ["plan-1", "2026-04-01"],
+    });
+    expect(db.calls[1]?.sql).toContain(
+      "SELECT COUNT(*) AS count FROM ynab_money_movement_groups movement_group",
+    );
+    expect(db.calls[1]?.sql).toContain(
+      "WHERE movement_group.plan_id = ? AND movement_group.deleted = 0 AND movement_group.month = ?",
+    );
+    expect(db.calls[2]).toMatchObject({
       params: ["plan-1"],
     });
-    expect(db.calls[1]?.sql).not.toContain("movement_group.month = ?");
-    expect(db.calls[1]?.sql).toContain(
+    expect(db.calls[2]?.sql).not.toContain("movement_group.month = ?");
+    expect(db.calls[2]?.sql).toContain(
       "WHERE movement_group.plan_id = ? AND movement_group.deleted = 0",
     );
   });

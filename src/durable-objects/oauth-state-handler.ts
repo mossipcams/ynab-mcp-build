@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 type StorageLike = {
   delete?(key: string): Promise<boolean | void>;
   get<T>(key: string): Promise<T | undefined>;
@@ -35,8 +37,78 @@ function jsonResponse(payload: unknown, status = 200) {
   return Response.json(payload, { status });
 }
 
-function readJson(request: Request) {
-  return request.json() as Promise<Record<string, unknown>>;
+function invalidRequestResponse() {
+  return jsonResponse(
+    {
+      error: "invalid_request",
+      error_description: "OAuth state request body is invalid.",
+    },
+    400,
+  );
+}
+
+const BodyWithClientIdSchema = z
+  .object({
+    clientId: z.string().min(1),
+  })
+  .passthrough();
+
+const BodyWithCodeSchema = z
+  .object({
+    code: z.string().min(1),
+  })
+  .passthrough();
+
+const BodyWithKeySchema = z
+  .object({
+    key: z.string().min(1),
+  })
+  .passthrough();
+
+const BodyWithTokenSchema = z
+  .object({
+    token: z.string().min(1),
+  })
+  .passthrough();
+
+type JsonParseResult<T> =
+  | {
+      kind: "invalid";
+      response: Response;
+    }
+  | {
+      kind: "valid";
+      value: T;
+    };
+
+async function readJson<TSchema extends z.ZodType>(
+  request: Request,
+  schema: TSchema,
+): Promise<JsonParseResult<z.output<TSchema>>> {
+  let payload: unknown;
+
+  try {
+    payload = await request.json();
+  } catch {
+    return {
+      kind: "invalid",
+      response: invalidRequestResponse(),
+    };
+  }
+
+  const result = schema.safeParse(payload);
+
+  if (!result.success) {
+    return {
+      kind: "invalid",
+      response: invalidRequestResponse(),
+    };
+  }
+
+  return {
+    kind: "valid",
+    value: result.data,
+  };
 }
 
 async function runStorageCriticalSection<T>(
@@ -173,8 +245,13 @@ async function handleOAuthStateRequestUnsafe(
 
   if (request.method === "POST" && url.pathname === "/kv/consume") {
     return runStorageCriticalSection(storage, async () => {
-      const body = await readJson(request);
-      const key = String(body.key);
+      const body = await readJson(request, BodyWithKeySchema);
+
+      if (body.kind === "invalid") {
+        return body.response;
+      }
+
+      const key = body.value.key;
       const storageKey = kvRecordKey(key);
       const record = await getKvRecord(storage, key);
 
@@ -222,9 +299,13 @@ async function handleOAuthStateRequestUnsafe(
   }
 
   if (request.method === "POST" && url.pathname === "/clients") {
-    const body = await readJson(request);
+    const body = await readJson(request, BodyWithClientIdSchema);
 
-    await storage.put(clientKey(String(body.clientId)), body);
+    if (body.kind === "invalid") {
+      return body.response;
+    }
+
+    await storage.put(clientKey(body.value.clientId), body.value);
 
     return new Response(null, { status: 204 });
   }
@@ -237,9 +318,13 @@ async function handleOAuthStateRequestUnsafe(
   }
 
   if (request.method === "POST" && url.pathname === "/authorization-codes") {
-    const body = await readJson(request);
+    const body = await readJson(request, BodyWithCodeSchema);
 
-    await storage.put(authorizationCodeKey(String(body.code)), body);
+    if (body.kind === "invalid") {
+      return body.response;
+    }
+
+    await storage.put(authorizationCodeKey(body.value.code), body.value);
 
     return new Response(null, { status: 204 });
   }
@@ -261,8 +346,13 @@ async function handleOAuthStateRequestUnsafe(
     url.pathname === "/authorization-codes/use"
   ) {
     return runStorageCriticalSection(storage, async () => {
-      const body = await readJson(request);
-      const code = String(body.code);
+      const body = await readJson(request, BodyWithCodeSchema);
+
+      if (body.kind === "invalid") {
+        return body.response;
+      }
+
+      const code = body.value.code;
       const record = await storage.get<
         Record<string, unknown> & { used?: boolean }
       >(authorizationCodeKey(code));
@@ -281,9 +371,13 @@ async function handleOAuthStateRequestUnsafe(
   }
 
   if (request.method === "POST" && url.pathname === "/access-tokens") {
-    const body = await readJson(request);
+    const body = await readJson(request, BodyWithTokenSchema);
 
-    await storage.put(accessTokenKey(String(body.token)), body);
+    if (body.kind === "invalid") {
+      return body.response;
+    }
+
+    await storage.put(accessTokenKey(body.value.token), body.value);
 
     return new Response(null, { status: 204 });
   }
@@ -298,17 +392,26 @@ async function handleOAuthStateRequestUnsafe(
   }
 
   if (request.method === "POST" && url.pathname === "/refresh-tokens") {
-    const body = await readJson(request);
+    const body = await readJson(request, BodyWithTokenSchema);
 
-    await storage.put(refreshTokenKey(String(body.token)), body);
+    if (body.kind === "invalid") {
+      return body.response;
+    }
+
+    await storage.put(refreshTokenKey(body.value.token), body.value);
 
     return new Response(null, { status: 204 });
   }
 
   if (request.method === "POST" && url.pathname === "/refresh-tokens/rotate") {
     return runStorageCriticalSection(storage, async () => {
-      const body = await readJson(request);
-      const token = String(body.token);
+      const body = await readJson(request, BodyWithTokenSchema);
+
+      if (body.kind === "invalid") {
+        return body.response;
+      }
+
+      const token = body.value.token;
       const record = await storage.get<
         Record<string, unknown> & { familyId?: string; used?: boolean }
       >(refreshTokenKey(token));

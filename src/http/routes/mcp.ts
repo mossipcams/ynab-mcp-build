@@ -1,10 +1,11 @@
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { Hono } from "hono";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
 import type { AppDependencies } from "../../app/dependencies.js";
 import { getRegisteredToolDefinitions } from "../../app/tool-definitions.js";
 import { validateToolCallRequest } from "../../mcp/json-rpc-validation.js";
 import { createMcpServer } from "../../mcp/server.js";
+import type { SliceToolDefinition } from "../../shared/tool-definition.js";
 import { resolveAppEnv } from "../../shared/env.js";
 
 const MCP_JSON_BODY_LIMIT_BYTES = 1024 * 1024;
@@ -110,6 +111,20 @@ function withSseHeartbeat(response: Response) {
   });
 }
 
+async function handleMcpHttpRequest(
+  appEnv: ReturnType<typeof resolveAppEnv>,
+  toolDefinitions: SliceToolDefinition[],
+  request: Request,
+  options: { parsedBody?: unknown } = {},
+) {
+  const transport = new WebStandardStreamableHTTPServerTransport();
+  const server = createMcpServer(appEnv, toolDefinitions);
+
+  await server.connect(transport);
+
+  return transport.handleRequest(request, options);
+}
+
 async function readBoundedJsonBody(
   request: Request,
 ): Promise<JsonBodyReadResult> {
@@ -201,13 +216,10 @@ export function registerMcpRoutes(
         return validation.response;
       }
 
-      const transport = new WebStandardStreamableHTTPServerTransport();
-      const server = createMcpServer(env, registeredToolDefinitions);
-
-      await server.connect(transport);
-
       const requestOptions = parsedBody !== undefined ? { parsedBody } : {};
-      const response = await transport.handleRequest(
+      const response = await handleMcpHttpRequest(
+        env,
+        registeredToolDefinitions,
         context.req.raw,
         requestOptions,
       );

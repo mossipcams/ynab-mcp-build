@@ -1,10 +1,13 @@
-import type { ScheduledTransactionRow } from "../../platform/ynab/read-model/scheduled-transactions-repository.js";
+import type {
+  ScheduledTransactionRow,
+  ScheduledTransactionSearchResult,
+  SearchScheduledTransactionsInput,
+} from "../../platform/ynab/read-model/scheduled-transactions-repository.js";
 import {
+  DEFAULT_LIMIT,
   formatAmountMilliunits,
   hasProjectionControls,
-  paginateEntries,
   projectRecord,
-  shouldPaginateEntries,
 } from "../../shared/collections.js";
 import { compactObject } from "../../shared/object.js";
 
@@ -42,9 +45,10 @@ type DbScheduledTransactionDependencies = {
       planId: string;
       scheduledTransactionId: string;
     }): Promise<ScheduledTransactionRow | null>;
-    listScheduledTransactions(input: {
-      planId: string;
-    }): Promise<ScheduledTransactionRow[]>;
+    listScheduledTransactions(
+      input: SearchScheduledTransactionsInput,
+    ): Promise<ScheduledTransactionSearchResult>;
+    usesServerPagination?: boolean;
   };
 };
 
@@ -64,19 +68,6 @@ function resolvePlanId(input: { planId?: string }, defaultPlanId?: string) {
   }
 
   return planId;
-}
-
-function matchesScheduledTransaction(
-  row: ScheduledTransactionRow,
-  input: SearchDbScheduledTransactionsInput,
-) {
-  return [
-    !input.fromDate || (row.date_next ?? row.date_first) >= input.fromDate,
-    !input.toDate || (row.date_next ?? row.date_first) <= input.toDate,
-    !input.accountId || row.account_id === input.accountId,
-    !input.categoryId || row.category_id === input.categoryId,
-    !input.payeeId || row.payee_id === input.payeeId,
-  ].every(Boolean);
 }
 
 function toCompactScheduledTransaction(row: ScheduledTransactionRow) {
@@ -111,48 +102,131 @@ function toDisplayScheduledTransaction(row: ScheduledTransactionRow) {
   });
 }
 
+function buildPaginationMetadata(
+  input: {
+    limit: number;
+    offset?: number;
+  },
+  returnedCount: number,
+  totalCount: number,
+) {
+  const offset = input.offset ?? 0;
+
+  return {
+    limit: input.limit,
+    offset,
+    returned_count: returnedCount,
+    has_more: offset + returnedCount < totalCount,
+  };
+}
+
+function shouldIncludePaginationMetadata(
+  input: Pick<SearchDbScheduledTransactionsInput, "limit" | "offset">,
+  totalCount: number,
+) {
+  return (
+    input.limit !== undefined ||
+    input.offset !== undefined ||
+    totalCount > DEFAULT_LIMIT
+  );
+}
+
+function getEffectivePagination(
+  input: Pick<SearchDbScheduledTransactionsInput, "limit" | "offset">,
+) {
+  return {
+    limit: input.limit ?? DEFAULT_LIMIT,
+    ...(input.offset !== undefined ? { offset: input.offset } : {}),
+  };
+}
+
+function buildSearchInput(
+  input: SearchDbScheduledTransactionsInput,
+  planId: string,
+  options: { useServerPagination: boolean },
+): SearchScheduledTransactionsInput {
+  const searchInput: SearchScheduledTransactionsInput = { planId };
+
+  if (input.fromDate) {
+    searchInput.fromDate = input.fromDate;
+  }
+
+  if (input.toDate) {
+    searchInput.toDate = input.toDate;
+  }
+
+  if (input.accountId) {
+    searchInput.accountId = input.accountId;
+  }
+
+  if (input.categoryId) {
+    searchInput.categoryId = input.categoryId;
+  }
+
+  if (input.payeeId) {
+    searchInput.payeeId = input.payeeId;
+  }
+
+  if (options.useServerPagination) {
+    const pagination = getEffectivePagination(input);
+
+    searchInput.limit = pagination.limit;
+
+    if (pagination.offset !== undefined) {
+      searchInput.offset = pagination.offset;
+    }
+
+    return searchInput;
+  }
+
+  if (input.limit !== undefined) {
+    searchInput.limit = input.limit;
+  }
+
+  if (input.offset !== undefined) {
+    searchInput.offset = input.offset;
+  }
+
+  return searchInput;
+}
+
 export async function searchDbScheduledTransactions(
   dependencies: DbScheduledTransactionDependencies,
   input: SearchDbScheduledTransactionsInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const scheduledTransactions = (
+  const useServerPagination =
+    dependencies.scheduledTransactionsRepository.usesServerPagination === true;
+  const result =
     await dependencies.scheduledTransactionsRepository.listScheduledTransactions(
-      {
-        planId,
-      },
-    )
+      buildSearchInput(input, planId, { useServerPagination }),
+    );
+  const scheduledTransactions = result.rows.map(toCompactScheduledTransaction);
+  const paginationMetadata = shouldIncludePaginationMetadata(
+    input,
+    result.totalCount,
   )
-    .filter((row) => matchesScheduledTransaction(row, input))
-    .map(toCompactScheduledTransaction);
-  const shouldPaginate = shouldPaginateEntries(scheduledTransactions, input);
+    ? buildPaginationMetadata(
+        getEffectivePagination(input),
+        scheduledTransactions.length,
+        result.totalCount,
+      )
+    : {};
 
-  if (!shouldPaginate && !hasProjectionControls(input)) {
+  if (!hasProjectionControls(input)) {
     return {
       scheduled_transactions: scheduledTransactions,
-      scheduled_transaction_count: scheduledTransactions.length,
+      scheduled_transaction_count: result.totalCount,
+      ...paginationMetadata,
     };
   }
-
-  if (!shouldPaginate) {
-    return {
-      scheduled_transactions: scheduledTransactions.map((transaction) =>
-        projectRecord(transaction, scheduledTransactionFields, input),
-      ),
-      scheduled_transaction_count: scheduledTransactions.length,
-    };
-  }
-
-  const pagedTransactions = paginateEntries(scheduledTransactions, input);
 
   return {
-    scheduled_transactions: pagedTransactions.entries.map((transaction) =>
-      hasProjectionControls(input)
-        ? projectRecord(transaction, scheduledTransactionFields, input)
-        : transaction,
+    scheduled_transactions: scheduledTransactions.map((transaction) =>
+      projectRecord(transaction, scheduledTransactionFields, input),
     ),
-    scheduled_transaction_count: scheduledTransactions.length,
-    ...pagedTransactions.metadata,
+    scheduled_transaction_count: result.totalCount,
+    ...paginationMetadata,
   };
 }
 

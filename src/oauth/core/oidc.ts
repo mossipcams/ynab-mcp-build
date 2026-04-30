@@ -1,18 +1,5 @@
 import { z } from "zod";
 
-type OidcJwtHeader = {
-  alg?: string;
-  kid?: string;
-};
-
-type OidcJwtPayload = {
-  aud?: string | string[];
-  email?: string;
-  exp?: number;
-  iss?: string;
-  sub?: string;
-};
-
 type OidcJwks = {
   keys?: (JsonWebKey & { kid?: string })[];
 };
@@ -34,7 +21,10 @@ const OidcJwtPayloadSchema = z
   })
   .passthrough();
 
-function base64urlDecode(input: string): Uint8Array {
+type OidcJwtHeader = z.output<typeof OidcJwtHeaderSchema>;
+type OidcJwtPayload = z.output<typeof OidcJwtPayloadSchema>;
+
+function base64urlDecode(input: string): Uint8Array<ArrayBuffer> {
   const base64 = input
     .replace(/-/g, "+")
     .replace(/_/g, "/")
@@ -49,15 +39,23 @@ function base64urlDecode(input: string): Uint8Array {
   return bytes;
 }
 
-async function parseJsonFromBase64url<T>(
+function copyBytes(input: Uint8Array): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(input.byteLength);
+
+  bytes.set(input);
+
+  return bytes;
+}
+
+async function parseJsonFromBase64url<TSchema extends z.ZodType<unknown>>(
   input: string,
-  schema: z.ZodType<unknown>,
-): Promise<T> {
+  schema: TSchema,
+): Promise<z.output<TSchema>> {
   const rawPayload: unknown = await new Response(
     new TextDecoder().decode(base64urlDecode(input)),
   ).json();
 
-  return schema.parse(rawPayload) as T;
+  return schema.parse(rawPayload);
 }
 
 async function importRsaKey(jwk: JsonWebKey) {
@@ -83,8 +81,8 @@ async function verifySignature(options: {
   return crypto.subtle.verify(
     "RSASSA-PKCS1-v1_5",
     await importRsaKey(options.jwk),
-    options.signature as Uint8Array<ArrayBuffer>,
-    options.signedData as Uint8Array<ArrayBuffer>,
+    copyBytes(options.signature),
+    copyBytes(options.signedData),
   );
 }
 
@@ -125,16 +123,17 @@ export async function verifyOidcIdToken(input: {
     throw new Error("Access OIDC ID token is invalid.");
   }
 
-  const [headerSegment, payloadSegment, signatureSegment] = parts as [
-    string,
-    string,
-    string,
-  ];
-  const header = await parseJsonFromBase64url<OidcJwtHeader>(
+  const [headerSegment, payloadSegment, signatureSegment] = parts;
+
+  if (!headerSegment || !payloadSegment || !signatureSegment) {
+    throw new Error("Access OIDC ID token is invalid.");
+  }
+
+  const header: OidcJwtHeader = await parseJsonFromBase64url(
     headerSegment,
     OidcJwtHeaderSchema,
   );
-  const payload = await parseJsonFromBase64url<OidcJwtPayload>(
+  const payload: OidcJwtPayload = await parseJsonFromBase64url(
     payloadSegment,
     OidcJwtPayloadSchema,
   );
