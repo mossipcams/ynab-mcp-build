@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { registerToolDefinitions } from "./tool-registry.js";
 
 describe("registerToolDefinitions", () => {
-  it("advertises slice tools as approval-free read-only closed-world tools", () => {
+  it("advertises slice tools as approval-free read-only open-world tools", () => {
     const registerTool = vi.fn();
 
     registerToolDefinitions({ registerTool } as never, [
@@ -24,7 +24,7 @@ describe("registerToolDefinitions", () => {
       annotations: {
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
         readOnlyHint: true,
       },
     });

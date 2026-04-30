@@ -32,7 +32,7 @@ describe("registerToolDefinitions", () => {
       annotations: {
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
         readOnlyHint: true,
       },
     });

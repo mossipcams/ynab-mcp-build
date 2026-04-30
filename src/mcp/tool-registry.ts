@@ -6,7 +6,7 @@ import { toErrorResult, toTextResult } from "./results.js";
 const READ_ONLY_TOOL_ANNOTATIONS = {
   destructiveHint: false,
   idempotentHint: true,
-  openWorldHint: false,
+  openWorldHint: true,
   readOnlyHint: true,
 } as const;
 

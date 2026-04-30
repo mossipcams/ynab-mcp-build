@@ -439,7 +439,7 @@ describe("oauth routes", () => {
       expect(tool.annotations).toMatchObject({
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
         readOnlyHint: true,
       });
     }
