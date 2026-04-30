@@ -435,5 +435,13 @@ describe("oauth routes", () => {
       [...DISCOVERY_TOOL_NAMES].sort(),
     );
     expect(result.tools).toHaveLength(27);
+    for (const tool of result.tools) {
+      expect(tool.annotations).toMatchObject({
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+        readOnlyHint: true,
+      });
+    }
   });
 });
