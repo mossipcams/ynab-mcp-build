@@ -76,7 +76,7 @@ type RangeMonthSummary = {
   toBeBudgeted: number;
 };
 
-type DetailLevel = "brief" | "normal" | "detailed";
+type DetailLevel = "normal" | "detailed";
 
 const DIGEST_ATTENTION_THRESHOLD_MILLIUNITS = 50_000;
 
@@ -216,14 +216,7 @@ function resolveTopN(input: { topN?: number; detailLevel?: DetailLevel }) {
 
   const detailLevel = input.detailLevel ?? "normal";
 
-  switch (detailLevel) {
-    case "brief":
-      return 3;
-    case "detailed":
-      return 10;
-    case "normal":
-      return 5;
-  }
+  return detailLevel === "detailed" ? 10 : 5;
 }
 
 function isExplicitMonth(month: string | undefined): month is string {
@@ -1242,7 +1235,7 @@ export async function getMonthlyReview(
     spent: budgetHealth.spent,
     assigned_vs_spent: budgetHealth.assigned_vs_spent,
     top_spending_categories: toMonthSpendingRollups(monthTransactions, topN),
-    ...(input.detailLevel
+    ...(input.detailLevel === "detailed"
       ? {
           example_transactions: toExampleTransactions(
             monthTransactions.filter((transaction) => transaction.amount < 0),
@@ -1477,7 +1470,7 @@ export async function getSpendingSummary(
           transaction_count: entry.transactionCount,
         }),
       ),
-    ...(input.detailLevel
+    ...(input.detailLevel === "detailed"
       ? {
           example_transactions: toExampleTransactions(
             spendingTransactions,

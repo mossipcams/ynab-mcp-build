@@ -690,7 +690,7 @@ describe("financial health service", () => {
     });
   });
 
-  it("caps digest lists by detail level and uses stable tie-breaking", async () => {
+  it("caps digest lists by explicit topN and uses stable tie-breaking", async () => {
     // DEFECT: digest rankings can flood MCP context or flicker between calls with equivalent signals.
     const currentCategories = [
       "Alpha",
@@ -724,9 +724,9 @@ describe("financial health service", () => {
     } as unknown as YnabClient;
 
     const digest = await getBudgetChangeDigest(ynabClient, {
-      detailLevel: "brief",
       month: "2026-04-01",
       planId: "plan-1",
+      topN: 3,
     });
 
     expect(digest.top_changes).toHaveLength(3);

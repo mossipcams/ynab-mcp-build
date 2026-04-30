@@ -374,7 +374,7 @@ How to test:
 - Assert `liquid_cash`, `average_monthly_spending`,
   `average_daily_outflow`, `coverage_months`, `runway_days`,
   `scheduled_net_next_30d`, `status`, `months_considered`.
-- Call with `detailLevel: "brief"`; assert no example/support arrays.
+- Call with `detailLevel: "normal"`; assert no example/support arrays.
 - Call with `detailLevel: "detailed"`; assert bounded support fields if
   implemented.
 
@@ -478,7 +478,7 @@ How to test:
   `returned_count`, `has_more`, `limit`, `offset`.
 - Call exact get tool; assert richer fields than search row.
 - Call summary with `topN: 2`; assert all top arrays length <= 2.
-- Call summary with `detailLevel: "brief"`; assert example/support arrays
+- Call summary with `detailLevel: "normal"`; assert example/support arrays
   omitted.
 - Call with `detailLevel: "detailed"`; assert support arrays are still bounded
   by `topN`.
