@@ -389,4 +389,96 @@ describe("read model sync repository", () => {
     expect(db.batchCalls.map((batch) => batch.length)).toEqual([50, 50, 25]);
     expect(db.batchStatements).toHaveLength(125);
   });
+
+  it("chunks large category and month deltas into bounded D1 batches", async () => {
+    const db = new FakeD1Database();
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
+    const categoryCount = 104;
+    const categories = Array.from({ length: categoryCount }, (_, index) => ({
+      balance: index,
+      hidden: false,
+      id: `category-${index}`,
+      name: `Category ${index}`,
+    }));
+
+    const categoryResult = await repository.upsertCategoryGroups({
+      categoryGroups: [
+        {
+          categories,
+          deleted: false,
+          hidden: false,
+          id: "group-1",
+          name: "Everyday",
+        },
+      ],
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z",
+    });
+    const monthResult = await repository.upsertMonths({
+      months: [
+        {
+          activity: -5000,
+          budgeted: 5000,
+          categories,
+          income: 0,
+          month: "2026-04-01",
+          toBeBudgeted: 0,
+        },
+      ],
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z",
+    });
+
+    expect(categoryResult).toEqual({
+      categoriesUpserted: 104,
+      categoryGroupsUpserted: 1,
+    });
+    expect(monthResult).toEqual({
+      monthCategoriesUpserted: 104,
+      monthsUpserted: 1,
+    });
+    expect(db.batchCalls.every((batch) => batch.length <= 50)).toBe(true);
+    expect(db.batchCalls.map((batch) => batch.length)).toEqual([
+      50, 50, 5, 50, 50, 5,
+    ]);
+    expect(db.batchStatements).toHaveLength(210);
+  });
+
+  it("chunks large payee and money movement deltas into bounded D1 batches", async () => {
+    const db = new FakeD1Database();
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
+
+    const payeeResult = await repository.upsertPayees({
+      payees: Array.from({ length: 539 }, (_, index) => ({
+        deleted: false,
+        id: `payee-${index}`,
+        name: `Payee ${index}`,
+      })),
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z",
+    });
+    const moneyMovementResult = await repository.upsertMoneyMovements({
+      moneyMovements: Array.from({ length: 316 }, (_, index) => ({
+        amount: 1000,
+        deleted: false,
+        id: `movement-${index}`,
+        month: "2026-04-01",
+        movedAt: "2026-04-03T10:00:00Z",
+      })),
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z",
+    });
+
+    expect(payeeResult).toEqual({ rowsUpserted: 539 });
+    expect(moneyMovementResult).toEqual({ rowsUpserted: 316 });
+    expect(db.batchCalls.every((batch) => batch.length <= 50)).toBe(true);
+    expect(db.batchCalls.map((batch) => batch.length)).toEqual([
+      50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 39, 50, 50, 50, 50, 50, 50, 16,
+    ]);
+    expect(db.batchStatements).toHaveLength(855);
+  });
 });

@@ -5,7 +5,7 @@ import {
 import { z } from "zod";
 
 import {
-  monthFieldSchema,
+  normalizedMonthFieldSchema,
   paginationSchema,
   planIdSchema,
 } from "../../shared/tool-inputs.js";
@@ -26,9 +26,9 @@ export function getDbMoneyMovementToolDefinitions(
         "Searches category money movements synced from the D1 read model.",
       inputSchema: {
         ...planIdSchema,
-        month: monthFieldSchema.optional(),
-        fromMonth: monthFieldSchema.optional(),
-        toMonth: monthFieldSchema.optional(),
+        month: normalizedMonthFieldSchema.optional(),
+        fromMonth: normalizedMonthFieldSchema.optional(),
+        toMonth: normalizedMonthFieldSchema.optional(),
         groupBy: z.enum(["movement", "group"]).optional(),
         ...paginationSchema,
       },

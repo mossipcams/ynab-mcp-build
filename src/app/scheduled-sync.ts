@@ -180,7 +180,7 @@ export async function runScheduledReadModelSync(
     });
   } catch (error) {
     return {
-      reason: toErrorMessage(error),
+      reason: `plan_discovery: ${toErrorMessage(error)}`,
       status: "failed",
     };
   }

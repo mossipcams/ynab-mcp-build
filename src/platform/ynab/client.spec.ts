@@ -72,6 +72,27 @@ describe("ynab scoped transaction client methods", () => {
   });
 });
 
+describe("ynab plans client methods", () => {
+  it("accepts plan discovery responses with no default plan", async () => {
+    const client = createYnabClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async () =>
+        Response.json({
+          data: {
+            default_plan: null,
+            plans: [{ id: "plan-1", name: "Household" }],
+          },
+        }),
+    });
+
+    await expect(client.listPlans()).resolves.toEqual({
+      defaultPlan: null,
+      plans: [{ id: "plan-1", name: "Household" }],
+    });
+  });
+});
+
 describe("ynab category client methods", () => {
   it("accepts ordinary no-goal categories with null goal fields", async () => {
     const client = createYnabClient({

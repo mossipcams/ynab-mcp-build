@@ -4,7 +4,7 @@ import {
 } from "../../shared/tool-definition.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
 import {
-  monthFieldSchema,
+  normalizedMonthFieldSchema,
   planIdSchema,
   requiredIdSchema,
 } from "../../shared/tool-inputs.js";
@@ -44,7 +44,7 @@ export function getPlanToolDefinitions(
       inputSchema: {
         ...planIdSchema,
         categoryId: requiredIdSchema,
-        month: monthFieldSchema.optional(),
+        month: normalizedMonthFieldSchema.optional(),
       },
       execute: async ({ planId, categoryId, month }) =>
         getCategory(ynabClient, planId, categoryId, month),
@@ -63,7 +63,7 @@ export function getPlanToolDefinitions(
         "Returns a compact summary for a specific month in a YNAB plan.",
       inputSchema: {
         ...planIdSchema,
-        month: monthFieldSchema,
+        month: normalizedMonthFieldSchema,
       },
       execute: async ({ planId, month }) =>
         getPlanMonth(ynabClient, planId, month),

@@ -34,6 +34,7 @@ class FakeStatement {
 class FakeD1Database {
   allCalls: BoundStatement[] = [];
   allResults: unknown[][] = [];
+  batchCalls: BoundStatement[][] = [];
   batchStatements: BoundStatement[] = [];
 
   prepare(sql: string) {
@@ -41,16 +42,17 @@ class FakeD1Database {
   }
 
   batch(statements: D1PreparedStatement[]) {
-    this.batchStatements.push(
-      ...statements.map((statement) => {
-        const fake = statement as unknown as FakeStatement;
+    const boundStatements = statements.map((statement) => {
+      const fake = statement as unknown as FakeStatement;
 
-        return {
-          sql: fake.sql,
-          params: fake.params,
-        };
-      }),
-    );
+      return {
+        sql: fake.sql,
+        params: fake.params,
+      };
+    });
+
+    this.batchCalls.push(boundStatements);
+    this.batchStatements.push(...boundStatements);
 
     return Promise.resolve([] as D1Result[]);
   }
@@ -140,6 +142,33 @@ describe("transactions repository", () => {
     expect(subtransactionStatement.params).toContain("subtxn-1");
     expect(subtransactionStatement.params).toContain("transfer-subtxn-1");
     expect(deletedTransactionStatement.params).toContain(1);
+  });
+
+  it("chunks large transaction deltas into bounded D1 batches", async () => {
+    const db = new FakeD1Database();
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    const result = await repository.upsertTransactions({
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z",
+      transactions: Array.from({ length: 4_379 }, (_, index) => ({
+        amount: -1000,
+        date: "2026-04-12",
+        deleted: false,
+        id: `txn-${index}`,
+      })),
+    });
+
+    expect(result).toEqual({
+      rowsDeleted: 0,
+      rowsUpserted: 4_379,
+    });
+    expect(db.batchCalls.every((batch) => batch.length <= 50)).toBe(true);
+    expect(db.batchCalls).toHaveLength(88);
+    expect(db.batchCalls.at(-1)).toHaveLength(29);
+    expect(db.batchStatements).toHaveLength(4_379);
   });
 
   it("searches with parameterized filters and excludes deleted transactions by default", async () => {

@@ -8,6 +8,8 @@ import {
   fieldProjectionSchema,
   includeIdsSchema,
   monthFieldSchema,
+  normalizedMonthFieldSchema,
+  normalizedMonthSelectorSchema,
   monthSelectorSchema,
   paginationSchema,
   planIdSchema,
@@ -94,6 +96,15 @@ describe("shared tool input schemas", () => {
     expect(monthSelectorSchema.parse("current")).toBe("current");
     expect(monthSelectorSchema.parse("2026-04-01")).toBe("2026-04-01");
     expect(() => monthFieldSchema.parse("current")).toThrow();
+  });
+
+  it("normalizes tool-facing YYYY-MM month shorthands to YNAB first-of-month IDs", () => {
+    // DEFECT: tool callers can naturally provide YYYY-MM, but service/read-model code requires YYYY-MM-01.
+    expect(normalizedMonthFieldSchema.parse("2026-04")).toBe("2026-04-01");
+    expect(normalizedMonthFieldSchema.parse("2026-04-01")).toBe("2026-04-01");
+    expect(normalizedMonthSelectorSchema.parse("current")).toBe("current");
+    expect(normalizedMonthSelectorSchema.parse("2026-04")).toBe("2026-04-01");
+    expect(() => normalizedMonthFieldSchema.parse("2026-04-02")).toThrow();
   });
 
   it("keeps transaction cleared status filters limited to YNAB values", () => {

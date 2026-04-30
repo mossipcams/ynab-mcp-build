@@ -515,4 +515,186 @@ describe("read-model sync service", () => {
       status: "ok",
     });
   });
+
+  it("keeps sync health ok when large deltas exceed 100 records", async () => {
+    const categories = Array.from({ length: 104 }, (_, index) => ({
+      balance: index,
+      hidden: false,
+      id: `category-${index}`,
+      name: `Category ${index}`,
+    }));
+    const transactions = Array.from({ length: 4_379 }, (_, index) => ({
+      amount: -1000,
+      date: "2026-04-12",
+      deleted: false,
+      id: `txn-${index}`,
+    }));
+    const moneyMovements = Array.from({ length: 316 }, (_, index) => ({
+      amount: 1000,
+      deleted: false,
+      id: `movement-${index}`,
+      month: "2026-04-01",
+      movedAt: "2026-04-03T10:00:00Z",
+    }));
+    const deltaClient = {
+      listAccountsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 201,
+      })),
+      listCategoriesDelta: vi.fn(async () => ({
+        records: [
+          {
+            categories,
+            deleted: false,
+            hidden: false,
+            id: "group-1",
+            name: "Everyday",
+          },
+        ],
+        serverKnowledge: 202,
+      })),
+      listMonthsDelta: vi.fn(async () => ({
+        records: [
+          {
+            categories,
+            month: "2026-04-01",
+          },
+        ],
+        serverKnowledge: 203,
+      })),
+      listPayeesDelta: vi.fn(async () => ({
+        records: Array.from({ length: 539 }, (_, index) => ({
+          deleted: false,
+          id: `payee-${index}`,
+          name: `Payee ${index}`,
+        })),
+        serverKnowledge: 204,
+      })),
+      listPayeeLocationsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 205,
+      })),
+      listScheduledTransactionsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 206,
+      })),
+      listTransactionsDelta: vi.fn(async () => ({
+        records: transactions,
+        serverKnowledge: 207,
+      })),
+    } as unknown as YnabDeltaClient;
+    const moneyMovementClient = {
+      listMoneyMovementGroups: vi.fn(async () => ({
+        moneyMovementGroups: [],
+        serverKnowledge: 208,
+      })),
+      listMoneyMovements: vi.fn(async () => ({
+        moneyMovements,
+        serverKnowledge: 208,
+      })),
+    };
+    const syncStateRepository = createSyncStateRepository();
+    const readModelRepository = {
+      upsertAccounts: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertCategoryGroups: vi.fn(async () => ({
+        categoriesUpserted: 104,
+        categoryGroupsUpserted: 1,
+      })),
+      upsertMonths: vi.fn(async () => ({
+        monthCategoriesUpserted: 104,
+        monthsUpserted: 1,
+      })),
+      upsertMoneyMovementGroups: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertMoneyMovements: vi.fn(async () => ({ rowsUpserted: 316 })),
+      upsertPayees: vi.fn(async () => ({ rowsUpserted: 539 })),
+      upsertPayeeLocations: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertScheduledTransactions: vi.fn(async () => ({ rowsUpserted: 0 })),
+    };
+    const transactionsRepository = {
+      upsertTransactions: vi.fn(async () => ({
+        rowsDeleted: 0,
+        rowsUpserted: 4_379,
+      })),
+    };
+    const service = createReadModelSyncService({
+      deltaClient,
+      moneyMovementClient,
+      readModelRepository,
+      syncStateRepository,
+      transactionsRepository,
+    });
+
+    const result = await service.syncReadModel({
+      leaseOwner: "cron:123",
+      now: "2026-04-28T12:00:00.000Z",
+      planId: "plan-1",
+    });
+
+    expect(syncStateRepository.recordFailure).not.toHaveBeenCalled();
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "categories",
+        rowsUpserted: 105,
+        serverKnowledge: 202,
+      }),
+    );
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "months",
+        rowsUpserted: 105,
+        serverKnowledge: 203,
+      }),
+    );
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "payees",
+        rowsUpserted: 539,
+        serverKnowledge: 204,
+      }),
+    );
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "money_movements",
+        rowsUpserted: 316,
+        serverKnowledge: 208,
+      }),
+    );
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "transactions",
+        rowsUpserted: 4_379,
+        serverKnowledge: 207,
+      }),
+    );
+    expect(result).toMatchObject({
+      endpointResults: expect.arrayContaining([
+        expect.objectContaining({
+          endpoint: "categories",
+          rowsUpserted: 105,
+          status: "ok",
+        }),
+        expect.objectContaining({
+          endpoint: "months",
+          rowsUpserted: 105,
+          status: "ok",
+        }),
+        expect.objectContaining({
+          endpoint: "payees",
+          rowsUpserted: 539,
+          status: "ok",
+        }),
+        expect.objectContaining({
+          endpoint: "money_movements",
+          rowsUpserted: 316,
+          status: "ok",
+        }),
+        expect.objectContaining({
+          endpoint: "transactions",
+          rowsUpserted: 4_379,
+          status: "ok",
+        }),
+      ]),
+      status: "ok",
+    });
+  });
 });
