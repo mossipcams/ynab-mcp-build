@@ -29,6 +29,16 @@ export const monthSelectorSchema = z.union([
   monthFieldSchema,
 ]);
 
+export const normalizedMonthFieldSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}(?:-01)?$/)
+  .transform((month) => (month.length === 7 ? `${month}-01` : month));
+
+export const normalizedMonthSelectorSchema = z.union([
+  z.literal("current"),
+  normalizedMonthFieldSchema,
+]);
+
 export const dateFieldSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const clearedStatusSchema = z.enum([

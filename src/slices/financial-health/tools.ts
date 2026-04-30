@@ -7,8 +7,8 @@ import {
 } from "../../shared/tool-definition.js";
 import {
   dateFieldSchema,
-  monthFieldSchema,
-  monthSelectorSchema,
+  normalizedMonthFieldSchema,
+  normalizedMonthSelectorSchema,
   planIdSchema,
   requiredIdSchema,
 } from "../../shared/tool-inputs.js";
@@ -42,7 +42,7 @@ export function getFinancialHealthToolDefinitions(
         "Returns a compact net worth, cash, debt, and assigned-versus-spent snapshot. Use for broad budget and financial questions.",
       inputSchema: {
         ...planIdSchema,
-        month: monthSelectorSchema.optional(),
+        month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
@@ -55,7 +55,7 @@ export function getFinancialHealthToolDefinitions(
         "Summarizes available funds, overspending, underfunding, and assigned versus spent. Use for broad budget health questions.",
       inputSchema: {
         ...planIdSchema,
-        month: monthSelectorSchema.optional(),
+        month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
@@ -68,7 +68,7 @@ export function getFinancialHealthToolDefinitions(
         "Returns a compact score and top risk list across cash, cleanup, and budget stress. Use for broad budget risk questions.",
       inputSchema: {
         ...planIdSchema,
-        month: monthSelectorSchema.optional(),
+        month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
@@ -81,7 +81,7 @@ export function getFinancialHealthToolDefinitions(
         "Returns a compact month summary with cash flow, budget health, top spending categories, and capped examples. Use for broad budget monthly review questions.",
       inputSchema: {
         ...planIdSchema,
-        month: monthSelectorSchema.optional(),
+        month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
@@ -94,8 +94,8 @@ export function getFinancialHealthToolDefinitions(
         "Returns inflow, outflow, net flow, and assigned-versus-spent across a month range. Use for broad budget cash-flow questions.",
       inputSchema: {
         ...planIdSchema,
-        fromMonth: monthFieldSchema.optional(),
-        toMonth: monthFieldSchema.optional(),
+        fromMonth: normalizedMonthFieldSchema.optional(),
+        toMonth: normalizedMonthFieldSchema.optional(),
         detailLevel: detailLevelSchema.optional(),
       },
       execute: async (input) => getCashFlowSummary(ynabClient, input),
@@ -107,8 +107,8 @@ export function getFinancialHealthToolDefinitions(
         "Returns a compact spending summary with top categories, groups, payees, and capped examples across a month range. Use for broad budget spending questions.",
       inputSchema: {
         ...planIdSchema,
-        fromMonth: monthFieldSchema.optional(),
-        toMonth: monthFieldSchema.optional(),
+        fromMonth: normalizedMonthFieldSchema.optional(),
+        toMonth: normalizedMonthFieldSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
@@ -121,7 +121,7 @@ export function getFinancialHealthToolDefinitions(
         "Flags category spending spikes against a trailing monthly baseline. Use for broad budget anomaly questions.",
       inputSchema: {
         ...planIdSchema,
-        month: monthFieldSchema,
+        month: normalizedMonthFieldSchema,
         baselineMonths: z.number().int().min(1).max(12).optional(),
         topN: z.number().int().min(1).max(10).optional(),
         thresholdMultiplier: z.number().min(1).optional(),
@@ -141,8 +141,8 @@ export function getFinancialHealthToolDefinitions(
         "Returns assigned, spent, and available trends for a category or category group across months. Use for broad budget trend questions.",
       inputSchema: {
         ...planIdSchema,
-        fromMonth: monthFieldSchema.optional(),
-        toMonth: monthFieldSchema.optional(),
+        fromMonth: normalizedMonthFieldSchema.optional(),
+        toMonth: normalizedMonthFieldSchema.optional(),
         categoryId: requiredIdSchema.optional(),
         categoryGroupName: z.string().min(1).optional(),
         detailLevel: detailLevelSchema.optional(),
@@ -156,7 +156,7 @@ export function getFinancialHealthToolDefinitions(
         "Estimates liquid cash coverage in months and days against recent spending and upcoming scheduled activity.",
       inputSchema: {
         ...planIdSchema,
-        month: monthFieldSchema.optional(),
+        month: normalizedMonthFieldSchema.optional(),
         monthsBack: z.number().int().min(1).max(12).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
@@ -182,8 +182,8 @@ export function getFinancialHealthToolDefinitions(
         "Returns a compact monthly income summary across a month range. Use for broad budget income questions.",
       inputSchema: {
         ...planIdSchema,
-        fromMonth: monthFieldSchema.optional(),
-        toMonth: monthFieldSchema.optional(),
+        fromMonth: normalizedMonthFieldSchema.optional(),
+        toMonth: normalizedMonthFieldSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
@@ -210,7 +210,7 @@ export function getFinancialHealthToolDefinitions(
         "Returns a compact cleanup punch-list for uncategorized, unapproved, uncleared, and overspent items. Use for broad budget cleanup questions.",
       inputSchema: {
         ...planIdSchema,
-        month: monthSelectorSchema.optional(),
+        month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
@@ -223,8 +223,8 @@ export function getFinancialHealthToolDefinitions(
         "Returns a month-by-month net worth trajectory with liquid cash and debt. Use for broad budget net-worth questions.",
       inputSchema: {
         ...planIdSchema,
-        fromMonth: monthFieldSchema.optional(),
-        toMonth: monthFieldSchema.optional(),
+        fromMonth: normalizedMonthFieldSchema.optional(),
+        toMonth: normalizedMonthFieldSchema.optional(),
         detailLevel: detailLevelSchema.optional(),
       },
       execute: async (input) => getNetWorthTrajectory(ynabClient, input),

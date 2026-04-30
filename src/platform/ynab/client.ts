@@ -1027,6 +1027,7 @@ const YnabPlansResponseSchema = z
             name: z.string(),
           })
           .passthrough()
+          .nullable()
           .optional(),
       })
       .passthrough(),

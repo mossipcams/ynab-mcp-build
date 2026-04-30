@@ -194,4 +194,25 @@ describe("runScheduledReadModelSync", () => {
       "Scheduled D1 sync failed: YNAB_ACCESS_TOKEN is required for scheduled D1 sync.",
     );
   });
+
+  it("labels scheduled plan discovery failures before reporting them", async () => {
+    await expect(
+      runScheduledReadModelSyncAndReport(
+        createD1Env({ YNAB_DEFAULT_PLAN_ID: undefined }),
+        1777406400000,
+        {
+          createReadModelSyncService: vi.fn(),
+          ynabClient: {
+            listPlans: vi.fn(async () => {
+              throw new Error(
+                "YNAB API response did not match expected schema.",
+              );
+            }),
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "Scheduled D1 sync failed: plan_discovery: YNAB API response did not match expected schema.",
+    );
+  });
 });
