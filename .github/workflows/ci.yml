@@ -2,6 +2,9 @@ name: ci
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   merge_group:
 
 permissions:
@@ -31,3 +34,28 @@ jobs:
 
       - name: PR quality gate
         run: pnpm check:pr
+
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality-gate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy Worker
+        run: pnpm exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
