@@ -176,6 +176,7 @@ describe("dependency-cruiser architecture enforcement", () => {
 
     expect(preflight.CI_COMMANDS).toContain("pnpm check:pr");
     expect(packageJson.scripts?.["check:pr"]).toContain("pnpm check:deps");
-    expect(ciWorkflow).toContain("pnpm check:pr");
+    expect(packageJson.scripts?.["check:github"]).toContain("pnpm check:deps");
+    expect(ciWorkflow).toContain("pnpm check:github");
   });
 });
