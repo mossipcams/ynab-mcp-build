@@ -6,6 +6,7 @@ import {
   getFinancialSnapshot,
   getMonthlyReview,
   getNetWorthTrajectory,
+  getSpendingSummary,
 } from "./service.js";
 
 function spendingTransaction(index: number) {
@@ -183,5 +184,49 @@ describe("financial health context optimization", () => {
         expect.objectContaining({ id: "txn-2" }),
       ]),
     });
+  });
+
+  it("keeps normal detailLevel compact without representative transactions", async () => {
+    // DEFECT: normal verbosity should not spend extra context on transaction
+    // evidence; that evidence belongs behind detailed mode.
+    const transactions = Array.from({ length: 6 }, (_, index) =>
+      spendingTransaction(index),
+    );
+    const ynabClient = {
+      getPlanMonth: vi.fn().mockResolvedValue({
+        month: "2026-04-01",
+        income: 0,
+        budgeted: 120000,
+        activity: -78000,
+        toBeBudgeted: 0,
+        categories: [],
+      }),
+      listCategories: vi.fn().mockResolvedValue([]),
+      listPlanMonths: vi.fn().mockResolvedValue([
+        {
+          month: "2026-04-01",
+          income: 0,
+          budgeted: 120000,
+          activity: -78000,
+          deleted: false,
+        },
+      ]),
+      listTransactions: vi.fn().mockResolvedValue(transactions),
+    };
+
+    const monthlyReview = await getMonthlyReview(ynabClient as never, {
+      detailLevel: "normal",
+      month: "2026-04-01",
+      planId: "plan-1",
+    });
+    const spendingSummary = await getSpendingSummary(ynabClient as never, {
+      detailLevel: "normal",
+      fromMonth: "2026-04-01",
+      planId: "plan-1",
+      toMonth: "2026-04-01",
+    });
+
+    expect(monthlyReview).not.toHaveProperty("example_transactions");
+    expect(spendingSummary).not.toHaveProperty("example_transactions");
   });
 });

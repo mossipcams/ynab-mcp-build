@@ -29,7 +29,12 @@ import {
   getUpcomingObligations,
 } from "./service.js";
 
-const detailLevelSchema = z.enum(["brief", "normal", "detailed"]);
+const detailLevelSchema = z
+  .enum(["normal", "detailed"])
+  .optional()
+  .describe(
+    "Controls bounded summary evidence: normal is compact; detailed includes capped supporting examples when available.",
+  );
 const topNDescription = " topN is capped at 10.";
 
 export function getFinancialHealthToolDefinitions(
@@ -44,7 +49,7 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getFinancialSnapshot(ynabClient, input),
     }),
@@ -56,7 +61,7 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getBudgetHealthSummary(ynabClient, input),
     }),
@@ -68,7 +73,7 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getFinancialHealthCheck(ynabClient, input),
     }),
@@ -80,7 +85,7 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getMonthlyReview(ynabClient, input),
     }),
@@ -93,7 +98,6 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         fromMonth: normalizedMonthFieldSchema.optional(),
         toMonth: normalizedMonthFieldSchema.optional(),
-        detailLevel: detailLevelSchema.optional(),
       },
       execute: async (input) => getCashFlowSummary(ynabClient, input),
     }),
@@ -106,7 +110,7 @@ export function getFinancialHealthToolDefinitions(
         fromMonth: normalizedMonthFieldSchema.optional(),
         toMonth: normalizedMonthFieldSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getSpendingSummary(ynabClient, input),
     }),
@@ -121,7 +125,7 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         thresholdMultiplier: z.number().min(1).optional(),
         minimumDifference: z.number().int().min(0).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async ({ month, ...input }) =>
         getSpendingAnomalies(ynabClient, {
@@ -140,7 +144,6 @@ export function getFinancialHealthToolDefinitions(
         toMonth: normalizedMonthFieldSchema.optional(),
         categoryId: requiredIdSchema.optional(),
         categoryGroupName: z.string().min(1).optional(),
-        detailLevel: detailLevelSchema.optional(),
       },
       execute: async (input) => getCategoryTrendSummary(ynabClient, input),
     }),
@@ -153,7 +156,7 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         month: normalizedMonthFieldSchema.optional(),
         monthsBack: z.number().int().min(1).max(12).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getCashResilienceSummary(ynabClient, input),
     }),
@@ -165,7 +168,7 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         asOfDate: dateFieldSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getUpcomingObligations(ynabClient, input),
     }),
@@ -178,7 +181,7 @@ export function getFinancialHealthToolDefinitions(
         fromMonth: normalizedMonthFieldSchema.optional(),
         toMonth: normalizedMonthFieldSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getIncomeSummary(ynabClient, input),
     }),
@@ -191,7 +194,7 @@ export function getFinancialHealthToolDefinitions(
         fromDate: dateFieldSchema,
         toDate: dateFieldSchema,
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getRecurringExpenseSummary(ynabClient, input),
     }),
@@ -203,7 +206,7 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
         topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
+        detailLevel: detailLevelSchema,
       },
       execute: async (input) => getBudgetCleanupSummary(ynabClient, input),
     }),
@@ -216,7 +219,6 @@ export function getFinancialHealthToolDefinitions(
         ...planIdSchema,
         fromMonth: normalizedMonthFieldSchema.optional(),
         toMonth: normalizedMonthFieldSchema.optional(),
-        detailLevel: detailLevelSchema.optional(),
       },
       execute: async (input) => getNetWorthTrajectory(ynabClient, input),
     }),
