@@ -16,6 +16,9 @@ importers:
       hono:
         specifier: ^4.12.14
         version: 4.12.15
+      simple-statistics:
+        specifier: 7.8.9
+        version: 7.8.9
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -4708,6 +4711,12 @@ packages:
       }
     engines: { node: ">=14" }
 
+  simple-statistics@7.8.9:
+    resolution:
+      {
+        integrity: sha512-YT6MLqYsz7y1rQZOLFlOCCgSRpCi6bqY417yhoOLI7aVoBi29dD39EPrOE03W9DY25H0J0jizVsHZnkLzyGJFg==,
+      }
+
   sisteransi@1.0.5:
     resolution:
       {
@@ -8043,6 +8052,8 @@ snapshots:
   signal-exit@3.0.7: {}
 
   signal-exit@4.1.0: {}
+
+  simple-statistics@7.8.9: {}
 
   sisteransi@1.0.5: {}
 

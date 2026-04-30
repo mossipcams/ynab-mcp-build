@@ -117,7 +117,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_spending_anomalies",
       title: "Get YNAB Spending Anomalies",
-      description: `Flags category spending spikes against a trailing monthly baseline. Use for broad budget anomaly questions.${topNDescription}`,
+      description: `Flags category spending spikes against a trailing monthly baseline with z-scores for anomaly strength. Use for broad budget anomaly questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         month: normalizedMonthFieldSchema,
@@ -137,7 +137,7 @@ export function getFinancialHealthToolDefinitions(
       name: "ynab_get_category_trend_summary",
       title: "Get YNAB Category Trend Summary",
       description:
-        "Returns assigned, spent, and available trends for a category or category group across months. Use for broad budget trend questions.",
+        "Returns assigned, spent, available, regression slope, direction, and assigned-spent correlation trends for a category or category group across months. Use for broad budget trend questions.",
       inputSchema: {
         ...planIdSchema,
         fromMonth: normalizedMonthFieldSchema.optional(),

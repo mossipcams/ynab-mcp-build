@@ -83,4 +83,26 @@ describe("financial health tool descriptions", () => {
       expect(definition?.inputSchema).not.toHaveProperty("detailLevel");
     }
   });
+
+  it("documents default statistical diagnostics on analytical tools", () => {
+    const definitions = getFinancialHealthToolDefinitions({
+      listPlans: vi.fn(),
+    } as never);
+
+    expect(
+      definitions.find(
+        (definition) => definition.name === "ynab_get_spending_anomalies",
+      )?.description,
+    ).toContain("z-scores");
+    expect(
+      definitions.find(
+        (definition) => definition.name === "ynab_get_category_trend_summary",
+      )?.description,
+    ).toContain("regression slope");
+    expect(
+      definitions.find(
+        (definition) => definition.name === "ynab_get_category_trend_summary",
+      )?.description,
+    ).toContain("correlation");
+  });
 });

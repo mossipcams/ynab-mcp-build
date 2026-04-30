@@ -135,6 +135,22 @@ describe("repository preflight tooling", () => {
     });
   });
 
+  it("wires GitHub Actions to a remote CI gate without fast lint or secrets scanning", () => {
+    // DEFECT: remote PR CI can waste time on local-only fast linting or secret scanning while missing the canonical ESLint gate.
+    const packageJson = JSON.parse(readRootFile("package.json")) as {
+      scripts?: Record<string, string>;
+    };
+    const githubCheck = packageJson.scripts?.["check:github"] ?? "";
+    const workflow = readRootFile(".github/workflows/ci.yml");
+
+    expect(githubCheck).toContain("pnpm lint");
+    expect(githubCheck).not.toContain("pnpm lint:fast");
+    expect(githubCheck).not.toContain("pnpm secrets:scan");
+    expect(githubCheck).toContain("pnpm check:deps");
+    expect(workflow).toContain("pnpm check:github");
+    expect(workflow).not.toContain("pnpm check:pr");
+  });
+
   it("wires package scripts for native and stable TypeScript checks", () => {
     // DEFECT: fast native type-checking can replace the stable compiler gate without a clear fallback.
     const packageJson = JSON.parse(readRootFile("package.json")) as {
