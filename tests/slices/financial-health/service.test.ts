@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   getCashFlowSummary,
   getBudgetHealthSummary,
-  getCashRunway,
+  getCashResilienceSummary,
   getCategoryTrendSummary,
   getFinancialHealthCheck,
   getFinancialSnapshot,
@@ -72,7 +72,7 @@ describe("financial health service", () => {
       month: "2026-04-01",
       net_worth: "150.00",
       liquid_cash: "200.00",
-      debt: "50.00",
+      total_debt: "50.00",
       ready_to_assign: "25.00",
       income: "300.00",
       assigned: "200.00",
@@ -168,7 +168,7 @@ describe("financial health service", () => {
       month: "2026-04-01",
       net_worth: "560.00",
       liquid_cash: "650.00",
-      debt: "90.00",
+      total_debt: "90.00",
       ready_to_assign: "10.00",
       income: "120.00",
       assigned: "90.00",
@@ -328,6 +328,9 @@ describe("financial health service", () => {
       age_of_money: 9,
       ready_to_assign: "2.00",
       available_total: "0.00",
+      goal_count: 2,
+      underfunded_goal_total: "30.00",
+      off_track_goal_count: 2,
       overspent_total: "30.00",
       underfunded_total: "30.00",
       assigned: "50.00",
@@ -348,6 +351,13 @@ describe("financial health service", () => {
           id: "category-2",
           name: "Big Underfunded",
           category_group_name: "Goals",
+          amount: "20.00",
+        },
+      ],
+      top_underfunded_goals: [
+        {
+          id: "category-2",
+          name: "Big Underfunded",
           amount: "20.00",
         },
       ],
@@ -1298,17 +1308,19 @@ describe("financial health service", () => {
     };
 
     await expect(
-      getCashRunway(ynabClient as never, {
-        asOfMonth: "2026-04-01",
+      getCashResilienceSummary(ynabClient as never, {
+        month: "2026-04-01",
         monthsBack: 3,
       }),
     ).resolves.toEqual({
-      as_of_month: "2026-04-01",
+      month: "2026-04-01",
       liquid_cash: "300.00",
+      average_monthly_spending: "34.00",
       average_daily_outflow: "1.13",
+      coverage_months: "8.82",
       scheduled_net_next_30d: "-6.00",
       runway_days: "264.71",
-      status: "stable",
+      status: "strong",
       months_considered: 3,
     });
   });
@@ -1358,17 +1370,19 @@ describe("financial health service", () => {
     };
 
     await expect(
-      getCashRunway(ynabClient as never, {
-        asOfMonth: "2026-04-01",
+      getCashResilienceSummary(ynabClient as never, {
+        month: "2026-04-01",
         monthsBack: 2,
       }),
     ).resolves.toEqual({
-      as_of_month: "2026-04-01",
+      month: "2026-04-01",
       liquid_cash: "120.00",
+      average_monthly_spending: "45.00",
       average_daily_outflow: "1.50",
+      coverage_months: "2.67",
       scheduled_net_next_30d: "-15.00",
       runway_days: "80.00",
-      status: "watch",
+      status: "thin",
       months_considered: 2,
     });
   });

@@ -108,6 +108,7 @@ type TransactionRow = {
   id: string;
   date: string;
   amount_milliunits: number;
+  memo?: string | null;
   payee_id?: string | null;
   payee_name?: string | null;
   category_id?: string | null;
@@ -116,8 +117,30 @@ type TransactionRow = {
   account_name?: string | null;
   approved?: number | null;
   cleared?: string | null;
+  flag_color?: string | null;
+  flag_name?: string | null;
   deleted?: number | null;
   transfer_account_id?: string | null;
+  transfer_transaction_id?: string | null;
+  matched_transaction_id?: string | null;
+  import_id?: string | null;
+  import_payee_name?: string | null;
+  import_payee_name_original?: string | null;
+  debt_transaction_type?: string | null;
+};
+
+type SubtransactionRow = {
+  id: string;
+  transaction_id?: string | null;
+  amount_milliunits: number;
+  memo?: string | null;
+  payee_id?: string | null;
+  payee_name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  transfer_account_id?: string | null;
+  transfer_transaction_id?: string | null;
+  deleted?: number | null;
 };
 
 type ScheduledTransactionRow = {
@@ -260,6 +283,7 @@ function toTransaction(row: TransactionRow): YnabTransaction {
     id: row.id,
     date: row.date,
     amount: row.amount_milliunits,
+    memo: row.memo,
     payeeId: row.payee_id,
     payeeName: row.payee_name,
     categoryId: row.category_id,
@@ -268,9 +292,33 @@ function toTransaction(row: TransactionRow): YnabTransaction {
     accountName: row.account_name,
     approved: toBoolean(row.approved) ?? null,
     cleared: row.cleared,
+    flagColor: row.flag_color,
+    flagName: row.flag_name,
     deleted: toBoolean(row.deleted),
     isTransfer: Boolean(row.transfer_account_id),
     transferAccountId: row.transfer_account_id,
+    transferTransactionId: row.transfer_transaction_id,
+    matchedTransactionId: row.matched_transaction_id,
+    importId: row.import_id,
+    importPayeeName: row.import_payee_name,
+    importPayeeNameOriginal: row.import_payee_name_original,
+    debtTransactionType: row.debt_transaction_type,
+  });
+}
+
+function toSubtransaction(row: SubtransactionRow) {
+  return compact({
+    id: row.id,
+    transactionId: row.transaction_id,
+    amount: row.amount_milliunits,
+    memo: row.memo,
+    payeeId: row.payee_id,
+    payeeName: row.payee_name,
+    categoryId: row.category_id,
+    categoryName: row.category_name,
+    transferAccountId: row.transfer_account_id,
+    transferTransactionId: row.transfer_transaction_id,
+    deleted: toBoolean(row.deleted),
   });
 }
 
@@ -367,6 +415,7 @@ export function createYnabReadModelClient(
       `SELECT id,
               date,
               amount_milliunits,
+              memo,
               payee_id,
               payee_name,
               category_id,
@@ -375,13 +424,42 @@ export function createYnabReadModelClient(
               account_name,
               approved,
               cleared,
+              flag_color,
+              flag_name,
               deleted,
-              transfer_account_id
+              transfer_account_id,
+              transfer_transaction_id,
+              matched_transaction_id,
+              import_id,
+              import_payee_name,
+              import_payee_name_original,
+              debt_transaction_type
        FROM ynab_transactions
        WHERE plan_id = ?${extraWhere.length ? ` AND ${extraWhere.join(" AND ")}` : ""}
        ORDER BY date DESC, id`,
       planId,
       ...params,
+    );
+  }
+
+  async function listSubtransactionRows(planId: string, transactionId: string) {
+    return all<SubtransactionRow>(
+      `SELECT id,
+              transaction_id,
+              amount_milliunits,
+              memo,
+              payee_id,
+              payee_name,
+              category_id,
+              category_name,
+              transfer_account_id,
+              transfer_transaction_id,
+              deleted
+       FROM ynab_subtransactions
+       WHERE plan_id = ? AND transaction_id = ?
+       ORDER BY id`,
+      planId,
+      transactionId,
     );
   }
 
@@ -756,12 +834,20 @@ export function createYnabReadModelClient(
     },
 
     async getTransaction(planId: string, transactionId: string) {
-      return toTransaction(
+      const transaction = toTransaction(
         first(
           await listTransactionRows(planId, ["id = ?"], [transactionId]),
           `YNAB transaction ${transactionId} was not found in the read model.`,
         ),
       );
+      const subtransactions = (
+        await listSubtransactionRows(planId, transactionId)
+      ).map(toSubtransaction);
+
+      return compact({
+        ...transaction,
+        subtransactions: subtransactions.length ? subtransactions : undefined,
+      });
     },
 
     async listScheduledTransactions(planId: string) {

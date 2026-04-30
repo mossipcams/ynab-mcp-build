@@ -8,13 +8,42 @@ import { DISCOVERY_TOOL_NAMES } from "../../src/mcp/discovery.js";
 function createFailingD1Database(message: string): D1Database {
   return {
     prepare() {
+      const statement = {
+        async all() {
+          throw new Error(message);
+        },
+        bind() {
+          return statement;
+        },
+      };
+
+      return statement;
+    },
+  } as unknown as D1Database;
+}
+
+function createPlanD1Database(): D1Database {
+  return {
+    prepare(sql: string) {
       return {
         bind() {
-          return {
-            async all() {
-              throw new Error(message);
-            },
-          };
+          return this;
+        },
+        async all() {
+          if (sql.includes("FROM ynab_plans")) {
+            return {
+              results: [
+                {
+                  id: "plan-1",
+                  name: "Household",
+                  last_modified_on: "2026-04-01T00:00:00.000Z",
+                  deleted: 0,
+                },
+              ],
+            };
+          }
+
+          return { results: [] };
         },
       };
     },
@@ -26,7 +55,7 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     MCP_SERVER_NAME: "ynab-mcp-build",
     MCP_SERVER_VERSION: "0.1.0",
     YNAB_API_BASE_URL: "https://api.ynab.com/v1",
-    YNAB_DB: {} as D1Database,
+    YNAB_DB: createPlanD1Database(),
     YNAB_READ_SOURCE: "d1",
     ...overrides,
   } as unknown as Env;
@@ -161,7 +190,7 @@ describe("mcp protocol", () => {
     await client.connect(transport);
 
     const result = await client.callTool({
-      name: "ynab_get_mcp_version",
+      name: "ynab_list_plans",
       arguments: {},
     });
 
@@ -203,7 +232,7 @@ describe("mcp protocol", () => {
     await client.connect(transport);
 
     const result = await client.callTool({
-      name: "ynab_get_user",
+      name: "ynab_list_plans",
       arguments: {},
     });
     const textContent = result.content.find((entry) => entry.type === "text");
@@ -265,7 +294,7 @@ describe("mcp protocol", () => {
         jsonrpc: "2.0",
         method: "tools/call",
         params: {
-          name: "ynab_get_mcp_version",
+          name: "ynab_list_plans",
           arguments: {},
         },
       }),

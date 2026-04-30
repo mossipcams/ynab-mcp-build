@@ -24,57 +24,28 @@ function createPlainEnv(): Env {
     MCP_SERVER_VERSION: "0.1.0",
     YNAB_ACCESS_TOKEN,
     YNAB_API_BASE_URL: "https://api.ynab.com/v1",
+    YNAB_DB: createFailingD1Database(),
+    YNAB_READ_SOURCE: "d1",
   } as unknown as Env;
 }
 
-function createFailingYnabClient() {
+function createFailingD1Database(): D1Database {
   return {
-    getUser: async () => {
-      throw new Error(
-        `Authorization: Bearer ${YNAB_ACCESS_TOKEN} JWT_SIGNING_KEY=${JWT_SIGNING_KEY}`,
-      );
+    prepare() {
+      const statement = {
+        async all() {
+          throw new Error(
+            `Authorization: Bearer ${YNAB_ACCESS_TOKEN} JWT_SIGNING_KEY=${JWT_SIGNING_KEY}`,
+          );
+        },
+        bind() {
+          return statement;
+        },
+      };
+
+      return statement;
     },
-    listPlans: async () => [],
-    getPlan: async () => ({ id: "plan-1", name: "Plan" }),
-    listCategories: async () => [],
-    getCategory: async () => ({
-      hidden: false,
-      id: "category-1",
-      name: "Category",
-    }),
-    getMonthCategory: async () => ({
-      hidden: false,
-      id: "category-1",
-      name: "Category",
-    }),
-    getPlanSettings: async () => ({}),
-    listPlanMonths: async () => [],
-    getPlanMonth: async () => ({ month: "2026-04-01" }),
-    listAccounts: async () => [],
-    getAccount: async () => ({
-      closed: false,
-      id: "account-1",
-      name: "Checking",
-      type: "checking",
-    }),
-    listTransactions: async () => [],
-    getTransaction: async () => ({
-      amount: 0,
-      date: "2026-04-01",
-      id: "txn-1",
-    }),
-    listScheduledTransactions: async () => [],
-    getScheduledTransaction: async () => ({
-      amount: 0,
-      dateFirst: "2026-04-01",
-      id: "sched-1",
-    }),
-    listPayees: async () => [],
-    getPayee: async () => ({ id: "payee-1", name: "Payee" }),
-    listPayeeLocations: async () => [],
-    getPayeeLocation: async () => ({ id: "location-1" }),
-    getPayeeLocationsByPayee: async () => [],
-  };
+  } as unknown as D1Database;
 }
 
 describe("log secret leakage", () => {
@@ -117,9 +88,7 @@ describe("log secret leakage", () => {
   });
 
   it("does not log configured secrets when MCP tool execution fails", async () => {
-    const app = createApp({
-      ynabClient: createFailingYnabClient(),
-    });
+    const app = createApp();
 
     await app.request(
       "http://localhost/mcp",
@@ -135,7 +104,7 @@ describe("log secret leakage", () => {
           method: "tools/call",
           params: {
             arguments: {},
-            name: "ynab_get_user",
+            name: "ynab_list_plans",
           },
         }),
       },

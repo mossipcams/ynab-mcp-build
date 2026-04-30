@@ -8,6 +8,34 @@ import {
   issueToken,
 } from "../helpers/oauth-provider.js";
 
+function createPlanD1Database(): D1Database {
+  return {
+    prepare(sql: string) {
+      return {
+        bind() {
+          return this;
+        },
+        async all() {
+          if (sql.includes("FROM ynab_plans")) {
+            return {
+              results: [
+                {
+                  id: "plan-1",
+                  name: "Household",
+                  last_modified_on: "2026-04-01T00:00:00.000Z",
+                  deleted: 0,
+                },
+              ],
+            };
+          }
+
+          return { results: [] };
+        },
+      };
+    },
+  } as unknown as D1Database;
+}
+
 describe("authenticated tool call integration", () => {
   const cleanups: Array<() => Promise<void>> = [];
 
@@ -18,7 +46,9 @@ describe("authenticated tool call integration", () => {
   });
 
   it("lets a provider-issued OAuth token call MCP tools", async () => {
-    const env = createOAuthEnv();
+    const env = createOAuthEnv({
+      YNAB_DB: createPlanD1Database(),
+    });
     const { accessToken, tokenResponse } = await issueToken(env);
     const transport = new StreamableHTTPClientTransport(
       new URL("http://localhost/mcp"),
@@ -53,19 +83,26 @@ describe("authenticated tool call integration", () => {
 
     const tools = await client.listTools();
     const result = await client.callTool({
-      name: "ynab_get_mcp_version",
+      name: "ynab_list_plans",
       arguments: {},
     });
     const textContent = result.content.find((entry) => entry.type === "text");
 
     expect(tokenResponse.status).toBe(200);
-    expect(
-      tools.tools.some((tool) => tool.name === "ynab_get_mcp_version"),
-    ).toBe(true);
+    expect(tools.tools.some((tool) => tool.name === "ynab_list_plans")).toBe(
+      true,
+    );
     expect(textContent).toBeDefined();
     expect(JSON.parse((textContent as { text: string }).text)).toMatchObject({
-      name: "ynab-mcp-build",
-      version: "0.1.0",
+      status: "ok",
+      data: {
+        plans: [
+          {
+            id: "plan-1",
+            name: "Household",
+          },
+        ],
+      },
     });
   });
 });

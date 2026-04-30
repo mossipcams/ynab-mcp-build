@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { YnabClient } from "../../platform/ynab/client.js";
 import {
-  getCashRunway,
-  getEmergencyFundCoverage,
+  getCashResilienceSummary,
   getNetWorthTrajectory,
   getUpcomingObligations,
 } from "./service.js";
@@ -137,22 +136,15 @@ describe("financial health service", () => {
     });
 
     await expect(
-      getCashRunway(ynabClient, {
-        asOfMonth: "2026-04-01",
+      getCashResilienceSummary(ynabClient, {
+        month: "2026-04-01",
         planId: "plan-1",
       }),
     ).resolves.toMatchObject({
       average_daily_outflow: "1.00",
-      scheduled_net_next_30d: "-15.00",
-    });
-
-    await expect(
-      getEmergencyFundCoverage(ynabClient, {
-        asOfMonth: "2026-04-01",
-        planId: "plan-1",
-      }),
-    ).resolves.toMatchObject({
       average_monthly_spending: "30.00",
+      coverage_months: "3.00",
+      runway_days: "90.00",
       scheduled_net_next_30d: "-15.00",
     });
   });

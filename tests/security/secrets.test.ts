@@ -35,15 +35,16 @@ function createPlainEnv(): Env {
 function createFailingD1Database(message: string): D1Database {
   return {
     prepare() {
-      return {
+      const statement = {
+        async all() {
+          throw new Error(message);
+        },
         bind() {
-          return {
-            async all() {
-              throw new Error(message);
-            },
-          };
+          return statement;
         },
       };
+
+      return statement;
     },
   } as unknown as D1Database;
 }
@@ -65,7 +66,7 @@ async function callUserToolWithFailure(message: string) {
         method: "tools/call",
         params: {
           arguments: {},
-          name: "ynab_get_user",
+          name: "ynab_list_plans",
         },
       }),
     },

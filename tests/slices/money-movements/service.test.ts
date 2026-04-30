@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import {
-  getDbMoneyMovementGroups,
-  getDbMoneyMovements,
-} from "../../../src/slices/db-money-movements/service.js";
+import { searchDbMoneyMovements } from "../../../src/slices/db-money-movements/service.js";
 import { getDbMoneyMovementToolDefinitions } from "../../../src/slices/db-money-movements/tools.js";
 
 describe("money movements service", () => {
@@ -29,7 +26,7 @@ describe("money movements service", () => {
     };
 
     await expect(
-      getDbMoneyMovements(
+      searchDbMoneyMovements(
         {
           defaultPlanId: "plan-1",
           moneyMovementsRepository: repository,
@@ -77,12 +74,12 @@ describe("money movements service", () => {
     };
 
     await expect(
-      getDbMoneyMovementGroups(
+      searchDbMoneyMovements(
         {
           defaultPlanId: "plan-1",
           moneyMovementsRepository: repository,
         },
-        {},
+        { groupBy: "group" },
       ),
     ).resolves.toEqual({
       money_movement_groups: [
@@ -104,7 +101,7 @@ describe("money movements service", () => {
     });
   });
 
-  it("requires month in the month-scoped money movement tool schema", () => {
+  it("publishes one money movement search schema with optional month and group view", () => {
     const repository = {
       listMoneyMovementGroups: vi.fn(),
       listMoneyMovements: vi.fn(),
@@ -113,11 +110,24 @@ describe("money movements service", () => {
       defaultPlanId: "plan-1",
       moneyMovementsRepository: repository,
     });
-    const monthlyTool = definitions.find(
-      (definition) => definition.name === "ynab_get_money_movements_by_month",
+    const searchTool = definitions.find(
+      (definition) => definition.name === "ynab_search_money_movements",
     );
 
-    expect(monthlyTool).toBeDefined();
-    expect(() => z.object(monthlyTool?.inputSchema ?? {}).parse({})).toThrow();
+    expect(searchTool).toBeDefined();
+    expect(() =>
+      z.object(searchTool?.inputSchema ?? {}).parse({}),
+    ).not.toThrow();
+    expect(() =>
+      z.object(searchTool?.inputSchema ?? {}).parse({
+        groupBy: "account_transfer",
+      }),
+    ).toThrow();
+    expect(() =>
+      z.object(searchTool?.inputSchema ?? {}).parse({
+        groupBy: "group",
+        month: "2026-04-01",
+      }),
+    ).not.toThrow();
   });
 });

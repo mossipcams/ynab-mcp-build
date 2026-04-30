@@ -572,18 +572,9 @@ describe("oauth routes", () => {
       transport as unknown as Parameters<typeof client.connect>[0],
     );
 
-    const result = await client.callTool({
-      name: "ynab_get_mcp_version",
-      arguments: {},
-    });
-    const content = result.content as Array<{ type: string; text?: string }>;
-    const textContent = content.find((entry) => entry.type === "text");
+    const result = await client.listTools();
 
     expect(tokenResponse.status).toBe(200);
-    expect(textContent).toBeDefined();
-    expect(JSON.parse(textContent!.text!)).toMatchObject({
-      name: "ynab-mcp-build",
-      version: "0.1.0",
-    });
+    expect(result.tools.map((tool) => tool.name)).toContain("ynab_list_plans");
   });
 });

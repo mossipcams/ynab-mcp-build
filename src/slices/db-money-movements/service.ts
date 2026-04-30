@@ -11,12 +11,12 @@ import { compactObject } from "../../shared/object.js";
 
 export type DbMoneyMovementsInput = {
   planId?: string;
+  month?: string;
+  fromMonth?: string;
+  toMonth?: string;
+  groupBy?: "movement" | "group";
   limit?: number;
   offset?: number;
-};
-
-export type DbMoneyMovementsByMonthInput = DbMoneyMovementsInput & {
-  month: string;
 };
 
 type DbMoneyMovementsDependencies = {
@@ -81,6 +81,24 @@ function toDisplayMoneyMovementGroup(row: MoneyMovementGroupRow) {
   });
 }
 
+function matchesMonthRange(
+  month: string | null | undefined,
+  input: Pick<DbMoneyMovementsInput, "fromMonth" | "month" | "toMonth">,
+) {
+  if (!month) {
+    return false;
+  }
+
+  if (input.month) {
+    return month === input.month;
+  }
+
+  return (
+    (!input.fromMonth || month >= input.fromMonth) &&
+    (!input.toMonth || month <= input.toMonth)
+  );
+}
+
 function buildCollectionResult<TEntry>(
   entries: TEntry[],
   input: DbMoneyMovementsInput,
@@ -106,80 +124,49 @@ function buildCollectionResult<TEntry>(
   };
 }
 
-export async function getDbMoneyMovements(
+export async function searchDbMoneyMovements(
   dependencies: DbMoneyMovementsDependencies,
   input: DbMoneyMovementsInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const rows = await dependencies.moneyMovementsRepository.listMoneyMovements({
-    planId,
-  });
-
-  return buildCollectionResult(
-    rows.map(toDisplayMoneyMovement),
-    input,
-    "money_movements",
-    "movement_count",
-  );
-}
-
-export async function getDbMoneyMovementsByMonth(
-  dependencies: DbMoneyMovementsDependencies,
-  input: DbMoneyMovementsByMonthInput,
-) {
-  const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const rows = await dependencies.moneyMovementsRepository.listMoneyMovements({
+  const groupBy = input.groupBy ?? "movement";
+  const month = input.month;
+  const filters = compactObject({
     month: input.month,
-    planId,
+    from_month: input.fromMonth,
+    to_month: input.toMonth,
   });
+  const extra = Object.keys(filters).length ? filters : {};
+
+  if (groupBy === "group") {
+    const rows = (
+      await dependencies.moneyMovementsRepository.listMoneyMovementGroups({
+        ...(month ? { month } : {}),
+        planId,
+      })
+    ).filter((row) => matchesMonthRange(row.month, input));
+
+    return buildCollectionResult(
+      rows.map(toDisplayMoneyMovementGroup),
+      input,
+      "money_movement_groups",
+      "group_count",
+      extra,
+    );
+  }
+
+  const rows = (
+    await dependencies.moneyMovementsRepository.listMoneyMovements({
+      ...(month ? { month } : {}),
+      planId,
+    })
+  ).filter((row) => matchesMonthRange(row.month, input));
 
   return buildCollectionResult(
     rows.map(toDisplayMoneyMovement),
     input,
     "money_movements",
     "movement_count",
-    {
-      month: input.month,
-    },
-  );
-}
-
-export async function getDbMoneyMovementGroups(
-  dependencies: DbMoneyMovementsDependencies,
-  input: DbMoneyMovementsInput,
-) {
-  const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const rows =
-    await dependencies.moneyMovementsRepository.listMoneyMovementGroups({
-      planId,
-    });
-
-  return buildCollectionResult(
-    rows.map(toDisplayMoneyMovementGroup),
-    input,
-    "money_movement_groups",
-    "group_count",
-  );
-}
-
-export async function getDbMoneyMovementGroupsByMonth(
-  dependencies: DbMoneyMovementsDependencies,
-  input: DbMoneyMovementsByMonthInput,
-) {
-  const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const rows =
-    await dependencies.moneyMovementsRepository.listMoneyMovementGroups({
-      month: input.month,
-      planId,
-    });
-
-  return buildCollectionResult(
-    rows.map(toDisplayMoneyMovementGroup),
-    input,
-    "money_movement_groups",
-    "group_count",
-    {
-      month: input.month,
-    },
+    extra,
   );
 }

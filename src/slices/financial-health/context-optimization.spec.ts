@@ -4,7 +4,6 @@ import {
   getBudgetHealthSummary,
   getCashFlowSummary,
   getFinancialSnapshot,
-  getGoalProgressSummary,
   getMonthlyReview,
   getNetWorthTrajectory,
 } from "./service.js";
@@ -121,12 +120,7 @@ describe("financial health context optimization", () => {
       planId: "plan-1",
       month: "2026-04-01",
     });
-    await getGoalProgressSummary(ynabClient as never, {
-      planId: "plan-1",
-      month: "2026-04-01",
-    });
-
-    expect(ynabClient.getPlanMonth).toHaveBeenCalledTimes(2);
+    expect(ynabClient.getPlanMonth).toHaveBeenCalledTimes(1);
     expect(ynabClient.listAccounts).not.toHaveBeenCalled();
     expect(ynabClient.listTransactions).not.toHaveBeenCalled();
   });

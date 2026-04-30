@@ -100,24 +100,24 @@ describe("plans service", () => {
     });
   });
 
-  it("requires month in the plan-month tool schema and treats planId as optional", () => {
-    // DEFECT: the plan-month tool contract can stop requiring its key identifiers and accept ambiguous requests.
+  it("requires month in the rebuilt month detail tool schema and treats planId as optional", () => {
+    // DEFECT: the month detail tool contract can stop requiring its key identifier and accept ambiguous requests.
     const ynabClient = {
       getCategory: vi.fn(),
-      getMonthCategory: vi.fn(),
-      getPlan: vi.fn(),
       getPlanMonth: vi.fn(),
-      getPlanSettings: vi.fn(),
       listCategories: vi.fn(),
       listPlanMonths: vi.fn(),
       listPlans: vi.fn(),
     };
     const definitions = getPlanToolDefinitions(ynabClient as never);
     const monthTool = definitions.find(
-      (definition) => definition.name === "ynab_get_plan_month",
+      (definition) => definition.name === "ynab_get_month",
     );
 
     expect(monthTool).toBeDefined();
+    expect(definitions.map((definition) => definition.name)).not.toContain(
+      "ynab_get_plan_month",
+    );
     expect(() =>
       z.object(monthTool?.inputSchema ?? {}).parse({ planId: "plan-1" }),
     ).toThrow();

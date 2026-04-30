@@ -42,17 +42,15 @@ For the deeper import boundaries, read [architecture.md](architecture.md).
 
 ## Tool Surface
 
-The discovery document advertises 48 YNAB tools. The registered tools cover:
+The discovery document advertises 27 YNAB tools. The registered tools cover:
 
-- metadata: server version and authenticated YNAB user
-- plans, plan settings, months, categories, and month categories
-- accounts
-- payees and payee locations
-- transactions and transaction search
-- scheduled transactions
-- money movements and money movement groups
-- financial summaries, including monthly review, cash flow, spending,
-  emergency fund coverage, debt, goals, anomalies, and cleanup checks
+- plans, months, categories, accounts, and payees
+- compact transaction search plus rich transaction detail by id
+- scheduled transaction search plus rich scheduled transaction detail by id
+- category money movement search, with movement or group views
+- financial summaries, including monthly review, snapshot, health, budget
+  health, cleanup, cash flow, spending, anomalies, category trends, upcoming
+  obligations, income, recurring expenses, cash resilience, and net worth
 
 All advertised normal MCP tools are registered in D1 mode.
 
@@ -193,7 +191,7 @@ Useful optional settings:
   `planId` inputs.
 - `ACCESS_AUTHORIZATION_URL`, `ACCESS_TOKEN_URL`, and `ACCESS_JWKS_URL`:
   Cloudflare Access OIDC endpoint overrides.
-- `MCP_SERVER_NAME` and `MCP_SERVER_VERSION`: discovery and version tool output.
+- `MCP_SERVER_NAME` and `MCP_SERVER_VERSION`: discovery metadata.
 
 ## D1 Schema
 

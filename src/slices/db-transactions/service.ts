@@ -28,6 +28,7 @@ type TransactionSort = "amount_asc" | "amount_desc" | "date_asc" | "date_desc";
 
 export type DbTransactionSearchInput = {
   planId?: string;
+  month?: string;
   fromDate?: string;
   toDate?: string;
   payeeId?: string;
@@ -122,6 +123,27 @@ function resolveLimit(limit: number | undefined) {
   return Math.min(Math.max(limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
 }
 
+function toMilliunits(value: number) {
+  return Math.round(value * 1000);
+}
+
+function addMonths(month: string, offset: number) {
+  const [yearPart, monthPart] = month.slice(0, 7).split("-");
+  const date = new Date(
+    Date.UTC(Number(yearPart), Number(monthPart) - 1 + offset, 1),
+  );
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function endOfMonth(month: string) {
+  const nextMonth = addMonths(month, 1);
+  const [yearPart, monthPart] = nextMonth.slice(0, 7).split("-");
+  const date = new Date(Date.UTC(Number(yearPart), Number(monthPart) - 1, 0));
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
 function toFreshnessEnvelope(freshness: FreshnessResult) {
   return {
     ...freshness,
@@ -144,36 +166,19 @@ function buildReadModelSyncNextAction(planId: string) {
 }
 
 function toDisplayTransaction(row: TransactionSearchRow) {
-  return Object.fromEntries(
-    Object.entries({
-      id: row.id,
-      date: row.date,
-      amount: formatAmountMilliunits(row.amount_milliunits),
-      amount_milliunits: row.amount_milliunits,
-      memo: row.memo,
-      cleared: row.cleared,
-      approved:
-        row.approved === undefined || row.approved === null
-          ? undefined
-          : Boolean(row.approved),
-      flag_color: row.flag_color,
-      flag_name: row.flag_name,
-      account_id: row.account_id,
-      account_name: row.account_name,
-      payee_id: row.payee_id,
-      payee_name: row.payee_name,
-      category_id: row.category_id,
-      category_name: row.category_name,
-      transfer_account_id: row.transfer_account_id,
-      transfer_transaction_id: row.transfer_transaction_id,
-      matched_transaction_id: row.matched_transaction_id,
-      import_id: row.import_id,
-      import_payee_name: row.import_payee_name,
-      import_payee_name_original: row.import_payee_name_original,
-      debt_transaction_type: row.debt_transaction_type,
-      deleted: row.deleted ? true : undefined,
-    }).filter(([, value]) => value !== undefined),
-  );
+  return compactObject({
+    id: row.id,
+    date: row.date,
+    amount: formatAmountMilliunits(row.amount_milliunits),
+    cleared: row.cleared,
+    approved:
+      row.approved === undefined || row.approved === null
+        ? undefined
+        : Boolean(row.approved),
+    account_name: row.account_name,
+    payee_name: row.payee_name,
+    category_name: row.category_name,
+  });
 }
 
 function buildTransactionSummary(rows: TransactionSearchRow[], topN = 5) {
@@ -342,6 +347,8 @@ export async function searchTransactions(
   input: DbTransactionSearchInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
+  const startDate = input.month ? input.month : input.fromDate;
+  const endDate = input.month ? endOfMonth(input.month) : input.toDate;
   const freshness = await dependencies.freshness.getFreshness(
     planId,
     REQUIRED_ENDPOINTS,
@@ -365,15 +372,15 @@ export async function searchTransactions(
     ...(input.approved !== undefined ? { approved: input.approved } : {}),
     ...(input.categoryId ? { categoryIds: [input.categoryId] } : {}),
     ...(input.cleared ? { cleared: input.cleared } : {}),
-    ...(input.toDate ? { endDate: input.toDate } : {}),
+    ...(endDate ? { endDate } : {}),
     ...(input.maxAmount !== undefined
-      ? { maxAmountMilliunits: input.maxAmount }
+      ? { maxAmountMilliunits: toMilliunits(input.maxAmount) }
       : {}),
     ...(input.minAmount !== undefined
-      ? { minAmountMilliunits: input.minAmount }
+      ? { minAmountMilliunits: toMilliunits(input.minAmount) }
       : {}),
     ...(input.payeeId ? { payeeIds: [input.payeeId] } : {}),
-    ...(input.fromDate ? { startDate: input.fromDate } : {}),
+    ...(startDate ? { startDate } : {}),
   };
   const transactionPage =
     await dependencies.transactionsRepository.searchTransactions({
@@ -409,6 +416,7 @@ export async function searchTransactions(
         ...summary,
         filters: compactObject({
           from_date: input.fromDate,
+          month: input.month,
           to_date: input.toDate,
           payee_id: input.payeeId,
           account_id: input.accountId,
@@ -418,11 +426,11 @@ export async function searchTransactions(
           min_amount:
             input.minAmount == null
               ? undefined
-              : formatAmountMilliunits(input.minAmount),
+              : formatAmountMilliunits(toMilliunits(input.minAmount)),
           max_amount:
             input.maxAmount == null
               ? undefined
-              : formatAmountMilliunits(input.maxAmount),
+              : formatAmountMilliunits(toMilliunits(input.maxAmount)),
           include_transfers: input.includeTransfers ?? false,
           include_summary: input.includeSummary,
           sort,

@@ -155,28 +155,14 @@ describe("DB-backed transaction service", () => {
         returned_count: 1,
         transactions: [
           {
-            account_id: "account-1",
             account_name: "Checking",
             amount: "-12.00",
-            amount_milliunits: -12000,
             approved: true,
-            category_id: "category-1",
             category_name: "Groceries",
             cleared: "cleared",
             date: "2026-04-12",
-            debt_transaction_type: "payment",
-            flag_color: "blue",
-            flag_name: "follow up",
             id: "txn-1",
-            import_id: "YNAB:-12000:2026-04-12:1",
-            import_payee_name: "MKT",
-            import_payee_name_original: "Market Original",
-            matched_transaction_id: "matched-txn-1",
-            memo: "weekly run",
-            payee_id: "payee-1",
             payee_name: "Market",
-            transfer_account_id: null,
-            transfer_transaction_id: "transfer-txn-1",
           },
         ],
       },
@@ -284,6 +270,77 @@ describe("DB-backed transaction service", () => {
       },
     });
     expect(result.data?.transactions[0]).not.toHaveProperty("id");
+  });
+
+  it("maps month filters to calendar date ranges", async () => {
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => ({
+        rows: [],
+        totalCount: 0,
+      })),
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-04-28T12:00:00.000Z",
+        stale: false,
+        warning: null,
+      })),
+    };
+
+    await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      {
+        month: "2026-04-01",
+      },
+    );
+
+    expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endDate: "2026-04-30",
+        startDate: "2026-04-01",
+      }),
+    );
+  });
+
+  it("treats public amount filters as decimal currency units", async () => {
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => ({
+        rows: [],
+        totalCount: 0,
+      })),
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-04-28T12:00:00.000Z",
+        stale: false,
+        warning: null,
+      })),
+    };
+
+    const result = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      {
+        maxAmount: 100.25,
+        minAmount: -25,
+      },
+    );
+
+    expect(transactionsRepository.searchTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxAmountMilliunits: 100250,
+        minAmountMilliunits: -25000,
+      }),
+    );
+    expect(result).toMatchObject({
+      data: {
+        filters: {
+          max_amount: "100.25",
+          min_amount: "-25.00",
+        },
+      },
+    });
   });
 
   it("returns an unhealthy error without querying transactions when required sync never completed", async () => {

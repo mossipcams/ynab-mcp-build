@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import {
-  listPayeeLocations,
-  listPayees,
-} from "../../../src/slices/payees/service.js";
+import { listPayees } from "../../../src/slices/payees/service.js";
 import { getPayeeToolDefinitions } from "../../../src/slices/payees/tools.js";
 
 describe("payees service", () => {
@@ -43,59 +40,20 @@ describe("payees service", () => {
     });
   });
 
-  it("filters deleted payee locations from location listings", async () => {
-    // DEFECT: deleted payee locations can leak into geolocation output and cause clients to render stale map points.
+  it("exposes only the compact payee list schema", () => {
+    // DEFECT: dead-weight payee detail/location tools can creep back into the public surface.
     const ynabClient = {
-      listPayeeLocations: vi.fn().mockResolvedValue([
-        {
-          id: "location-1",
-          payeeId: "payee-1",
-          latitude: 30.2672,
-          longitude: -97.7431,
-          deleted: false,
-        },
-        {
-          id: "location-2",
-          payeeId: "payee-2",
-          latitude: 40.7128,
-          longitude: -74.006,
-          deleted: true,
-        },
-      ]),
-      listPlans: vi.fn().mockResolvedValue({
-        plans: [{ id: "plan-1", name: "Household" }],
-        defaultPlan: { id: "plan-1", name: "Household" },
-      }),
-    };
-
-    await expect(listPayeeLocations(ynabClient as never, {})).resolves.toEqual({
-      payee_locations: [
-        {
-          id: "location-1",
-          payee_id: "payee-1",
-          latitude: 30.2672,
-          longitude: -97.7431,
-        },
-      ],
-      payee_location_count: 1,
-    });
-  });
-
-  it("requires payeeId in the payee lookup tool schema", () => {
-    // DEFECT: the payee tool contract can lose its required payeeId field and push malformed requests into slice execution.
-    const ynabClient = {
-      getPayee: vi.fn(),
-      getPayeeLocation: vi.fn(),
-      getPayeeLocationsByPayee: vi.fn(),
-      listPayeeLocations: vi.fn(),
       listPayees: vi.fn(),
     };
     const definitions = getPayeeToolDefinitions(ynabClient as never);
-    const payeeTool = definitions.find(
-      (definition) => definition.name === "ynab_get_payee",
+    const listTool = definitions.find(
+      (definition) => definition.name === "ynab_list_payees",
     );
 
-    expect(payeeTool).toBeDefined();
-    expect(() => z.object(payeeTool?.inputSchema ?? {}).parse({})).toThrow();
+    expect(definitions.map((definition) => definition.name)).toEqual([
+      "ynab_list_payees",
+    ]);
+    expect(listTool).toBeDefined();
+    expect(() => z.object(listTool?.inputSchema ?? {}).parse({})).not.toThrow();
   });
 });
