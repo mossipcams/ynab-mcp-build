@@ -21,6 +21,16 @@ export type FinancialHealthInput = {
   detailLevel?: DetailLevel;
 };
 
+export type BudgetChangeDigestInput = FinancialHealthInput;
+
+export type MonthDeltaInput = {
+  planId?: string;
+  baselineMonth: string;
+  comparisonMonth: string;
+  topN?: number;
+  detailLevel?: DetailLevel;
+};
+
 export type FinancialHealthRangeInput = {
   planId?: string;
   fromMonth?: string;
@@ -67,6 +77,137 @@ type RangeMonthSummary = {
 };
 
 type DetailLevel = "brief" | "normal" | "detailed";
+
+const DIGEST_ATTENTION_THRESHOLD_MILLIUNITS = 50_000;
+
+export async function getBudgetChangeDigest(
+  ynabClient: YnabClient,
+  input: BudgetChangeDigestInput,
+) {
+  const planId = await resolvePlanId(ynabClient, input.planId);
+  const month = await resolveMonth(ynabClient, planId, input.month);
+  const previousMonth = addMonths(month, -1);
+  const topN = resolveTopN(input);
+  const [
+    monthDetail,
+    previousMonthDetail,
+    transactions,
+    scheduledTransactions,
+  ] = await Promise.all([
+    ynabClient.getPlanMonth(planId, month),
+    ynabClient.getPlanMonth(planId, previousMonth),
+    ynabClient.listTransactions(planId, month, endOfMonth(month)),
+    ynabClient.listScheduledTransactions(planId),
+  ]);
+
+  const topChanges = buildDigestTopChanges(
+    monthDetail.categories ?? [],
+    previousMonthDetail.categories ?? [],
+    topN,
+  );
+  const categoryPressure = buildDigestCategoryPressure(
+    monthDetail.categories ?? [],
+    topN,
+  );
+  const newLargeTransactions = buildDigestLargeTransactions(
+    transactions,
+    month,
+    topN,
+  );
+  const upcomingObligations = buildDigestUpcomingObligations(
+    scheduledTransactions,
+    `${month.slice(0, 7)}-01`,
+    topN,
+  );
+  const unusualSpending = topChanges.filter(
+    (change) => change.reason === "spending_increased",
+  );
+  const recommendedActions = buildDigestRecommendations({
+    categoryPressure,
+    topChanges,
+    upcomingObligations,
+  }).slice(0, topN);
+  const signalCount =
+    topChanges.length +
+    categoryPressure.length +
+    newLargeTransactions.length +
+    upcomingObligations.length;
+
+  return {
+    month,
+    headline:
+      signalCount === 0
+        ? `No notable budget changes need attention for ${month.slice(0, 7)}.`
+        : `${signalCount} budget signals need attention for ${month.slice(0, 7)}.`,
+    top_changes: topChanges,
+    new_large_transactions: newLargeTransactions,
+    category_pressure: categoryPressure,
+    unusual_spending: unusualSpending,
+    upcoming_obligations: upcomingObligations,
+    recommended_actions: recommendedActions,
+  };
+}
+
+export async function explainMonthDelta(
+  ynabClient: YnabClient,
+  input: MonthDeltaInput,
+) {
+  const planId = await resolvePlanId(ynabClient, input.planId);
+  const topN = resolveTopN(input);
+  const [baseline, comparison, transactions] = await Promise.all([
+    ynabClient.getPlanMonth(planId, input.baselineMonth),
+    ynabClient.getPlanMonth(planId, input.comparisonMonth),
+    ynabClient.listTransactions(
+      planId,
+      input.comparisonMonth,
+      endOfMonth(input.comparisonMonth),
+    ),
+  ]);
+  const baselineSpending = toSpentFromActivity(baseline.activity);
+  const comparisonSpending = toSpentFromActivity(comparison.activity);
+  const incomeDelta = (comparison.income ?? 0) - (baseline.income ?? 0);
+  const spendingDelta = comparisonSpending - baselineSpending;
+  const drivers = [
+    ...buildMonthDeltaDriver(
+      "income",
+      incomeDelta,
+      incomeDelta < 0 ? "income_decreased" : "income_increased",
+    ),
+    ...buildMonthDeltaDriver(
+      "spending",
+      spendingDelta,
+      spendingDelta > 0 ? "spending_increased" : "spending_decreased",
+    ),
+  ]
+    .sort(
+      (left, right) =>
+        right.amountMilliunits - left.amountMilliunits ||
+        left.code.localeCompare(right.code),
+    )
+    .slice(0, topN)
+    .map((driver) => ({
+      code: driver.code,
+      area: driver.area,
+      amount: formatMilliunits(driver.amountMilliunits),
+    }));
+
+  return {
+    baseline_month: input.baselineMonth,
+    comparison_month: input.comparisonMonth,
+    summary: `Compared ${input.comparisonMonth.slice(0, 7)} with ${input.baselineMonth.slice(0, 7)} across income, spending, and category movement.`,
+    drivers,
+    category_deltas: buildDigestTopChanges(
+      comparison.categories ?? [],
+      baseline.categories ?? [],
+      topN,
+    ),
+    transaction_evidence: buildDigestLargeTransactions(
+      transactions,
+      input.comparisonMonth,
+      topN,
+    ),
+  };
+}
 
 function resolveTopN(input: { topN?: number; detailLevel?: DetailLevel }) {
   if (input.topN !== undefined) {
@@ -612,6 +753,283 @@ function toExampleTransactions(transactions: YnabTransaction[], topN: number) {
         type: transaction.amount >= 0 ? "inflow" : "outflow",
       }),
     );
+}
+
+function visibleDigestCategories(categories: FinancialHealthCategory[]) {
+  return categories.filter((category) => !category.deleted && !category.hidden);
+}
+
+function buildDigestTopChanges(
+  currentCategories: FinancialHealthCategory[],
+  previousCategories: FinancialHealthCategory[],
+  topN: number,
+) {
+  const previousById = new Map(
+    visibleDigestCategories(previousCategories).map((category) => [
+      category.id,
+      category,
+    ]),
+  );
+
+  return visibleDigestCategories(currentCategories)
+    .map((category) => {
+      const previous = previousById.get(category.id);
+      const currentSpent = toSpentFromActivity(category.activity);
+      const previousSpent = toSpentFromActivity(previous?.activity);
+      const spendingIncrease = currentSpent - previousSpent;
+      const availableDrop = (previous?.balance ?? 0) - category.balance;
+      const assignedChange = Math.abs(
+        (category.budgeted ?? 0) - (previous?.budgeted ?? 0),
+      );
+      const candidates = [
+        {
+          amountMilliunits: spendingIncrease,
+          reason: "spending_increased",
+        },
+        {
+          amountMilliunits: availableDrop,
+          reason: "available_dropped",
+        },
+        {
+          amountMilliunits: assignedChange,
+          reason: "assigned_changed",
+        },
+      ].filter((entry) => entry.amountMilliunits > 0);
+      const strongest = candidates.sort(
+        (left, right) =>
+          right.amountMilliunits - left.amountMilliunits ||
+          left.reason.localeCompare(right.reason),
+      )[0];
+
+      if (!strongest) {
+        return null;
+      }
+
+      return {
+        category_id: category.id,
+        category_name: category.name,
+        isOverspent: category.balance < 0,
+        reason: strongest.reason,
+        amountMilliunits: strongest.amountMilliunits,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .filter(
+      (entry) =>
+        entry.isOverspent ||
+        entry.amountMilliunits >= DIGEST_ATTENTION_THRESHOLD_MILLIUNITS,
+    )
+    .sort(
+      (left, right) =>
+        right.amountMilliunits - left.amountMilliunits ||
+        left.category_name.localeCompare(right.category_name) ||
+        left.category_id.localeCompare(right.category_id),
+    )
+    .slice(0, topN)
+    .map((entry) => ({
+      category_id: entry.category_id,
+      category_name: entry.category_name,
+      reason: entry.reason,
+      amount: formatMilliunits(entry.amountMilliunits),
+    }));
+}
+
+function buildDigestCategoryPressure(
+  categories: FinancialHealthCategory[],
+  topN: number,
+) {
+  return visibleDigestCategories(categories)
+    .map((category) => {
+      if (category.balance < 0) {
+        return {
+          category_id: category.id,
+          category_name: category.name,
+          pressure_reason: "overspent",
+          severity: 2,
+          amountMilliunits: Math.abs(category.balance),
+          available: category.balance,
+          activity: category.activity ?? 0,
+        };
+      }
+
+      if ((category.goalUnderFunded ?? 0) > 0) {
+        return {
+          category_id: category.id,
+          category_name: category.name,
+          pressure_reason: "underfunded",
+          severity: 1,
+          amountMilliunits: category.goalUnderFunded ?? 0,
+          available: category.balance,
+          activity: category.activity ?? 0,
+        };
+      }
+
+      return null;
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort(
+      (left, right) =>
+        right.severity - left.severity ||
+        right.amountMilliunits - left.amountMilliunits ||
+        left.category_name.localeCompare(right.category_name) ||
+        left.category_id.localeCompare(right.category_id),
+    )
+    .slice(0, topN)
+    .map((entry) => ({
+      category_id: entry.category_id,
+      category_name: entry.category_name,
+      pressure_reason: entry.pressure_reason,
+      amount: formatMilliunits(entry.amountMilliunits),
+      available: formatMilliunits(entry.available),
+      activity: formatMilliunits(toSpentFromActivity(entry.activity)),
+    }));
+}
+
+function buildDigestLargeTransactions(
+  transactions: YnabTransaction[],
+  month: string,
+  topN: number,
+) {
+  return transactions
+    .filter((transaction) => isNonTransferMonthTransaction(transaction, month))
+    .filter(
+      (transaction) =>
+        Math.abs(transaction.amount) >= DIGEST_ATTENTION_THRESHOLD_MILLIUNITS,
+    )
+    .sort(
+      (left, right) =>
+        Math.abs(right.amount) - Math.abs(left.amount) ||
+        right.date.localeCompare(left.date) ||
+        left.id.localeCompare(right.id),
+    )
+    .slice(0, topN)
+    .map((transaction) =>
+      compactObject({
+        id: transaction.id,
+        date: transaction.date,
+        amount: formatMilliunits(Math.abs(transaction.amount)),
+        payee_name: transaction.payeeName,
+        category_name: transaction.categoryName,
+        account_name: transaction.accountName,
+        type: transaction.amount >= 0 ? "inflow" : "outflow",
+      }),
+    );
+}
+
+function buildDigestUpcomingObligations(
+  scheduledTransactions: Array<{
+    id: string;
+    amount: number;
+    dateNext?: string | null;
+    deleted?: boolean;
+    transferAccountId?: string | null;
+    payeeName?: string | null;
+    categoryName?: string | null;
+    accountName?: string | null;
+  }>,
+  asOfDate: string,
+  topN: number,
+) {
+  return scheduledTransactions
+    .filter(isNonTransferScheduledTransaction)
+    .map((transaction) => ({
+      ...transaction,
+      daysUntilDue: daysUntil(asOfDate, transaction.dateNext!),
+    }))
+    .filter((transaction) => transaction.daysUntilDue >= 0)
+    .filter((transaction) => transaction.daysUntilDue <= 30)
+    .sort(
+      (left, right) =>
+        left.daysUntilDue - right.daysUntilDue ||
+        Math.abs(right.amount) - Math.abs(left.amount) ||
+        left.id.localeCompare(right.id),
+    )
+    .slice(0, topN)
+    .map((transaction) =>
+      compactObject({
+        id: transaction.id,
+        date_next: transaction.dateNext,
+        amount: formatMilliunits(Math.abs(transaction.amount)),
+        payee_name: transaction.payeeName,
+        category_name: transaction.categoryName,
+        account_name: transaction.accountName,
+        type: transaction.amount >= 0 ? "inflow" : "outflow",
+      }),
+    );
+}
+
+function buildDigestRecommendations(input: {
+  categoryPressure: Array<{
+    category_id: string;
+    category_name: string;
+    pressure_reason: string;
+  }>;
+  topChanges: Array<{
+    category_id: string;
+    category_name: string;
+    reason: string;
+  }>;
+  upcomingObligations: Array<{ id?: string; payee_name?: string }>;
+}) {
+  const recommendations = new Map<
+    string,
+    {
+      priority: "high" | "medium" | "low";
+      action: string;
+      reason: string;
+      target: string;
+    }
+  >();
+
+  for (const pressure of input.categoryPressure) {
+    const key = `category:${pressure.category_id}`;
+    recommendations.set(key, {
+      action:
+        pressure.pressure_reason === "overspent"
+          ? `Cover overspending in ${pressure.category_name}.`
+          : `Review funding for ${pressure.category_name}.`,
+      priority: pressure.pressure_reason === "overspent" ? "high" : "medium",
+      reason: pressure.pressure_reason,
+      target: pressure.category_name,
+    });
+  }
+
+  for (const change of input.topChanges) {
+    const key = `category:${change.category_id}`;
+
+    if (recommendations.has(key)) {
+      continue;
+    }
+
+    recommendations.set(key, {
+      action: `Inspect ${change.category_name} for ${change.reason.replaceAll("_", " ")}.`,
+      priority: "low",
+      reason: change.reason,
+      target: change.category_name,
+    });
+  }
+
+  const priorityRank = { high: 0, medium: 1, low: 2 };
+
+  return Array.from(recommendations.values()).sort(
+    (left, right) =>
+      priorityRank[left.priority] - priorityRank[right.priority] ||
+      left.target.localeCompare(right.target),
+  );
+}
+
+function buildMonthDeltaDriver(area: string, delta: number, code: string) {
+  if (delta === 0) {
+    return [];
+  }
+
+  return [
+    {
+      amountMilliunits: Math.abs(delta),
+      area,
+      code,
+    },
+  ];
 }
 
 export async function getFinancialSnapshot(

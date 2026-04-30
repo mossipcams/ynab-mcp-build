@@ -460,6 +460,64 @@ describe("DB-backed tool registration", () => {
     ).toBe(false);
   });
 
+  it("checks digest freshness across all insight inputs before execution", async () => {
+    // DEFECT: digest can return stale-looking insight when one of its read-model inputs never synced.
+    const database = new FakeD1Database();
+    database.endpointHealthStatuses.set("money_movements", "unhealthy");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    );
+    const digest = definitions.find(
+      (definition) => definition.name === "ynab_get_budget_change_digest",
+    );
+
+    await expect(
+      executeToolDefinition(digest, { month: "2026-04-01" }),
+    ).resolves.toMatchObject({
+      status: "unhealthy",
+      data_freshness: {
+        health_status: "unhealthy",
+        required_endpoints: [
+          "accounts",
+          "categories",
+          "months",
+          "transactions",
+          "scheduled_transactions",
+          "money_movements",
+        ],
+      },
+      data: null,
+    });
+  });
+
+  it("checks month delta freshness before execution", async () => {
+    // DEFECT: month delta can compare months from incomplete read-model endpoints.
+    const database = new FakeD1Database();
+    database.endpointHealthStatuses.set("transactions", "unhealthy");
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    );
+    const delta = definitions.find(
+      (definition) => definition.name === "ynab_explain_month_delta",
+    );
+
+    await expect(
+      executeToolDefinition(delta, {
+        baselineMonth: "2026-03-01",
+        comparisonMonth: "2026-04-01",
+      }),
+    ).resolves.toMatchObject({
+      status: "unhealthy",
+      data_freshness: {
+        health_status: "unhealthy",
+        required_endpoints: ["categories", "months", "transactions"],
+      },
+      data: null,
+    });
+  });
+
   it("requires all count sources before reading plan details", async () => {
     const database = new FakeD1Database();
     database.endpointHealthStatuses.set("accounts", "unhealthy");

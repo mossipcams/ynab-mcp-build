@@ -527,4 +527,60 @@ describe("ynab money movement client methods", () => {
       "https://api.ynab.com/v1/plans/plan-1/money_movement_groups",
     ]);
   });
+
+  it("sends last_knowledge_of_server for money movement requests when provided", async () => {
+    // DEFECT: YNAB money movement client can drop delta cursor query params.
+    const requests: string[] = [];
+    const client = createYnabClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async (input) => {
+        requests.push(String(input));
+
+        if (String(input).includes("money_movement_groups")) {
+          return Response.json({
+            data: { money_movement_groups: [], server_knowledge: 43 },
+          });
+        }
+
+        return Response.json({
+          data: { money_movements: [], server_knowledge: 42 },
+        });
+      },
+    });
+
+    await client.listMoneyMovements("plan-1", 41);
+    await client.listMoneyMovementGroups("plan-1", 41);
+
+    expect(requests).toEqual([
+      "https://api.ynab.com/v1/plans/plan-1/money_movements?last_knowledge_of_server=41",
+      "https://api.ynab.com/v1/plans/plan-1/money_movement_groups?last_knowledge_of_server=41",
+    ]);
+  });
+
+  it("omits money movement cursor query params when no server knowledge exists", async () => {
+    // DEFECT: initial money movement sync can send invalid empty cursor parameters.
+    const requests: string[] = [];
+    const client = createYnabClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async (input) => {
+        requests.push(String(input));
+
+        return Response.json({
+          data: String(input).includes("money_movement_groups")
+            ? { money_movement_groups: [], server_knowledge: 43 }
+            : { money_movements: [], server_knowledge: 42 },
+        });
+      },
+    });
+
+    await client.listMoneyMovements("plan-1");
+    await client.listMoneyMovementGroups("plan-1");
+
+    expect(requests).toEqual([
+      "https://api.ynab.com/v1/plans/plan-1/money_movements",
+      "https://api.ynab.com/v1/plans/plan-1/money_movement_groups",
+    ]);
+  });
 });
