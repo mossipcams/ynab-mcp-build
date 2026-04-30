@@ -5,7 +5,7 @@ import {
   listTransactions,
   searchTransactions,
 } from "../../../src/slices/transactions/service.js";
-import { getTransactionToolDefinitions } from "../../../src/slices/transactions/tools.js";
+import { getDbTransactionToolDefinitions } from "../../../src/slices/db-transactions/tools.js";
 
 describe("transactions service", () => {
   it("excludes transfer transactions from search results by default", async () => {
@@ -613,11 +613,10 @@ describe("transactions service", () => {
 
   it("rejects invalid transaction search sort values at the tool schema boundary", () => {
     // DEFECT: the transaction search tool can accept unsupported sort values and leave downstream handlers with ambiguous ordering behavior.
-    const ynabClient = {
-      listPlans: vi.fn(),
-      listTransactions: vi.fn(),
-    };
-    const definitions = getTransactionToolDefinitions(ynabClient as never);
+    const definitions = getDbTransactionToolDefinitions({
+      freshness: {} as never,
+      transactionsRepository: {} as never,
+    });
     const searchTool = definitions.find(
       (definition) => definition.name === "ynab_search_transactions",
     );

@@ -3,6 +3,7 @@ import {
   type SliceToolDefinition,
 } from "../../shared/tool-definition.js";
 import {
+  dateFieldSchema,
   fieldProjectionSchema,
   includeIdsSchema,
   paginationSchema,
@@ -11,7 +12,7 @@ import {
 } from "../../shared/tool-inputs.js";
 import {
   getDbScheduledTransaction,
-  listDbScheduledTransactions,
+  searchDbScheduledTransactions,
 } from "./service.js";
 
 const scheduledTransactionFields = [
@@ -24,7 +25,7 @@ const scheduledTransactionFields = [
 ] as const;
 
 export type DbScheduledTransactionToolDependencies = Parameters<
-  typeof listDbScheduledTransactions
+  typeof searchDbScheduledTransactions
 >[0];
 
 export function getDbScheduledTransactionToolDefinitions(
@@ -32,18 +33,23 @@ export function getDbScheduledTransactionToolDefinitions(
 ): SliceToolDefinition[] {
   return [
     defineTool({
-      name: "ynab_list_scheduled_transactions",
-      title: "List YNAB Scheduled Transactions",
+      name: "ynab_search_scheduled_transactions",
+      title: "Search YNAB Scheduled Transactions",
       description:
-        "Lists scheduled transactions from the D1 read model with optional pagination and compact field projection.",
+        "Searches scheduled transactions from the D1 read model with filters, pagination, and compact projection.",
       inputSchema: {
         ...planIdSchema,
+        fromDate: dateFieldSchema.optional(),
+        toDate: dateFieldSchema.optional(),
+        accountId: requiredIdSchema.optional(),
+        categoryId: requiredIdSchema.optional(),
+        payeeId: requiredIdSchema.optional(),
         ...paginationSchema,
         fields: fieldProjectionSchema(scheduledTransactionFields),
         ...includeIdsSchema,
       },
       execute: async (input) =>
-        listDbScheduledTransactions(dependencies, input),
+        searchDbScheduledTransactions(dependencies, input),
     }),
     defineTool({
       name: "ynab_get_scheduled_transaction",

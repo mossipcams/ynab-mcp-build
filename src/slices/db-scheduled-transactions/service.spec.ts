@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   getDbScheduledTransaction,
-  listDbScheduledTransactions,
+  searchDbScheduledTransactions,
 } from "./service.js";
 
 const repository = {
@@ -40,7 +40,7 @@ describe("DB-backed scheduled transaction service", () => {
     ]);
 
     await expect(
-      listDbScheduledTransactions(
+      searchDbScheduledTransactions(
         {
           defaultPlanId: "plan-1",
           scheduledTransactionsRepository: repository,
@@ -116,7 +116,7 @@ describe("DB-backed scheduled transaction service", () => {
   it("falls back to the default plan when input plan ids are blank", async () => {
     repository.listScheduledTransactions.mockResolvedValueOnce([]);
 
-    await listDbScheduledTransactions(
+    await searchDbScheduledTransactions(
       {
         defaultPlanId: "plan-1",
         scheduledTransactionsRepository: repository,

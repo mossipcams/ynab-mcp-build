@@ -96,7 +96,7 @@ describe("financial health helpers", () => {
     });
   });
 
-  it("requires latestMonth in the spending-anomalies tool schema", () => {
+  it("requires month in the spending-anomalies tool schema", () => {
     // DEFECT: the spending-anomalies tool can lose its required anchor month and run against an undefined time window.
     const ynabClient = {
       getAccount: async () => ({ id: "account-1" }),
@@ -145,5 +145,10 @@ describe("financial health helpers", () => {
     expect(() =>
       z.object(anomaliesTool?.inputSchema ?? {}).parse({}),
     ).toThrow();
+    expect(() =>
+      z.object(anomaliesTool?.inputSchema ?? {}).parse({
+        month: "2026-04-01",
+      }),
+    ).not.toThrow();
   });
 });

@@ -2,20 +2,17 @@ import {
   defineTool,
   type SliceToolDefinition,
 } from "../../shared/tool-definition.js";
+import { z } from "zod";
+
 import {
   monthFieldSchema,
   paginationSchema,
   planIdSchema,
 } from "../../shared/tool-inputs.js";
-import {
-  getDbMoneyMovementGroups,
-  getDbMoneyMovementGroupsByMonth,
-  getDbMoneyMovements,
-  getDbMoneyMovementsByMonth,
-} from "./service.js";
+import { searchDbMoneyMovements } from "./service.js";
 
 export type DbMoneyMovementToolDependencies = Parameters<
-  typeof getDbMoneyMovements
+  typeof searchDbMoneyMovements
 >[0];
 
 export function getDbMoneyMovementToolDefinitions(
@@ -23,51 +20,19 @@ export function getDbMoneyMovementToolDefinitions(
 ): SliceToolDefinition[] {
   return [
     defineTool({
-      name: "ynab_get_money_movements",
-      title: "Get YNAB Money Movements",
+      name: "ynab_search_money_movements",
+      title: "Search YNAB Money Movements",
       description:
-        "Returns category money movements synced from the D1 read model.",
+        "Searches category money movements synced from the D1 read model.",
       inputSchema: {
         ...planIdSchema,
+        month: monthFieldSchema.optional(),
+        fromMonth: monthFieldSchema.optional(),
+        toMonth: monthFieldSchema.optional(),
+        groupBy: z.enum(["movement", "group"]).optional(),
         ...paginationSchema,
       },
-      execute: async (input) => getDbMoneyMovements(dependencies, input),
-    }),
-    defineTool({
-      name: "ynab_get_money_movements_by_month",
-      title: "Get YNAB Money Movements By Month",
-      description:
-        "Returns category money movements synced from the D1 read model for a single month.",
-      inputSchema: {
-        ...planIdSchema,
-        month: monthFieldSchema,
-        ...paginationSchema,
-      },
-      execute: async (input) => getDbMoneyMovementsByMonth(dependencies, input),
-    }),
-    defineTool({
-      name: "ynab_get_money_movement_groups",
-      title: "Get YNAB Money Movement Groups",
-      description:
-        "Groups category money movements synced from the D1 read model.",
-      inputSchema: {
-        ...planIdSchema,
-        ...paginationSchema,
-      },
-      execute: async (input) => getDbMoneyMovementGroups(dependencies, input),
-    }),
-    defineTool({
-      name: "ynab_get_money_movement_groups_by_month",
-      title: "Get YNAB Money Movement Groups By Month",
-      description:
-        "Groups category money movements synced from the D1 read model for a single month.",
-      inputSchema: {
-        ...planIdSchema,
-        month: monthFieldSchema,
-        ...paginationSchema,
-      },
-      execute: async (input) =>
-        getDbMoneyMovementGroupsByMonth(dependencies, input),
+      execute: async (input) => searchDbMoneyMovements(dependencies, input),
     }),
   ];
 }

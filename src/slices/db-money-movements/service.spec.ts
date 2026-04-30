@@ -3,12 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  getDbMoneyMovementGroups,
-  getDbMoneyMovementGroupsByMonth,
-  getDbMoneyMovements,
-  getDbMoneyMovementsByMonth,
-} from "./service.js";
+import { searchDbMoneyMovements } from "./service.js";
 
 const repository = {
   listMoneyMovementGroups: vi.fn(),
@@ -55,7 +50,7 @@ describe("DB-backed money movement service", () => {
     ]);
 
     await expect(
-      getDbMoneyMovements(
+      searchDbMoneyMovements(
         {
           defaultPlanId: "plan-1",
           moneyMovementsRepository: repository,
@@ -95,7 +90,7 @@ describe("DB-backed money movement service", () => {
     repository.listMoneyMovements.mockResolvedValueOnce([]);
 
     await expect(
-      getDbMoneyMovementsByMonth(
+      searchDbMoneyMovements(
         {
           defaultPlanId: "plan-1",
           moneyMovementsRepository: repository,
@@ -118,7 +113,7 @@ describe("DB-backed money movement service", () => {
   it("falls back to the default plan when input plan ids are blank", async () => {
     repository.listMoneyMovements.mockResolvedValueOnce([]);
 
-    await getDbMoneyMovements(
+    await searchDbMoneyMovements(
       {
         defaultPlanId: "plan-1",
         moneyMovementsRepository: repository,
@@ -148,12 +143,12 @@ describe("DB-backed money movement service", () => {
     ]);
 
     await expect(
-      getDbMoneyMovementGroups(
+      searchDbMoneyMovements(
         {
           defaultPlanId: "plan-1",
           moneyMovementsRepository: repository,
         },
-        {},
+        { groupBy: "group" },
       ),
     ).resolves.toEqual({
       money_movement_groups: [
@@ -176,12 +171,13 @@ describe("DB-backed money movement service", () => {
     repository.listMoneyMovementGroups.mockResolvedValueOnce([]);
 
     await expect(
-      getDbMoneyMovementGroupsByMonth(
+      searchDbMoneyMovements(
         {
           defaultPlanId: "plan-1",
           moneyMovementsRepository: repository,
         },
         {
+          groupBy: "group",
           month: "2026-04-01",
         },
       ),

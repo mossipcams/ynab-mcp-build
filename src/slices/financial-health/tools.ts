@@ -13,18 +13,13 @@ import {
   requiredIdSchema,
 } from "../../shared/tool-inputs.js";
 import {
-  explainMonthDelta,
   getBudgetCleanupSummary,
-  getBudgetChangeDigest,
   getBudgetHealthSummary,
   getCashFlowSummary,
-  getCashRunway,
+  getCashResilienceSummary,
   getCategoryTrendSummary,
-  getDebtSummary,
-  getEmergencyFundCoverage,
   getFinancialHealthCheck,
   getFinancialSnapshot,
-  getGoalProgressSummary,
   getIncomeSummary,
   getMonthlyReview,
   getNetWorthTrajectory,
@@ -40,33 +35,6 @@ export function getFinancialHealthToolDefinitions(
   ynabClient: YnabClient,
 ): SliceToolDefinition[] {
   return [
-    defineTool({
-      name: "ynab_explain_month_delta",
-      title: "Explain YNAB Month Delta",
-      description:
-        "Explains what changed between two budget months, including income, spending, category deltas, and transaction evidence.",
-      inputSchema: {
-        ...planIdSchema,
-        baselineMonth: monthFieldSchema,
-        comparisonMonth: monthFieldSchema,
-        topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
-      },
-      execute: async (input) => explainMonthDelta(ynabClient, input),
-    }),
-    defineTool({
-      name: "ynab_get_budget_change_digest",
-      title: "Get YNAB Budget Change Digest",
-      description:
-        "Summarizes what changed in a budget month and what needs attention. Use for broad budget review questions like what changed, what matters, or what to inspect next.",
-      inputSchema: {
-        ...planIdSchema,
-        month: monthSelectorSchema.optional(),
-        topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
-      },
-      execute: async (input) => getBudgetChangeDigest(ynabClient, input),
-    }),
     defineTool({
       name: "ynab_get_financial_snapshot",
       title: "Get YNAB Financial Snapshot",
@@ -153,14 +121,18 @@ export function getFinancialHealthToolDefinitions(
         "Flags category spending spikes against a trailing monthly baseline. Use for broad budget anomaly questions.",
       inputSchema: {
         ...planIdSchema,
-        latestMonth: monthFieldSchema,
+        month: monthFieldSchema,
         baselineMonths: z.number().int().min(1).max(12).optional(),
         topN: z.number().int().min(1).max(10).optional(),
         thresholdMultiplier: z.number().min(1).optional(),
         minimumDifference: z.number().int().min(0).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
-      execute: async (input) => getSpendingAnomalies(ynabClient, input),
+      execute: async ({ month, ...input }) =>
+        getSpendingAnomalies(ynabClient, {
+          ...input,
+          latestMonth: month,
+        }),
     }),
     defineTool({
       name: "ynab_get_category_trend_summary",
@@ -178,17 +150,17 @@ export function getFinancialHealthToolDefinitions(
       execute: async (input) => getCategoryTrendSummary(ynabClient, input),
     }),
     defineTool({
-      name: "ynab_get_cash_runway",
-      title: "Get YNAB Cash Runway",
+      name: "ynab_get_cash_resilience_summary",
+      title: "Get YNAB Cash Resilience Summary",
       description:
-        "Estimates how many days liquid cash can cover recent outflows. Use for broad budget runway questions.",
+        "Estimates liquid cash coverage in months and days against recent spending and upcoming scheduled activity.",
       inputSchema: {
         ...planIdSchema,
-        asOfMonth: monthFieldSchema,
+        month: monthFieldSchema.optional(),
         monthsBack: z.number().int().min(1).max(12).optional(),
         detailLevel: detailLevelSchema.optional(),
       },
-      execute: async (input) => getCashRunway(ynabClient, input),
+      execute: async (input) => getCashResilienceSummary(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_upcoming_obligations",
@@ -230,44 +202,6 @@ export function getFinancialHealthToolDefinitions(
         detailLevel: detailLevelSchema.optional(),
       },
       execute: async (input) => getRecurringExpenseSummary(ynabClient, input),
-    }),
-    defineTool({
-      name: "ynab_get_emergency_fund_coverage",
-      title: "Get YNAB Emergency Fund Coverage",
-      description:
-        "Estimates how many months of recent spending liquid cash can cover. Use for broad budget emergency fund questions.",
-      inputSchema: {
-        ...planIdSchema,
-        asOfMonth: monthFieldSchema,
-        monthsBack: z.number().int().min(1).max(12).optional(),
-        detailLevel: detailLevelSchema.optional(),
-      },
-      execute: async (input) => getEmergencyFundCoverage(ynabClient, input),
-    }),
-    defineTool({
-      name: "ynab_get_goal_progress_summary",
-      title: "Get YNAB Goal Progress Summary",
-      description:
-        "Summarizes goal progress, underfunded goals, and top goal gaps. Use for broad budget goal questions.",
-      inputSchema: {
-        ...planIdSchema,
-        month: monthSelectorSchema.optional(),
-        topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
-      },
-      execute: async (input) => getGoalProgressSummary(ynabClient, input),
-    }),
-    defineTool({
-      name: "ynab_get_debt_summary",
-      title: "Get YNAB Debt Summary",
-      description:
-        "Summarizes debt balances, concentration, and cash pressure from debt accounts. Use for broad budget debt questions.",
-      inputSchema: {
-        ...planIdSchema,
-        topN: z.number().int().min(1).max(10).optional(),
-        detailLevel: detailLevelSchema.optional(),
-      },
-      execute: async (input) => getDebtSummary(ynabClient, input),
     }),
     defineTool({
       name: "ynab_get_budget_cleanup_summary",

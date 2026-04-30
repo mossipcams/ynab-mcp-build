@@ -17,8 +17,13 @@ const scheduledTransactionFields = [
   "account_name",
 ] as const;
 
-export type ListDbScheduledTransactionsInput = {
+export type SearchDbScheduledTransactionsInput = {
   planId?: string;
+  fromDate?: string;
+  toDate?: string;
+  accountId?: string;
+  categoryId?: string;
+  payeeId?: string;
   limit?: number;
   offset?: number;
   fields?: Array<(typeof scheduledTransactionFields)[number]>;
@@ -61,6 +66,31 @@ function resolvePlanId(input: { planId?: string }, defaultPlanId?: string) {
   return planId;
 }
 
+function matchesScheduledTransaction(
+  row: ScheduledTransactionRow,
+  input: SearchDbScheduledTransactionsInput,
+) {
+  return [
+    !input.fromDate || (row.date_next ?? row.date_first) >= input.fromDate,
+    !input.toDate || (row.date_next ?? row.date_first) <= input.toDate,
+    !input.accountId || row.account_id === input.accountId,
+    !input.categoryId || row.category_id === input.categoryId,
+    !input.payeeId || row.payee_id === input.payeeId,
+  ].every(Boolean);
+}
+
+function toCompactScheduledTransaction(row: ScheduledTransactionRow) {
+  return compactObject({
+    id: row.id,
+    date_first: row.date_first,
+    date_next: row.date_next,
+    amount: formatAmountMilliunits(row.amount_milliunits),
+    account_name: row.account_name,
+    payee_name: row.payee_name,
+    category_name: row.category_name,
+  });
+}
+
 function toDisplayScheduledTransaction(row: ScheduledTransactionRow) {
   return compactObject({
     id: row.id,
@@ -81,9 +111,9 @@ function toDisplayScheduledTransaction(row: ScheduledTransactionRow) {
   });
 }
 
-export async function listDbScheduledTransactions(
+export async function searchDbScheduledTransactions(
   dependencies: DbScheduledTransactionDependencies,
-  input: ListDbScheduledTransactionsInput,
+  input: SearchDbScheduledTransactionsInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
   const scheduledTransactions = (
@@ -92,7 +122,9 @@ export async function listDbScheduledTransactions(
         planId,
       },
     )
-  ).map(toDisplayScheduledTransaction);
+  )
+    .filter((row) => matchesScheduledTransaction(row, input))
+    .map(toCompactScheduledTransaction);
   const shouldPaginate = shouldPaginateEntries(scheduledTransactions, input);
 
   if (!shouldPaginate && !hasProjectionControls(input)) {

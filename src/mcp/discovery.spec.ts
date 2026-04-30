@@ -28,27 +28,25 @@ describe("MCP discovery document", () => {
     expect(document.tools.names).not.toBe(DISCOVERY_TOOL_NAMES);
   });
 
-  it("advertises budget digest in discovery metadata", () => {
-    // DEFECT: digest can be registered but invisible to MCP discovery clients.
+  it("keeps retired budget digest out of discovery metadata", () => {
     const document = buildDiscoveryDocument({
       mcpServerName: "ynab-mcp-test",
       mcpServerVersion: "1.2.3",
     } as AppEnv);
 
-    expect(document.tools.names).toContain("ynab_get_budget_change_digest");
+    expect(document.tools.names).not.toContain("ynab_get_budget_change_digest");
     expect(new Set(document.tools.names).size).toBe(
       document.tools.names.length,
     );
   });
 
-  it("advertises month delta in discovery metadata", () => {
-    // DEFECT: month delta can be implemented but undiscoverable.
+  it("keeps retired month delta out of discovery metadata", () => {
     const document = buildDiscoveryDocument({
       mcpServerName: "ynab-mcp-test",
       mcpServerVersion: "1.2.3",
     } as AppEnv);
 
-    expect(document.tools.names).toContain("ynab_explain_month_delta");
+    expect(document.tools.names).not.toContain("ynab_explain_month_delta");
     expect(new Set(document.tools.names).size).toBe(
       document.tools.names.length,
     );

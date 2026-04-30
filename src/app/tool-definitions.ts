@@ -7,16 +7,12 @@ import { createScheduledTransactionsRepository } from "../platform/ynab/read-mod
 import { createTransactionsRepository } from "../platform/ynab/read-model/transactions-repository.js";
 import type { AppEnv } from "../shared/env.js";
 import { getKnownDefaultPlan } from "../shared/plans.js";
-import {
-  defineTool,
-  type SliceToolDefinition,
-} from "../shared/tool-definition.js";
+import type { SliceToolDefinition } from "../shared/tool-definition.js";
 import { getAccountToolDefinitions } from "../slices/accounts/index.js";
 import { getDbMoneyMovementToolDefinitions } from "../slices/db-money-movements/index.js";
 import { getDbScheduledTransactionToolDefinitions } from "../slices/db-scheduled-transactions/index.js";
 import { getDbTransactionToolDefinitions } from "../slices/db-transactions/index.js";
 import { getFinancialHealthToolDefinitions } from "../slices/financial-health/index.js";
-import { getMetaToolDefinitions } from "../slices/meta/index.js";
 import { getPayeeToolDefinitions } from "../slices/payees/index.js";
 import { getPlanToolDefinitions } from "../slices/plans/index.js";
 import { getTransactionToolDefinitions } from "../slices/transactions/index.js";
@@ -24,26 +20,10 @@ import { getTransactionToolDefinitions } from "../slices/transactions/index.js";
 const DEFINITIONS_WITH_OWN_FRESHNESS = new Set(["ynab_search_transactions"]);
 
 const REQUIRED_ENDPOINTS_BY_TOOL = {
-  ynab_explain_month_delta: ["categories", "months", "transactions"],
-  ynab_get_budget_change_digest: [
-    "accounts",
-    "categories",
-    "months",
-    "transactions",
-    "scheduled_transactions",
-    "money_movements",
-  ],
   ynab_get_budget_cleanup_summary: ["categories", "months", "transactions"],
   ynab_get_budget_health_summary: ["categories", "months"],
   ynab_get_cash_flow_summary: ["months", "transactions"],
-  ynab_get_cash_runway: ["accounts", "months", "scheduled_transactions"],
   ynab_get_category_trend_summary: ["categories", "months"],
-  ynab_get_debt_summary: ["accounts"],
-  ynab_get_emergency_fund_coverage: [
-    "accounts",
-    "months",
-    "scheduled_transactions",
-  ],
   ynab_get_financial_health_check: [
     "accounts",
     "categories",
@@ -51,15 +31,18 @@ const REQUIRED_ENDPOINTS_BY_TOOL = {
     "transactions",
   ],
   ynab_get_financial_snapshot: ["accounts", "categories", "months"],
-  ynab_get_goal_progress_summary: ["categories", "months"],
   ynab_get_income_summary: ["months", "transactions"],
   ynab_get_monthly_review: ["categories", "months", "transactions"],
   ynab_get_net_worth_trajectory: ["accounts", "months", "transactions"],
   ynab_get_category: ["categories"],
-  ynab_get_plan: ["plans", "accounts", "categories", "payees"],
-  ynab_get_plan_settings: ["plan_settings"],
+  ynab_get_cash_resilience_summary: [
+    "accounts",
+    "months",
+    "scheduled_transactions",
+  ],
   ynab_list_categories: ["categories"],
-  ynab_list_plan_months: ["months"],
+  ynab_list_months: ["months"],
+  ynab_get_month: ["categories", "months"],
   ynab_get_recurring_expense_summary: ["transactions"],
   ynab_get_spending_anomalies: ["categories", "months"],
   ynab_get_spending_summary: ["categories", "months", "transactions"],
@@ -88,27 +71,10 @@ export function getRegisteredToolDefinitions(
   );
   const baseDependencies = defaultPlanDependencies;
   const definitions: SliceToolDefinition[] = [
-    defineTool({
-      name: "ynab_get_mcp_version",
-      title: "YNAB MCP Version",
-      description:
-        "Returns the MCP server name and version for this deployment.",
-      inputSchema: {},
-      execute: () =>
-        Promise.resolve({
-          name: env.mcpServerName,
-          version: env.mcpServerVersion,
-        }),
-    }),
-    ...getMetaToolDefinitions(env, ynabClient).filter(
-      (definition) => definition.name !== "ynab_get_mcp_version",
-    ),
     ...getPlanToolDefinitions(ynabClient),
     ...getAccountToolDefinitions(ynabClient),
     ...getTransactionToolDefinitions(ynabClient).filter(
-      (definition) =>
-        !definition.name.includes("scheduled") &&
-        definition.name !== "ynab_search_transactions",
+      (definition) => definition.name === "ynab_get_transaction",
     ),
     ...getDbTransactionToolDefinitions({
       ...baseDependencies,
@@ -251,11 +217,7 @@ function requiredEndpointsForTool(name: string) {
     ];
   }
 
-  if (
-    name === "ynab_get_mcp_version" ||
-    name === "ynab_get_user" ||
-    name === "ynab_list_plans"
-  ) {
+  if (name === "ynab_list_plans") {
     return [];
   }
 
@@ -304,6 +266,33 @@ function requiredEndpointsForTool(name: string) {
   ];
 }
 
+function hasMonthInput(input: unknown) {
+  if (!input || typeof input !== "object" || !("month" in input)) {
+    return false;
+  }
+
+  const month = (input as { month?: unknown }).month;
+
+  return typeof month === "string" && month.trim().length > 0;
+}
+
+function requiredEndpointsForExecution(
+  definition: SliceToolDefinition,
+  input: unknown,
+) {
+  const requiredEndpoints = requiredEndpointsForTool(definition.name);
+
+  if (
+    definition.name === "ynab_get_category" &&
+    hasMonthInput(input) &&
+    !requiredEndpoints.includes("months")
+  ) {
+    return [...requiredEndpoints, "months"];
+  }
+
+  return requiredEndpoints;
+}
+
 function resolveFreshnessPlanId(
   input: unknown,
   defaultPlanId: string | undefined,
@@ -346,15 +335,26 @@ function withReadModelFreshness(
   definition: SliceToolDefinition,
   dependencies: FreshnessDependencies,
 ): SliceToolDefinition {
-  const requiredEndpoints = requiredEndpointsForTool(definition.name);
-
-  if (requiredEndpoints.length === 0) {
-    return definition;
+  if (requiredEndpointsForTool(definition.name).length === 0) {
+    return {
+      ...definition,
+      execute: async (input) => ({
+        status: "ok",
+        data_freshness: {
+          required_endpoints: [],
+        },
+        data: await definition.execute(input),
+      }),
+    };
   }
 
   return {
     ...definition,
     execute: async (input) => {
+      const requiredEndpoints = requiredEndpointsForExecution(
+        definition,
+        input,
+      );
       const planId = resolveFreshnessPlanId(input, dependencies.defaultPlanId);
       const freshness = await dependencies.freshness.getFreshness(
         planId,

@@ -10,6 +10,7 @@ import {
   dateFieldSchema,
   fieldProjectionSchema,
   includeIdsSchema,
+  monthFieldSchema,
   paginationSchema,
   planIdSchema,
 } from "../../shared/tool-inputs.js";
@@ -46,6 +47,7 @@ export function getDbTransactionToolDefinitions(
         "Searches synced YNAB transactions from the D1 read model with freshness metadata.",
       inputSchema: {
         ...planIdSchema,
+        month: monthFieldSchema.optional(),
         fromDate: dateFieldSchema.optional(),
         toDate: dateFieldSchema.optional(),
         payeeId: z.string().optional(),

@@ -46,6 +46,7 @@ class FakeD1Database {
     ynab_plan_settings: [],
     ynab_plans: [],
     ynab_scheduled_transactions: [],
+    ynab_subtransactions: [],
     ynab_transactions: [],
     ynab_users: [],
   };
@@ -98,6 +99,13 @@ class FakeD1Database {
     }
 
     if (sql.includes("payee_id = ?") && row.payee_id !== params.at(-1)) {
+      return false;
+    }
+
+    if (
+      sql.includes("transaction_id = ?") &&
+      row.transaction_id !== params.at(-1)
+    ) {
       return false;
     }
 
@@ -434,10 +442,27 @@ describe("YNAB read-model client", () => {
         category_name: "Groceries",
         account_id: "account-1",
         account_name: "Checking",
+        memo: "Weekly grocery split",
         approved: null,
         cleared: "cleared",
         deleted: 0,
         transfer_account_id: null,
+      },
+    ];
+    db.rows.ynab_subtransactions = [
+      {
+        plan_id: "plan-1",
+        transaction_id: "txn-1",
+        id: "subtxn-1",
+        amount_milliunits: -1500,
+        memo: "Produce",
+        payee_id: "payee-1",
+        payee_name: "Market",
+        category_id: "category-1",
+        category_name: "Groceries",
+        transfer_account_id: null,
+        transfer_transaction_id: null,
+        deleted: 0,
       },
     ];
     db.rows.ynab_scheduled_transactions = [
@@ -600,7 +625,23 @@ describe("YNAB read-model client", () => {
       client.getTransaction("plan-1", "txn-1"),
     ).resolves.toMatchObject({
       id: "txn-1",
+      memo: "Weekly grocery split",
       transferAccountId: null,
+      subtransactions: [
+        {
+          id: "subtxn-1",
+          transactionId: "txn-1",
+          amount: -1500,
+          memo: "Produce",
+          payeeId: "payee-1",
+          payeeName: "Market",
+          categoryId: "category-1",
+          categoryName: "Groceries",
+          transferAccountId: null,
+          transferTransactionId: null,
+          deleted: false,
+        },
+      ],
     });
     await expect(client.listScheduledTransactions("plan-1")).resolves.toEqual([
       {

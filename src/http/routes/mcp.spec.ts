@@ -61,11 +61,7 @@ describe("http mcp route optimization", () => {
         body: JSON.stringify({
           id: "call-1",
           jsonrpc: "2.0",
-          method: "tools/call",
-          params: {
-            arguments: {},
-            name: "ynab_get_mcp_version",
-          },
+          method: "tools/list",
         }),
         headers: {
           accept: "application/json, text/event-stream",

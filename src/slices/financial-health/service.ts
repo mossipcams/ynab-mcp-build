@@ -483,6 +483,19 @@ function summarizeBudgetHealthMonth(
         right.amountMilliunits - left.amountMilliunits ||
         left.name.localeCompare(right.name),
     );
+  const goalCategories = categories.filter(
+    (category) =>
+      !category.deleted &&
+      !category.hidden &&
+      category.goalUnderFunded !== undefined,
+  );
+  const underfundedGoals = goalCategories
+    .filter((category) => (category.goalUnderFunded ?? 0) > 0)
+    .sort(
+      (left, right) =>
+        (right.goalUnderFunded ?? 0) - (left.goalUnderFunded ?? 0) ||
+        left.name.localeCompare(right.name),
+    );
 
   return {
     month: monthDetail.month,
@@ -507,6 +520,14 @@ function summarizeBudgetHealthMonth(
     ),
     overspent_category_count: overspentCategories.length,
     underfunded_category_count: underfundedCategories.length,
+    goal_count: goalCategories.length,
+    underfunded_goal_total: formatMilliunits(
+      underfundedGoals.reduce(
+        (sum, category) => sum + (category.goalUnderFunded ?? 0),
+        0,
+      ),
+    ),
+    off_track_goal_count: underfundedGoals.length,
     top_overspent_categories: overspentCategories
       .slice(0, topN)
       .map((category) =>
@@ -527,6 +548,13 @@ function summarizeBudgetHealthMonth(
           amount: formatMilliunits(category.amountMilliunits),
         }),
       ),
+    top_underfunded_goals: underfundedGoals.slice(0, topN).map((category) =>
+      compactObject({
+        id: category.id,
+        name: category.name,
+        amount: formatMilliunits(category.goalUnderFunded ?? 0),
+      }),
+    ),
   };
 }
 
@@ -1049,7 +1077,7 @@ export async function getFinancialSnapshot(
     month: monthDetail.month,
     net_worth: formatMilliunits(snapshot.netWorthMilliunits),
     liquid_cash: formatMilliunits(snapshot.liquidCashMilliunits),
-    debt: formatMilliunits(
+    total_debt: formatMilliunits(
       snapshot.negativeAccounts.reduce(
         (sum, account) => sum + Math.abs(account.balance),
         0,
@@ -1560,11 +1588,17 @@ export async function getCategoryTrendSummary(
   };
 }
 
-export async function getCashRunway(
+export async function getCashResilienceSummary(
   ynabClient: YnabClient,
-  input: { planId?: string; asOfMonth: string; monthsBack?: number },
+  input: {
+    planId?: string;
+    month?: string;
+    monthsBack?: number;
+    detailLevel?: DetailLevel;
+  },
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
+  const month = await resolveMonth(ynabClient, planId, input.month);
   const monthsBack = input.monthsBack ?? 3;
   const [accounts, months, scheduledTransactions] = await Promise.all([
     ynabClient.listAccounts(planId),
@@ -1573,17 +1607,17 @@ export async function getCashRunway(
   ]);
   const liquidCash = buildAccountSnapshotSummary(accounts).liquidCashMilliunits;
   const consideredMonths = months
-    .filter((month) => !month.deleted && month.month <= input.asOfMonth)
+    .filter((entry) => !entry.deleted && entry.month <= month)
     .sort((left, right) => right.month.localeCompare(left.month))
     .slice(0, monthsBack);
   const averageMonthlySpending = consideredMonths.length
     ? consideredMonths.reduce(
-        (sum, month) => sum + toSpentFromActivity(month.activity),
+        (sum, entry) => sum + toSpentFromActivity(entry.activity),
         0,
       ) / consideredMonths.length
     : 0;
   const averageDailyOutflow = averageMonthlySpending / 30;
-  const asOfDate = toNextDateFromMonth(input.asOfMonth);
+  const asOfDate = toNextDateFromMonth(month);
   const scheduledNetNext30d = scheduledTransactions
     .filter(isNonTransferScheduledTransaction)
     .filter((transaction) => {
@@ -1591,25 +1625,43 @@ export async function getCashRunway(
       return dueInDays >= 0 && dueInDays <= 30;
     })
     .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const coverageMonths =
+    averageMonthlySpending === 0
+      ? undefined
+      : liquidCash / averageMonthlySpending;
   const runwayDays =
     averageDailyOutflow === 0 ? undefined : liquidCash / averageDailyOutflow;
   const status =
-    runwayDays == null
-      ? "no_outflows"
-      : runwayDays >= 90
-        ? "stable"
-        : runwayDays >= 30
-          ? "watch"
-          : "urgent";
+    coverageMonths == null
+      ? "no_spending"
+      : coverageMonths >= 6
+        ? "strong"
+        : coverageMonths >= 3
+          ? "solid"
+          : coverageMonths >= 1
+            ? "thin"
+            : "critical";
 
   return compactObject({
-    as_of_month: input.asOfMonth,
+    month,
     liquid_cash: formatMilliunits(liquidCash),
+    average_monthly_spending: formatMilliunits(
+      Math.round(averageMonthlySpending),
+    ),
     average_daily_outflow: formatMilliunits(Math.round(averageDailyOutflow)),
-    scheduled_net_next_30d: formatMilliunits(scheduledNetNext30d),
+    coverage_months: coverageMonths?.toFixed(2),
     runway_days: runwayDays?.toFixed(2),
+    scheduled_net_next_30d: formatMilliunits(scheduledNetNext30d),
     status,
     months_considered: consideredMonths.length,
+    ...(input.detailLevel === "detailed"
+      ? {
+          considered_months: consideredMonths.map((entry) => ({
+            month: entry.month,
+            spent: formatMilliunits(toSpentFromActivity(entry.activity)),
+          })),
+        }
+      : {}),
   });
 }
 
@@ -1898,154 +1950,6 @@ export async function getRecurringExpenseSummary(
     recurring_expense_count: recurringExpenses.length,
     recurring_expenses: recurringExpenses,
   };
-}
-
-export async function getEmergencyFundCoverage(
-  ynabClient: YnabClient,
-  input: { planId?: string; asOfMonth: string; monthsBack?: number },
-) {
-  const planId = await resolvePlanId(ynabClient, input.planId);
-  const monthsBack = input.monthsBack ?? 3;
-  const [accounts, months, scheduledTransactions] = await Promise.all([
-    ynabClient.listAccounts(planId),
-    ynabClient.listPlanMonths(planId),
-    ynabClient.listScheduledTransactions(planId),
-  ]);
-  const liquidCash = buildAccountSnapshotSummary(accounts).liquidCashMilliunits;
-  const consideredMonths = months
-    .filter((month) => !month.deleted && month.month <= input.asOfMonth)
-    .sort((left, right) => right.month.localeCompare(left.month))
-    .slice(0, monthsBack);
-  const averageMonthlySpending = consideredMonths.length
-    ? consideredMonths.reduce(
-        (sum, month) => sum + toSpentFromActivity(month.activity),
-        0,
-      ) / consideredMonths.length
-    : 0;
-  const asOfDate = toNextDateFromMonth(input.asOfMonth);
-  const scheduledNetNext30d = scheduledTransactions
-    .filter(isNonTransferScheduledTransaction)
-    .filter((transaction) => {
-      const dueInDays = daysUntil(asOfDate, transaction.dateNext!);
-      return dueInDays >= 0 && dueInDays <= 30;
-    })
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
-  const coverageMonths =
-    averageMonthlySpending === 0
-      ? undefined
-      : liquidCash / averageMonthlySpending;
-  const status =
-    coverageMonths == null
-      ? "no_spending"
-      : coverageMonths >= 6
-        ? "strong"
-        : coverageMonths >= 3
-          ? "solid"
-          : coverageMonths >= 1
-            ? "thin"
-            : "critical";
-
-  return compactObject({
-    as_of_month: input.asOfMonth,
-    liquid_cash: formatMilliunits(liquidCash),
-    average_monthly_spending: formatMilliunits(
-      Math.round(averageMonthlySpending),
-    ),
-    scheduled_net_next_30d: formatMilliunits(scheduledNetNext30d),
-    coverage_months: coverageMonths?.toFixed(2),
-    status,
-    months_considered: consideredMonths.length,
-  });
-}
-
-export async function getGoalProgressSummary(
-  ynabClient: YnabClient,
-  input: FinancialHealthInput,
-) {
-  const topN = resolveTopN(input);
-  const { monthDetail } = await getMonthDetailContext(ynabClient, input);
-  const goalCategories = (monthDetail.categories ?? []).filter(
-    (category) =>
-      !category.deleted &&
-      !category.hidden &&
-      category.goalUnderFunded !== undefined,
-  );
-  const underfundedGoals = goalCategories
-    .filter((category) => (category.goalUnderFunded ?? 0) > 0)
-    .sort(
-      (left, right) =>
-        (right.goalUnderFunded ?? 0) - (left.goalUnderFunded ?? 0),
-    );
-
-  return {
-    month: monthDetail.month,
-    goal_count: goalCategories.length,
-    underfunded_total: formatMilliunits(
-      underfundedGoals.reduce(
-        (sum, category) => sum + (category.goalUnderFunded ?? 0),
-        0,
-      ),
-    ),
-    on_track_count: goalCategories.filter(
-      (category) => (category.goalUnderFunded ?? 0) === 0,
-    ).length,
-    off_track_count: underfundedGoals.length,
-    top_underfunded_goals: underfundedGoals.slice(0, topN).map((category) =>
-      compactObject({
-        id: category.id,
-        name: category.name,
-        amount: formatMilliunits(category.goalUnderFunded ?? 0),
-      }),
-    ),
-  };
-}
-
-export async function getDebtSummary(
-  ynabClient: YnabClient,
-  input: { planId?: string; topN?: number },
-) {
-  const planId = await resolvePlanId(ynabClient, input.planId);
-  const topN = resolveTopN(input);
-  const accounts = (await ynabClient.listAccounts(planId)).filter(
-    (account) => !account.deleted && !account.closed,
-  );
-  const debtAccounts = accounts
-    .filter((account) => account.balance < 0)
-    .sort((left, right) => left.balance - right.balance);
-  const snapshot = buildAccountSnapshotSummary(accounts);
-  const totalDebt = debtAccounts.reduce(
-    (sum, account) => sum + Math.abs(account.balance),
-    0,
-  );
-  const liquidCash = snapshot.liquidCashMilliunits;
-  const ratio =
-    totalDebt === 0
-      ? 0
-      : liquidCash === 0
-        ? Number.POSITIVE_INFINITY
-        : totalDebt / liquidCash;
-  const status =
-    totalDebt === 0
-      ? "none"
-      : ratio <= 1
-        ? "manageable"
-        : ratio <= 2
-          ? "watch"
-          : "high";
-
-  return compactObject({
-    total_debt: formatMilliunits(totalDebt),
-    liquid_cash: formatMilliunits(liquidCash),
-    debt_account_count: debtAccounts.length,
-    debt_to_cash_ratio: Number.isFinite(ratio) ? ratio.toFixed(2) : undefined,
-    status,
-    top_debt_accounts: debtAccounts.slice(0, topN).map((account) => ({
-      id: account.id,
-      name: account.name,
-      type: account.type,
-      balance: formatMilliunits(Math.abs(account.balance)),
-    })),
-  });
 }
 
 export async function getBudgetCleanupSummary(
