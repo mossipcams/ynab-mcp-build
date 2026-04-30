@@ -174,6 +174,88 @@ describe("financial health service", () => {
     });
   });
 
+  it("adds regression slope and assigned-spent correlation to category trends", async () => {
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => {
+        const monthIndex = ["2026-01-01", "2026-02-01", "2026-03-01"].indexOf(
+          month,
+        );
+
+        return {
+          month,
+          categories: [
+            {
+              id: "groceries",
+              name: "Groceries",
+              budgeted: 100000 + monthIndex * 10000,
+              activity: -(100000 + monthIndex * 50000),
+              balance: 0,
+              deleted: false,
+              hidden: false,
+            },
+          ],
+        };
+      },
+      listPlanMonths: async () => [
+        { month: "2026-01-01", deleted: false },
+        { month: "2026-02-01", deleted: false },
+        { month: "2026-03-01", deleted: false },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getCategoryTrendSummary(ynabClient, {
+        categoryId: "groceries",
+        fromMonth: "2026-01-01",
+        planId: "plan-1",
+        toMonth: "2026-03-01",
+      }),
+    ).resolves.toMatchObject({
+      trend: {
+        spent_slope_per_month: "50.00",
+        spent_direction: "increasing",
+        assigned_spent_correlation: "1.0000",
+      },
+    });
+  });
+
+  it("includes category trend diagnostics in default responses", async () => {
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories: [
+          {
+            id: "groceries",
+            name: "Groceries",
+            budgeted: 100000,
+            activity: -100000,
+            balance: 0,
+            deleted: false,
+            hidden: false,
+          },
+        ],
+      }),
+      listPlanMonths: async () => [
+        { month: "2026-01-01", deleted: false },
+        { month: "2026-02-01", deleted: false },
+      ],
+    } as unknown as YnabClient;
+
+    const summary = await getCategoryTrendSummary(ynabClient, {
+      categoryId: "groceries",
+      fromMonth: "2026-01-01",
+      planId: "plan-1",
+      toMonth: "2026-02-01",
+    });
+
+    expect(summary).toMatchObject({
+      trend: {
+        spent_slope_per_month: "0.00",
+        spent_direction: "flat",
+      },
+    });
+  });
+
   it("bounds net worth transaction reads to the current balance month", async () => {
     // DEFECT: net worth trajectory should avoid unbounded reads while still preserving rollback from current balances.
     vi.useFakeTimers();
@@ -397,6 +479,113 @@ describe("financial health service", () => {
           increase: "1100.00",
         }),
       ],
+    });
+  });
+
+  it("uses z-scores to filter noisy spending anomaly candidates", async () => {
+    const categoryActivityByMonth: Record<
+      string,
+      { stable: number; noisy: number }
+    > = {
+      "2026-01-01": {
+        stable: -100000,
+        noisy: -100000,
+      },
+      "2026-02-01": {
+        stable: -120000,
+        noisy: -700000,
+      },
+      "2026-03-01": {
+        stable: -80000,
+        noisy: -100000,
+      },
+      "2026-04-01": {
+        stable: -180000,
+        noisy: -500000,
+      },
+    };
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories: [
+          {
+            id: "stable",
+            name: "Stable Spike",
+            activity: categoryActivityByMonth[month]!.stable,
+            balance: 0,
+            deleted: false,
+            hidden: false,
+          },
+          {
+            id: "noisy",
+            name: "Noisy Spike",
+            activity: categoryActivityByMonth[month]!.noisy,
+            balance: 0,
+            deleted: false,
+            hidden: false,
+          },
+        ],
+      }),
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingAnomalies(ynabClient, {
+        baselineMonths: 3,
+        latestMonth: "2026-04-01",
+        minimumDifference: 50,
+        planId: "plan-1",
+        thresholdMultiplier: 1.5,
+      }),
+    ).resolves.toMatchObject({
+      anomalies: [
+        expect.objectContaining({
+          category_name: "Stable Spike",
+          z_score: "4.8990",
+        }),
+      ],
+    });
+  });
+
+  it("includes spending anomaly z-scores in default responses", async () => {
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories:
+          month === "2026-04-01"
+            ? [
+                {
+                  id: "vet",
+                  name: "Vet",
+                  activity: -500000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+              ]
+            : [
+                {
+                  id: "vet",
+                  name: "Vet",
+                  activity: -100000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+              ],
+      }),
+    } as unknown as YnabClient;
+
+    const summary = await getSpendingAnomalies(ynabClient, {
+      baselineMonths: 1,
+      latestMonth: "2026-04-01",
+      minimumDifference: 100,
+      planId: "plan-1",
+      thresholdMultiplier: 1,
+    });
+
+    expect(summary.anomalies[0]).toMatchObject({
+      category_name: "Vet",
+      z_score: "0.0000",
     });
   });
 
