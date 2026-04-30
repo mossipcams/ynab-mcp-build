@@ -38,11 +38,11 @@ function createMoneyMovementClient(accessToken: string, baseUrl: string) {
   });
 
   return {
-    listMoneyMovementGroups(planId: string) {
-      return client.listMoneyMovementGroups(planId);
+    listMoneyMovementGroups(planId: string, serverKnowledge?: number) {
+      return client.listMoneyMovementGroups(planId, serverKnowledge);
     },
-    listMoneyMovements(planId: string) {
-      return client.listMoneyMovements(planId);
+    listMoneyMovements(planId: string, serverKnowledge?: number) {
+      return client.listMoneyMovements(planId, serverKnowledge);
     },
   };
 }

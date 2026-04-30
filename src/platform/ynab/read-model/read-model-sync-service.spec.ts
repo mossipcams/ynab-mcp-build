@@ -22,6 +22,7 @@ function createSyncStateRepository() {
           payee_locations: 105,
           scheduled_transactions: 106,
           transactions: 107,
+          money_movements: 108,
         })[endpoint] ?? null,
     ),
     recordFailure: vi.fn(async () => undefined),
@@ -277,9 +278,11 @@ describe("read-model sync service", () => {
     );
     expect(moneyMovementClient.listMoneyMovementGroups).toHaveBeenCalledWith(
       "plan-1",
+      108,
     );
     expect(moneyMovementClient.listMoneyMovements).toHaveBeenCalledWith(
       "plan-1",
+      108,
     );
     expect(syncStateRepository.advanceCursor).toHaveBeenCalledTimes(8);
     expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
@@ -335,6 +338,95 @@ describe("read-model sync service", () => {
       ]),
       status: "ok",
     });
+  });
+
+  it("passes previous server knowledge to money movement sync reads", async () => {
+    // DEFECT: money movement sync can refetch full history despite having a cursor.
+    const deltaClient = {
+      listAccountsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 1,
+      })),
+      listCategoriesDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 1,
+      })),
+      listMonthsDelta: vi.fn(async () => ({ records: [], serverKnowledge: 1 })),
+      listPayeesDelta: vi.fn(async () => ({ records: [], serverKnowledge: 1 })),
+      listPayeeLocationsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 1,
+      })),
+      listScheduledTransactionsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 1,
+      })),
+      listTransactionsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 1,
+      })),
+    } as unknown as YnabDeltaClient;
+    const syncStateRepository = createSyncStateRepository();
+    const readModelRepository = {
+      upsertAccounts: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertCategoryGroups: vi.fn(async () => ({
+        categoriesUpserted: 0,
+        categoryGroupsUpserted: 0,
+      })),
+      upsertMonths: vi.fn(async () => ({
+        monthCategoriesUpserted: 0,
+        monthsUpserted: 0,
+      })),
+      upsertMoneyMovementGroups: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertMoneyMovements: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertPayees: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertPayeeLocations: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertScheduledTransactions: vi.fn(async () => ({ rowsUpserted: 0 })),
+    };
+    const transactionsRepository = {
+      upsertTransactions: vi.fn(async () => ({
+        rowsDeleted: 0,
+        rowsUpserted: 0,
+      })),
+    };
+    const moneyMovementClient = {
+      listMoneyMovementGroups: vi.fn(async () => ({
+        moneyMovementGroups: [],
+        serverKnowledge: 50,
+      })),
+      listMoneyMovements: vi.fn(async () => ({
+        moneyMovements: [],
+        serverKnowledge: 55,
+      })),
+    };
+    const service = createReadModelSyncService({
+      deltaClient,
+      moneyMovementClient,
+      readModelRepository,
+      syncStateRepository,
+      transactionsRepository,
+    });
+
+    await service.syncReadModel({
+      leaseOwner: "cron:123",
+      now: "2026-04-28T12:00:00.000Z",
+      planId: "plan-1",
+    });
+
+    expect(moneyMovementClient.listMoneyMovements).toHaveBeenCalledWith(
+      "plan-1",
+      108,
+    );
+    expect(moneyMovementClient.listMoneyMovementGroups).toHaveBeenCalledWith(
+      "plan-1",
+      108,
+    );
+    expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "money_movements",
+        serverKnowledge: 55,
+      }),
+    );
   });
 
   it("writes large initial deltas instead of permanently failing on the row limit", async () => {

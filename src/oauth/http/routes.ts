@@ -2,7 +2,6 @@ import type { Hono } from "hono";
 import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 
 import type { AppDependencies } from "../../app/dependencies.js";
-import { verifyCfAccessJwt } from "../core/cf-access-jwt.js";
 import { resolveAppEnv } from "../../shared/env.js";
 import {
   createAccessOidcClient,
@@ -144,32 +143,6 @@ function getAccessOidcAuthorizationRedirect(options: {
 
 const accessOidcFetch: typeof fetch = (input, init) => fetch(input, init);
 
-async function validateCloudflareAccessRequest(
-  request: Request,
-  env: {
-    cfAccessAudience?: string;
-    cfAccessTeamDomain?: string;
-  },
-) {
-  if (!env.cfAccessAudience || !env.cfAccessTeamDomain) {
-    return;
-  }
-
-  const token = request.headers.get("cf-access-jwt-assertion");
-
-  if (!token) {
-    throw new Error("Cloudflare Access JWT is required.");
-  }
-
-  try {
-    await verifyCfAccessJwt(token, env.cfAccessTeamDomain, {
-      audience: env.cfAccessAudience,
-    });
-  } catch {
-    throw new Error("Cloudflare Access JWT is invalid.");
-  }
-}
-
 function getOpenIdConfiguration(publicUrl: string) {
   const origin = getPublicOrigin(publicUrl);
 
@@ -217,7 +190,6 @@ export function registerOAuthHttpRoutes(
 
     try {
       validateAuthorizationCodePkce(context.req.raw);
-      await validateCloudflareAccessRequest(context.req.raw, env);
 
       const oauth = createOAuthProviderApi(context.env);
       const request = await oauth.parseAuthRequest(context.req.raw);
@@ -270,15 +242,8 @@ export function registerOAuthHttpRoutes(
       return context.redirect(result.redirectTo, 302);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const requiresAccessJwt = env.cfAccessAudience && env.cfAccessTeamDomain;
 
-      return writeOAuthError(
-        requiresAccessJwt ? "unauthorized" : "invalid_request",
-        message,
-        requiresAccessJwt && message.startsWith("Cloudflare Access JWT")
-          ? 401
-          : 400,
-      );
+      return writeOAuthError("invalid_request", message, 400);
     }
   });
 

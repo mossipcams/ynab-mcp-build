@@ -40,6 +40,8 @@ const REMOVED_TOOL_NAMES = [
   "ynab_get_plan",
   "ynab_get_plan_settings",
   "ynab_get_payee",
+  "ynab_explain_month_delta",
+  "ynab_get_budget_change_digest",
   "ynab_list_payee_locations",
   "ynab_get_payee_location",
   "ynab_get_payee_locations_by_payee",

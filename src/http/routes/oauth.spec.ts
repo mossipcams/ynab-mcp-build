@@ -49,60 +49,6 @@ function createOAuthEnv(): Env {
   } as unknown as Env;
 }
 
-function toBase64Url(input: string | Uint8Array) {
-  const bytes =
-    typeof input === "string" ? new TextEncoder().encode(input) : input;
-  let binary = "";
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return btoa(binary)
-    .replace(/\+/gu, "-")
-    .replace(/\//gu, "_")
-    .replace(/=+$/u, "");
-}
-
-async function createSignedAccessJwt(payload: Record<string, unknown>) {
-  const keyPair = await crypto.subtle.generateKey(
-    {
-      hash: "SHA-256",
-      modulusLength: 2048,
-      name: "RSASSA-PKCS1-v1_5",
-      publicExponent: new Uint8Array([1, 0, 1]),
-    },
-    true,
-    ["sign", "verify"],
-  );
-  const kid = "cf-access-key-1";
-  const publicJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-  const header = {
-    alg: "RS256",
-    kid,
-  };
-  const signingInput = `${toBase64Url(JSON.stringify(header))}.${toBase64Url(JSON.stringify(payload))}`;
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    keyPair.privateKey,
-    new TextEncoder().encode(signingInput),
-  );
-
-  return {
-    jwks: {
-      keys: [
-        {
-          ...publicJwk,
-          alg: "RS256",
-          kid,
-          use: "sig",
-        },
-      ],
-    },
-    token: `${signingInput}.${toBase64Url(new Uint8Array(signature))}`,
-  };
-}
-
 describe("oauth routes", () => {
   const cleanups: Array<() => Promise<void>> = [];
 
@@ -332,7 +278,7 @@ describe("oauth routes", () => {
     expect(wrongMethodResponse.status).toBe(400);
   });
 
-  it("requires a valid Cloudflare Access JWT before self-authorizing when Access JWT checks are configured", async () => {
+  it("ignores legacy Cloudflare Access JWT assertion settings when self-authorizing", async () => {
     const env = {
       ...createOAuthEnv(),
       CF_ACCESS_AUD: "access-audience-1",
@@ -362,97 +308,6 @@ describe("oauth routes", () => {
     const response = await worker.fetch(
       new Request(
         `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`,
-      ),
-      env,
-      executionContext,
-    );
-
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({
-      error: "unauthorized",
-      error_description: "Cloudflare Access JWT is required.",
-    });
-
-    const invalidResponse = await worker.fetch(
-      new Request(
-        `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`,
-        {
-          headers: {
-            "cf-access-jwt-assertion": "not-a-jwt",
-          },
-        },
-      ),
-      env,
-      executionContext,
-    );
-
-    expect(invalidResponse.status).toBe(401);
-    await expect(invalidResponse.json()).resolves.toMatchObject({
-      error: "unauthorized",
-      error_description: "Cloudflare Access JWT is invalid.",
-    });
-  });
-
-  it("accepts self-authorization when the Cloudflare Access JWT is valid", async () => {
-    const env = {
-      ...createOAuthEnv(),
-      CF_ACCESS_AUD: "access-audience-1",
-      CF_ACCESS_TEAM_DOMAIN: "https://access-team.example.com",
-    } as Env;
-    const { jwks, token } = await createSignedAccessJwt({
-      aud: ["access-audience-1"],
-      email: "matt@example.com",
-      exp: Math.floor(Date.now() / 1000) + 300,
-      iss: "https://access-team.example.com",
-      sub: "user-1",
-    });
-    const realFetch = fetch;
-
-    vi.stubGlobal(
-      "fetch",
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request =
-          input instanceof Request ? input : new Request(input, init);
-
-        if (
-          request.url === "https://access-team.example.com/cdn-cgi/access/certs"
-        ) {
-          return Response.json(jwks);
-        }
-
-        return realFetch(request);
-      },
-    );
-
-    const executionContext = {} as ExecutionContext;
-    const registrationResponse = await worker.fetch(
-      new Request("https://mcp.example.com/register", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          client_name: "Claude",
-          grant_types: ["authorization_code", "refresh_token"],
-          redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
-          response_types: ["code"],
-          token_endpoint_auth_method: "none",
-        }),
-      }),
-      env,
-      executionContext,
-    );
-    const registration = (await registrationResponse.json()) as {
-      client_id: string;
-    };
-    const response = await worker.fetch(
-      new Request(
-        `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`,
-        {
-          headers: {
-            "cf-access-jwt-assertion": token,
-          },
-        },
       ),
       env,
       executionContext,

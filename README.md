@@ -181,7 +181,6 @@ Important environment behavior:
   OAuth-compatible KV store.
 - `ACCESS_TEAM_DOMAIN`, `ACCESS_CLIENT_ID`, and `ACCESS_CLIENT_SECRET` must be
   provided together for Cloudflare Access OIDC.
-- `CF_ACCESS_TEAM_DOMAIN` requires `CF_ACCESS_AUD`.
 - `YNAB_STALE_AFTER_MINUTES` controls the read-model freshness threshold and
   defaults to `360`.
 
@@ -286,9 +285,8 @@ and confirm `MCP_PUBLIC_URL` is configured in the deployed environment.
   environment resolution before routes run.
 - If the read model has never synced an endpoint required by a tool, the tool
   reports `unhealthy` with a `sync_read_model` next action.
-- Money movement sync currently refreshes money movements and groups without
-  passing the stored `server_knowledge` cursor into those two YNAB calls, then
-  records the maximum returned cursor in sync state.
+- Money movement sync passes the stored `server_knowledge` cursor into movement
+  and group reads, then records the maximum returned cursor in sync state.
 - Metadata endpoints such as users, plans, and plan settings are refreshed as
   bounded metadata reads rather than YNAB delta cursor calls.
 - The repository has both fast local gates and a heavier `check:pr` path. Prefer

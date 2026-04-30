@@ -365,9 +365,13 @@ export interface YnabClient {
     planId: string,
     payeeId: string,
   ): Promise<YnabPayeeLocation[]>;
-  listMoneyMovements(planId: string): Promise<YnabMoneyMovementsResult>;
+  listMoneyMovements(
+    planId: string,
+    serverKnowledge?: number,
+  ): Promise<YnabMoneyMovementsResult>;
   listMoneyMovementGroups(
     planId: string,
+    serverKnowledge?: number,
   ): Promise<YnabMoneyMovementGroupsResult>;
 }
 
@@ -1528,6 +1532,12 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
     );
   }
 
+  function applyServerKnowledge(url: URL, serverKnowledge: number | undefined) {
+    if (serverKnowledge !== undefined) {
+      url.searchParams.set("last_knowledge_of_server", String(serverKnowledge));
+    }
+  }
+
   return {
     async getUser() {
       const response = await authorizedFetch(`${baseUrl}/user`);
@@ -1909,10 +1919,12 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
 
       return payload.data.payee_locations.map(toYnabPayeeLocation);
     },
-    async listMoneyMovements(planId: string) {
-      const response = await authorizedFetch(
+    async listMoneyMovements(planId: string, serverKnowledge?: number) {
+      const url = new URL(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/money_movements`,
       );
+      applyServerKnowledge(url, serverKnowledge);
+      const response = await authorizedFetch(url.toString());
       const payload = await getJson<YnabMoneyMovementsResponse>(
         response,
         YnabMoneyMovementsResponseSchema,
@@ -1923,10 +1935,12 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         serverKnowledge: payload.data.server_knowledge,
       };
     },
-    async listMoneyMovementGroups(planId: string) {
-      const response = await authorizedFetch(
+    async listMoneyMovementGroups(planId: string, serverKnowledge?: number) {
+      const url = new URL(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/money_movement_groups`,
       );
+      applyServerKnowledge(url, serverKnowledge);
+      const response = await authorizedFetch(url.toString());
       const payload = await getJson<YnabMoneyMovementGroupsResponse>(
         response,
         YnabMoneyMovementGroupsResponseSchema,

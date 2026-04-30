@@ -18,12 +18,13 @@ describe("oauth provider configuration", () => {
     expect(response.status).toBe(404);
   });
 
-  it("keeps self-hosted provider discovery active even when Cloudflare Access env vars exist", async () => {
+  it("keeps self-hosted provider discovery active when Access OIDC env vars exist", async () => {
     const response = await fetchWorker(
       new Request(`${MCP_ORIGIN}/.well-known/oauth-authorization-server`),
       createOAuthEnv({
-        CF_ACCESS_AUD: "access-app-audience",
-        CF_ACCESS_TEAM_DOMAIN: "https://access-team.example.com",
+        ACCESS_CLIENT_ID: "access-client-id",
+        ACCESS_CLIENT_SECRET: "access-client-secret",
+        ACCESS_TEAM_DOMAIN: "access-team.example.com",
       } as Partial<Env>),
     );
 
