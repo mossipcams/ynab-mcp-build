@@ -1,15 +1,517 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { YnabClient } from "../../platform/ynab/client.js";
 import {
   getBudgetChangeDigest,
+  getBudgetCleanupSummary,
+  getBudgetHealthSummary,
   explainMonthDelta,
   getCashResilienceSummary,
+  getCategoryTrendSummary,
+  getFinancialHealthCheck,
+  getFinancialSnapshot,
+  getMonthlyReview,
   getNetWorthTrajectory,
+  getRecurringExpenseSummary,
+  getSpendingAnomalies,
   getUpcomingObligations,
 } from "./service.js";
 
 describe("financial health service", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("resolves current month to the calendar month instead of a future empty budget month", async () => {
+    // DEFECT: current/default month resolution can choose the latest future budget month and hide real current-month signals.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-30T17:00:00.000Z"));
+
+    const getPlanMonth = vi.fn(async (_planId: string, month: string) => ({
+      month,
+      income: month === "2026-04-01" ? 5000000 : 0,
+      budgeted: month === "2026-04-01" ? 4500000 : 0,
+      activity: month === "2026-04-01" ? -4000000 : 0,
+      toBeBudgeted: 0,
+      categories: [],
+    }));
+    const ynabClient = {
+      getPlanMonth,
+      listPlanMonths: async () => [
+        { month: "2026-06-01", deleted: false, activity: 0 },
+        { month: "2026-05-01", deleted: false, activity: 0 },
+        { month: "2026-04-01", deleted: false, activity: -4000000 },
+      ],
+      listTransactions: async () => [],
+    } as unknown as YnabClient;
+
+    await expect(
+      getMonthlyReview(ynabClient, {
+        month: "current",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      month: "2026-04-01",
+      income: "5000.00",
+      spent: "4000.00",
+    });
+
+    expect(getPlanMonth).toHaveBeenCalledWith("plan-1", "2026-04-01");
+  });
+
+  it("uses the calendar month for omitted month inputs across month-defaulting summaries", async () => {
+    // DEFECT: omitted month inputs can drift to future empty budget months across broad summary tools.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-30T17:00:00.000Z"));
+
+    const getPlanMonth = vi.fn(async (_planId: string, month: string) => ({
+      month,
+      income: month === "2026-04-01" ? 5000000 : 0,
+      budgeted: month === "2026-04-01" ? 4500000 : 0,
+      activity: month === "2026-04-01" ? -4000000 : 0,
+      toBeBudgeted: 0,
+      categories: [],
+    }));
+    const ynabClient = {
+      getPlanMonth,
+      listAccounts: async () => [],
+      listPlanMonths: async () => [
+        { month: "2026-06-01", deleted: false, activity: 0 },
+        { month: "2026-05-01", deleted: false, activity: 0 },
+        { month: "2026-04-01", deleted: false, activity: -4000000 },
+      ],
+      listTransactions: async () => [],
+    } as unknown as YnabClient;
+
+    await expect(
+      Promise.all([
+        getMonthlyReview(ynabClient, { planId: "plan-1" }),
+        getBudgetHealthSummary(ynabClient, { planId: "plan-1" }),
+        getBudgetCleanupSummary(ynabClient, { planId: "plan-1" }),
+        getFinancialSnapshot(ynabClient, { planId: "plan-1" }),
+        getFinancialHealthCheck(ynabClient, { planId: "plan-1" }),
+      ]),
+    ).resolves.toEqual([
+      expect.objectContaining({ month: "2026-04-01" }),
+      expect.objectContaining({ month: "2026-04-01" }),
+      expect.objectContaining({ month: "2026-04-01" }),
+      expect.objectContaining({ month: "2026-04-01" }),
+      expect.objectContaining({ as_of_month: "2026-04-01" }),
+    ]);
+  });
+
+  it("aggregates category group trends from category membership when month categories omit group names", async () => {
+    // DEFECT: read-model month category rows can omit category_group_name and make group trends report all zeroes.
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories: [
+          {
+            id: "groceries",
+            name: "Groceries",
+            budgeted: 200000,
+            activity: -150000,
+            balance: 50000,
+            deleted: false,
+            hidden: false,
+          },
+          {
+            id: "dining",
+            name: "Dining",
+            budgeted: 100000,
+            activity: -125000,
+            balance: -25000,
+            deleted: false,
+            hidden: false,
+          },
+          {
+            id: "rent",
+            name: "Rent",
+            budgeted: 1000000,
+            activity: -1000000,
+            balance: 0,
+            deleted: false,
+            hidden: false,
+          },
+        ],
+      }),
+      listCategories: async () => [
+        {
+          id: "food-group",
+          name: "Food",
+          deleted: false,
+          hidden: false,
+          categories: [
+            {
+              id: "groceries",
+              name: "Groceries",
+              deleted: false,
+              hidden: false,
+            },
+            { id: "dining", name: "Dining", deleted: false, hidden: false },
+          ],
+        },
+      ],
+      listPlanMonths: async () => [{ month: "2026-04-01", deleted: false }],
+    } as unknown as YnabClient;
+
+    await expect(
+      getCategoryTrendSummary(ynabClient, {
+        categoryGroupName: "Food",
+        fromMonth: "2026-04-01",
+        planId: "plan-1",
+        toMonth: "2026-04-01",
+      }),
+    ).resolves.toMatchObject({
+      average_spent: "275.00",
+      periods: [
+        {
+          assigned: "300.00",
+          available: "25.00",
+          spent: "275.00",
+        },
+      ],
+    });
+  });
+
+  it("bounds net worth transaction reads to the current balance month", async () => {
+    // DEFECT: net worth trajectory should avoid unbounded reads while still preserving rollback from current balances.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-30T17:00:00.000Z"));
+
+    const listTransactions = vi.fn(async () => []);
+    const ynabClient = {
+      listAccounts: async () => [],
+      listPlanMonths: async () => [
+        { month: "2026-04-01", deleted: false },
+        { month: "2026-03-01", deleted: false },
+      ],
+      listTransactions,
+    } as unknown as YnabClient;
+
+    await getNetWorthTrajectory(ynabClient, {
+      fromMonth: "2026-03-01",
+      planId: "plan-1",
+      toMonth: "2026-04-01",
+    });
+
+    expect(listTransactions).toHaveBeenCalledWith(
+      "plan-1",
+      "2026-03-01",
+      "2026-04-30",
+    );
+  });
+
+  it("includes post-range transactions when rolling current balances back for historical net worth", async () => {
+    // DEFECT: ending transaction reads at toMonth leaves later activity inside historical balances.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-15T17:00:00.000Z"));
+
+    const ynabClient = {
+      listAccounts: async () => [
+        {
+          id: "checking",
+          name: "Checking",
+          type: "checking",
+          closed: false,
+          deleted: false,
+          balance: 1200000,
+        },
+      ],
+      listPlanMonths: async () => [
+        { month: "2026-06-01", deleted: false },
+        { month: "2026-05-01", deleted: false },
+        { month: "2026-04-01", deleted: false },
+        { month: "2026-03-01", deleted: false },
+      ],
+      listTransactions: async (
+        _planId: string,
+        fromDate?: string,
+        toDate?: string,
+      ) =>
+        [
+          {
+            id: "april-income",
+            accountId: "checking",
+            amount: 100000,
+            date: "2026-04-15",
+            deleted: false,
+          },
+          {
+            id: "may-income",
+            accountId: "checking",
+            amount: 200000,
+            date: "2026-05-15",
+            deleted: false,
+          },
+        ].filter(
+          (transaction) =>
+            (!fromDate || transaction.date >= fromDate) &&
+            (!toDate || transaction.date <= toDate),
+        ),
+    } as unknown as YnabClient;
+
+    await expect(
+      getNetWorthTrajectory(ynabClient, {
+        fromMonth: "2026-03-01",
+        planId: "plan-1",
+        toMonth: "2026-04-01",
+      }),
+    ).resolves.toMatchObject({
+      start_net_worth: "900.00",
+      end_net_worth: "1000.00",
+      months: [
+        expect.objectContaining({
+          month: "2026-03-01",
+          net_worth: "900.00",
+        }),
+        expect.objectContaining({
+          month: "2026-04-01",
+          net_worth: "1000.00",
+        }),
+      ],
+    });
+  });
+
+  it("treats spending anomaly minimumDifference as dollars instead of raw milliunits", async () => {
+    // DEFECT: minimumDifference can be compared to milliunits, letting small dollar changes through.
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories:
+          month === "2026-04-01"
+            ? [
+                {
+                  id: "groceries",
+                  name: "Groceries",
+                  activity: -291100,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+                {
+                  id: "vet",
+                  name: "Vet",
+                  activity: -500000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+              ]
+            : [
+                {
+                  id: "groceries",
+                  name: "Groceries",
+                  activity: -192270,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+                {
+                  id: "vet",
+                  name: "Vet",
+                  activity: -100000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+              ],
+      }),
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingAnomalies(ynabClient, {
+        baselineMonths: 1,
+        latestMonth: "2026-04-01",
+        minimumDifference: 100,
+        planId: "plan-1",
+        thresholdMultiplier: 1,
+      }),
+    ).resolves.toMatchObject({
+      anomalies: [
+        expect.objectContaining({
+          category_name: "Vet",
+          increase: "400.00",
+        }),
+      ],
+    });
+  });
+
+  it("converts high-dollar spending anomaly minimumDifference values to milliunits", async () => {
+    // DEFECT: minimumDifference values at 1000 or more can be treated as raw milliunits instead of dollars.
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories:
+          month === "2026-04-01"
+            ? [
+                {
+                  id: "minor",
+                  name: "Minor Spike",
+                  activity: -999000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+                {
+                  id: "major",
+                  name: "Major Spike",
+                  activity: -1100000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+              ]
+            : [
+                {
+                  id: "minor",
+                  name: "Minor Spike",
+                  activity: 0,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+                {
+                  id: "major",
+                  name: "Major Spike",
+                  activity: 0,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+              ],
+      }),
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingAnomalies(ynabClient, {
+        baselineMonths: 1,
+        latestMonth: "2026-04-01",
+        minimumDifference: 1000,
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      anomalies: [
+        expect.objectContaining({
+          category_name: "Major Spike",
+          increase: "1100.00",
+        }),
+      ],
+    });
+  });
+
+  it("omits zero-dollar scheduled rows and exposes signed upcoming obligation amounts", async () => {
+    // DEFECT: zero-dollar scheduled rows can crowd upcoming obligations and positive display amounts hide outflow signs.
+    const ynabClient = {
+      listScheduledTransactions: async () => [
+        {
+          id: "zero-card-payment",
+          amount: 0,
+          dateNext: "2026-05-03",
+          deleted: false,
+          payeeName: "Credit Card Payment",
+        },
+        {
+          id: "rent",
+          amount: -1550000,
+          dateNext: "2026-05-01",
+          deleted: false,
+          payeeName: "Rent",
+          categoryName: "Rent",
+          accountName: "Checking",
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getUpcomingObligations(ynabClient, {
+        asOfDate: "2026-04-30",
+        detailLevel: "detailed",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      obligation_count: 1,
+      expected_inflow_count: 0,
+      top_due: [
+        expect.objectContaining({
+          amount: "1550.00",
+          signed_amount: "-1550.00",
+          type: "outflow",
+        }),
+      ],
+    });
+  });
+
+  it("filters repeated casual merchants out of recurring expense detection", async () => {
+    // DEFECT: three roughly monthly purchases can be mistaken for a recurring bill even when amounts vary heavily.
+    const ynabClient = {
+      listTransactions: async () => [
+        {
+          id: "rent-1",
+          amount: -1550000,
+          date: "2026-02-01",
+          deleted: false,
+          payeeId: "rent",
+          payeeName: "Rent",
+        },
+        {
+          id: "rent-2",
+          amount: -1550000,
+          date: "2026-03-01",
+          deleted: false,
+          payeeId: "rent",
+          payeeName: "Rent",
+        },
+        {
+          id: "rent-3",
+          amount: -1550000,
+          date: "2026-04-01",
+          deleted: false,
+          payeeId: "rent",
+          payeeName: "Rent",
+        },
+        {
+          id: "clinic-1",
+          amount: -20000,
+          date: "2026-02-16",
+          deleted: false,
+          payeeId: "clinic",
+          payeeName: "Clinic",
+        },
+        {
+          id: "clinic-2",
+          amount: -395150,
+          date: "2026-03-16",
+          deleted: false,
+          payeeId: "clinic",
+          payeeName: "Clinic",
+        },
+        {
+          id: "clinic-3",
+          amount: -878950,
+          date: "2026-04-16",
+          deleted: false,
+          payeeId: "clinic",
+          payeeName: "Clinic",
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getRecurringExpenseSummary(ynabClient, {
+        fromDate: "2026-02-01",
+        planId: "plan-1",
+        toDate: "2026-04-30",
+      }),
+    ).resolves.toMatchObject({
+      recurring_expenses: [
+        expect.objectContaining({
+          payee_name: "Rent",
+        }),
+      ],
+    });
+  });
+
   it("returns a neutral digest for a quiet month", async () => {
     // DEFECT: digest can hallucinate financial concerns when synced data has no notable changes.
     const ynabClient = {

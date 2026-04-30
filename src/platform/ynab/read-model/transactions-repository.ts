@@ -20,6 +20,8 @@ export type SearchTransactionsInput = {
   cleared?: string;
   minAmountMilliunits?: number;
   maxAmountMilliunits?: number;
+  minAbsAmountMilliunits?: number;
+  maxAbsAmountMilliunits?: number;
   includeDeleted?: boolean;
   includeTransfers?: boolean;
   limit: number;
@@ -159,7 +161,19 @@ function buildSearchWhere(
   }
 
   if (input.categoryIds?.length) {
-    where.push(`category_id IN (${placeholders(input.categoryIds.length)})`);
+    const categoryPlaceholders = placeholders(input.categoryIds.length);
+    where.push(
+      `(category_id IN (${categoryPlaceholders}) OR (category_id IS NULL AND EXISTS (
+        SELECT 1
+        FROM ynab_categories cat
+        WHERE cat.plan_id = ynab_transactions.plan_id
+          AND cat.id IN (${categoryPlaceholders})
+          AND cat.name = 'Uncategorized'
+          AND cat.deleted = 0
+        LIMIT 1
+      )))`,
+    );
+    params.push(...input.categoryIds);
     params.push(...input.categoryIds);
   }
 
@@ -191,6 +205,16 @@ function buildSearchWhere(
   if (input.maxAmountMilliunits !== undefined) {
     where.push("amount_milliunits <= ?");
     params.push(input.maxAmountMilliunits);
+  }
+
+  if (input.minAbsAmountMilliunits !== undefined) {
+    where.push("ABS(amount_milliunits) >= ?");
+    params.push(input.minAbsAmountMilliunits);
+  }
+
+  if (input.maxAbsAmountMilliunits !== undefined) {
+    where.push("ABS(amount_milliunits) <= ?");
+    params.push(input.maxAbsAmountMilliunits);
   }
 
   return {

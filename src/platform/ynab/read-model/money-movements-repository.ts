@@ -27,6 +27,8 @@ export type MoneyMovementGroupRow = {
 export type ListMoneyMovementsInput = {
   planId: string;
   month?: string;
+  fromMonth?: string;
+  toMonth?: string;
 };
 
 const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
@@ -40,6 +42,16 @@ export function createMoneyMovementsRepository(database: D1Database) {
       if (input.month) {
         where.push("movement.month = ?");
         params.push(input.month);
+      } else {
+        if (input.fromMonth) {
+          where.push("movement.month >= ?");
+          params.push(input.fromMonth);
+        }
+
+        if (input.toMonth) {
+          where.push("movement.month <= ?");
+          params.push(input.toMonth);
+        }
       }
 
       const result = await database
@@ -73,35 +85,42 @@ export function createMoneyMovementsRepository(database: D1Database) {
     },
 
     async listMoneyMovementGroups(input: ListMoneyMovementsInput) {
-      const where = [
-        "movement_group.plan_id = ?",
-        "movement_group.deleted = 0",
-      ];
+      const where = ["movement.plan_id = ?", "movement.deleted = 0"];
       const params: string[] = [input.planId];
 
       if (input.month) {
-        where.push("movement_group.month = ?");
+        where.push("movement.month = ?");
         params.push(input.month);
+      } else {
+        if (input.fromMonth) {
+          where.push("movement.month >= ?");
+          params.push(input.fromMonth);
+        }
+
+        if (input.toMonth) {
+          where.push("movement.month <= ?");
+          params.push(input.toMonth);
+        }
       }
 
       const result = await database
         .prepare(
-          `SELECT movement_group.id,
-                  movement_group.group_created_at,
-                  movement_group.month,
+          `SELECT COALESCE(movement.money_movement_group_id, movement.id) AS id,
+                  COALESCE(movement_group.group_created_at, MAX(movement.moved_at)) AS group_created_at,
+                  COALESCE(movement_group.month, movement.month) AS month,
                   movement_group.note,
-                  movement_group.performed_by_user_id,
+                  COALESCE(movement_group.performed_by_user_id, movement.performed_by_user_id) AS performed_by_user_id,
                   COUNT(movement.id) AS movement_count,
                   COALESCE(SUM(movement.amount_milliunits), 0) AS total_amount_milliunits,
-                  movement_group.deleted
-           FROM ynab_money_movement_groups movement_group
-           LEFT JOIN ynab_money_movements movement
-             ON movement.plan_id = movement_group.plan_id
-            AND movement.money_movement_group_id = movement_group.id
-            AND movement.deleted = 0
+                  COALESCE(movement_group.deleted, 0) AS deleted
+           FROM ynab_money_movements movement
+           LEFT JOIN ynab_money_movement_groups movement_group
+             ON movement_group.plan_id = movement.plan_id
+            AND movement_group.id = movement.money_movement_group_id
+            AND movement_group.deleted = 0
            WHERE ${where.join(" AND ")}
-           GROUP BY movement_group.plan_id, movement_group.id
-           ORDER BY movement_group.group_created_at DESC, movement_group.id`,
+           GROUP BY movement.plan_id, COALESCE(movement.money_movement_group_id, movement.id)
+           ORDER BY group_created_at DESC, id`,
         )
         .bind(...params)
         .all<MoneyMovementGroupRow>();

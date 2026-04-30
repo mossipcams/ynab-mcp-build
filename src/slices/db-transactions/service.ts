@@ -38,6 +38,8 @@ export type DbTransactionSearchInput = {
   cleared?: string;
   minAmount?: number;
   maxAmount?: number;
+  minAbsAmount?: number;
+  maxAbsAmount?: number;
   includeTransfers?: boolean;
   includeSummary?: boolean;
   includeDeleted?: boolean;
@@ -70,6 +72,8 @@ type DbTransactionServiceDependencies = {
       cleared?: string;
       minAmountMilliunits?: number;
       maxAmountMilliunits?: number;
+      minAbsAmountMilliunits?: number;
+      maxAbsAmountMilliunits?: number;
       includeDeleted?: boolean;
       includeTransfers?: boolean;
       limit: number;
@@ -88,6 +92,8 @@ type DbTransactionServiceDependencies = {
       cleared?: string;
       minAmountMilliunits?: number;
       maxAmountMilliunits?: number;
+      minAbsAmountMilliunits?: number;
+      maxAbsAmountMilliunits?: number;
       includeDeleted?: boolean;
       includeTransfers?: boolean;
       topN?: number;
@@ -376,8 +382,14 @@ export async function searchTransactions(
     ...(input.maxAmount !== undefined
       ? { maxAmountMilliunits: toMilliunits(input.maxAmount) }
       : {}),
+    ...(input.maxAbsAmount !== undefined
+      ? { maxAbsAmountMilliunits: toMilliunits(input.maxAbsAmount) }
+      : {}),
     ...(input.minAmount !== undefined
       ? { minAmountMilliunits: toMilliunits(input.minAmount) }
+      : {}),
+    ...(input.minAbsAmount !== undefined
+      ? { minAbsAmountMilliunits: toMilliunits(input.minAbsAmount) }
       : {}),
     ...(input.payeeId ? { payeeIds: [input.payeeId] } : {}),
     ...(startDate ? { startDate } : {}),
@@ -431,6 +443,14 @@ export async function searchTransactions(
             input.maxAmount == null
               ? undefined
               : formatAmountMilliunits(toMilliunits(input.maxAmount)),
+          min_abs_amount:
+            input.minAbsAmount == null
+              ? undefined
+              : formatAmountMilliunits(toMilliunits(input.minAbsAmount)),
+          max_abs_amount:
+            input.maxAbsAmount == null
+              ? undefined
+              : formatAmountMilliunits(toMilliunits(input.maxAbsAmount)),
           include_transfers: input.includeTransfers ?? false,
           include_summary: input.includeSummary,
           sort,

@@ -30,6 +30,7 @@ import {
 } from "./service.js";
 
 const detailLevelSchema = z.enum(["brief", "normal", "detailed"]);
+const topNDescription = " topN is capped at 10.";
 
 export function getFinancialHealthToolDefinitions(
   ynabClient: YnabClient,
@@ -38,8 +39,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_financial_snapshot",
       title: "Get YNAB Financial Snapshot",
-      description:
-        "Returns a compact net worth, cash, debt, and assigned-versus-spent snapshot. Use for broad budget and financial questions.",
+      description: `Returns a compact net worth, cash, debt, and assigned-versus-spent snapshot. Use for broad budget and financial questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
@@ -51,8 +51,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_budget_health_summary",
       title: "Get YNAB Budget Health Summary",
-      description:
-        "Summarizes available funds, overspending, underfunding, and assigned versus spent. Use for broad budget health questions.",
+      description: `Summarizes available funds, overspending, underfunding, and assigned versus spent. Use for broad budget health questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
@@ -64,8 +63,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_financial_health_check",
       title: "Get YNAB Financial Health Check",
-      description:
-        "Returns a compact score and top risk list across cash, cleanup, and budget stress. Use for broad budget risk questions.",
+      description: `Returns a compact score and top risk list across cash, cleanup, and budget stress. Use for broad budget risk questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
@@ -77,8 +75,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_monthly_review",
       title: "Get YNAB Monthly Review",
-      description:
-        "Returns a compact month summary with cash flow, budget health, top spending categories, and capped examples. Use for broad budget monthly review questions.",
+      description: `Returns a compact month summary with cash flow, budget health, top spending categories, and capped examples. Use for broad budget monthly review questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),
@@ -103,8 +100,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_spending_summary",
       title: "Get YNAB Spending Summary",
-      description:
-        "Returns a compact spending summary with top categories, groups, payees, and capped examples across a month range. Use for broad budget spending questions.",
+      description: `Returns a compact spending summary with top categories, groups, payees, and capped examples across a month range. Use for broad budget spending questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         fromMonth: normalizedMonthFieldSchema.optional(),
@@ -117,8 +113,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_spending_anomalies",
       title: "Get YNAB Spending Anomalies",
-      description:
-        "Flags category spending spikes against a trailing monthly baseline. Use for broad budget anomaly questions.",
+      description: `Flags category spending spikes against a trailing monthly baseline. Use for broad budget anomaly questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         month: normalizedMonthFieldSchema,
@@ -165,8 +160,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_upcoming_obligations",
       title: "Get YNAB Upcoming Obligations",
-      description:
-        "Summarizes upcoming scheduled inflows and outflows across 7, 14, and 30 day windows. Use for broad budget obligation questions.",
+      description: `Summarizes upcoming scheduled inflows and outflows across 7, 14, and 30 day windows. Use for broad budget obligation questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         asOfDate: dateFieldSchema.optional(),
@@ -178,8 +172,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_income_summary",
       title: "Get YNAB Income Summary",
-      description:
-        "Returns a compact monthly income summary across a month range. Use for broad budget income questions.",
+      description: `Returns a compact monthly income summary across a month range. Use for broad budget income questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         fromMonth: normalizedMonthFieldSchema.optional(),
@@ -192,8 +185,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_recurring_expense_summary",
       title: "Get YNAB Recurring Expense Summary",
-      description:
-        "Infers recurring expenses from transaction history and estimates monthly cost. Use for broad budget recurring expense questions.",
+      description: `Infers recurring expenses from transaction history and estimates monthly cost. Use for broad budget recurring expense questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         fromDate: dateFieldSchema,
@@ -206,8 +198,7 @@ export function getFinancialHealthToolDefinitions(
     defineTool({
       name: "ynab_get_budget_cleanup_summary",
       title: "Get YNAB Budget Cleanup Summary",
-      description:
-        "Returns a compact cleanup punch-list for uncategorized, unapproved, uncleared, and overspent items. Use for broad budget cleanup questions.",
+      description: `Returns a compact cleanup punch-list for uncategorized, unapproved, uncleared, and overspent items. Use for broad budget cleanup questions.${topNDescription}`,
       inputSchema: {
         ...planIdSchema,
         month: normalizedMonthSelectorSchema.optional(),

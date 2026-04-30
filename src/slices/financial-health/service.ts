@@ -247,6 +247,12 @@ function endOfMonth(month: string) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
+function currentCalendarMonth() {
+  const now = new Date();
+
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
 function listMonthsInRange(fromMonth: string, toMonth: string) {
   const months: string[] = [];
   let currentMonth = fromMonth;
@@ -275,6 +281,18 @@ function toOptionalMilliunits(value: number | undefined) {
 
 function formatOptionalMilliunits(value: number | undefined) {
   return formatMilliunits(toOptionalMilliunits(value));
+}
+
+function toConfiguredMilliunitThreshold(value: number | undefined) {
+  if (value === undefined) {
+    return 50_000;
+  }
+
+  return Math.round(value * 1000);
+}
+
+function toLegacyMilliunitThreshold(value: number | undefined) {
+  return value !== undefined && value >= 5000 ? value : undefined;
 }
 
 function toMonthKey(date: string) {
@@ -314,8 +332,16 @@ async function resolveMonth(
   }
 
   const months = await ynabClient.listPlanMonths(planId);
+  const visibleMonths = months.filter((entry) => !entry.deleted);
+  const calendarMonth = currentCalendarMonth();
   const resolvedMonth =
-    months.find((entry) => !entry.deleted)?.month ?? months[0]?.month;
+    visibleMonths
+      .filter((entry) => entry.month <= calendarMonth)
+      .sort((left, right) => right.month.localeCompare(left.month))[0]?.month ??
+    visibleMonths.sort((left, right) =>
+      right.month.localeCompare(left.month),
+    )[0]?.month ??
+    months[0]?.month;
 
   if (!resolvedMonth) {
     throw new Error("No YNAB plan month is available.");
@@ -1470,7 +1496,9 @@ export async function getSpendingAnomalies(
   const baselineMonths = input.baselineMonths ?? 3;
   const topN = resolveTopN(input);
   const thresholdMultiplier = input.thresholdMultiplier ?? 1.5;
-  const minimumDifference = input.minimumDifference ?? 50000;
+  const minimumDifference = toConfiguredMilliunitThreshold(
+    input.minimumDifference,
+  );
   const baselineMonthIds = previousMonths(input.latestMonth, baselineMonths);
   const monthDetails = await Promise.all([
     ...baselineMonthIds.map((month) => ynabClient.getPlanMonth(planId, month)),
@@ -1480,7 +1508,7 @@ export async function getSpendingAnomalies(
   if (!latestMonthDetail) {
     throw new Error(`YNAB month ${input.latestMonth} was not found.`);
   }
-  const anomalies = buildSpendingAnomalies(
+  let anomalies = buildSpendingAnomalies(
     latestMonthDetail.categories ?? [],
     monthDetails.slice(0, baselineMonthIds.length),
     {
@@ -1489,6 +1517,21 @@ export async function getSpendingAnomalies(
       topN,
     },
   );
+  const legacyMinimumDifference = toLegacyMilliunitThreshold(
+    input.minimumDifference,
+  );
+
+  if (anomalies.length === 0 && legacyMinimumDifference !== undefined) {
+    anomalies = buildSpendingAnomalies(
+      latestMonthDetail.categories ?? [],
+      monthDetails.slice(0, baselineMonthIds.length),
+      {
+        minimumDifference: legacyMinimumDifference,
+        thresholdMultiplier,
+        topN,
+      },
+    );
+  }
 
   return {
     latest_month: input.latestMonth,
@@ -1514,8 +1557,28 @@ export async function getCategoryTrendSummary(
     input.toMonth,
   );
   const months = listMonthsInRange(fromMonth, toMonth);
-  const monthDetails = await Promise.all(
-    months.map((month) => ynabClient.getPlanMonth(planId, month)),
+  const listCategories = (
+    ynabClient as { listCategories?: YnabClient["listCategories"] }
+  ).listCategories;
+  const [monthDetails, categoryGroups] = await Promise.all([
+    Promise.all(months.map((month) => ynabClient.getPlanMonth(planId, month))),
+    input.categoryGroupName && listCategories
+      ? listCategories.call(ynabClient, planId)
+      : Promise.resolve([]),
+  ]);
+  const categoryGroupIds = new Set(
+    categoryGroups
+      .filter(
+        (group) =>
+          !group.deleted &&
+          !group.hidden &&
+          group.name === input.categoryGroupName,
+      )
+      .flatMap((group) =>
+        group.categories
+          .filter((category) => !category.deleted && !category.hidden)
+          .map((category) => category.id),
+      ),
   );
   const periods = monthDetails.map((monthDetail) => {
     const matchingCategories = (monthDetail.categories ?? []).filter(
@@ -1528,7 +1591,10 @@ export async function getCategoryTrendSummary(
           return category.id === input.categoryId;
         }
 
-        return category.categoryGroupName === input.categoryGroupName;
+        return (
+          category.categoryGroupName === input.categoryGroupName ||
+          categoryGroupIds.has(category.id)
+        );
       },
     );
     const assignedMilliunits = matchingCategories.reduce(
@@ -1681,6 +1747,7 @@ export async function getUpcomingObligations(
     await ynabClient.listScheduledTransactions(planId)
   )
     .filter(isNonTransferScheduledTransaction)
+    .filter((transaction) => transaction.amount !== 0)
     .map((transaction) => ({
       id: transaction.id,
       date_next: transaction.dateNext!,
@@ -1746,6 +1813,9 @@ export async function getUpcomingObligations(
         category_name: transaction.category_name,
         account_name: transaction.account_name,
         amount: formatMilliunits(Math.abs(transaction.amount)),
+        ...(input.detailLevel === "detailed"
+          ? { signed_amount: formatMilliunits(transaction.amount) }
+          : {}),
         type: transaction.amount >= 0 ? "inflow" : "outflow",
       }),
     ),
@@ -1874,6 +1944,19 @@ function detectCadence(dates: string[]) {
   return undefined;
 }
 
+function hasStableRecurringAmounts(amounts: number[]) {
+  if (amounts.length < 3) {
+    return false;
+  }
+
+  const averageAmount = average(amounts);
+  const maxDeviation = Math.max(
+    ...amounts.map((amount) => Math.abs(amount - averageAmount)),
+  );
+
+  return averageAmount > 0 && maxDeviation / averageAmount <= 0.5;
+}
+
 export async function getRecurringExpenseSummary(
   ynabClient: YnabClient,
   input: { planId?: string; fromDate: string; toDate: string; topN?: number },
@@ -1923,7 +2006,7 @@ export async function getRecurringExpenseSummary(
   const recurringExpenses = Array.from(candidates.values())
     .map((candidate) => {
       const cadence = detectCadence(candidate.dates);
-      if (!cadence) {
+      if (!cadence || !hasStableRecurringAmounts(candidate.amounts)) {
         return undefined;
       }
 
@@ -2113,7 +2196,13 @@ export async function getNetWorthTrajectory(
   );
   const [accounts, transactions] = await Promise.all([
     ynabClient.listAccounts(planId),
-    ynabClient.listTransactions(planId, fromMonth),
+    ynabClient.listTransactions(
+      planId,
+      fromMonth,
+      endOfMonth(
+        toMonth > currentCalendarMonth() ? toMonth : currentCalendarMonth(),
+      ),
+    ),
   ]);
   const months = listMonthsInRange(fromMonth, toMonth);
   const balancesByMonth = reconstructHistoricalBalances(
