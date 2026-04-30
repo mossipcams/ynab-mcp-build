@@ -10,6 +10,14 @@ import {
   toYnabPayeeLocation,
   toYnabScheduledTransaction,
   YnabClientError,
+  YnabAccountRecordSchema,
+  YnabCategoryGroupRecordSchema,
+  YnabCategoryRecordSchema,
+  YnabPayeeLocationRecordSchema,
+  YnabPayeeRecordSchema,
+  YnabPlanMonthRecordSchema,
+  YnabScheduledTransactionRecordSchema,
+  YnabTransactionRecordSchema,
   type YnabAccountRecord,
   type YnabAccountSummary,
   type YnabCategoryGroupRecord,
@@ -30,45 +38,15 @@ export type YnabDeltaResponse<TRecord> = {
   records: TRecord[];
 };
 
-export type YnabDeltaTransactionRecord = {
-  id: string;
-  date: string;
-  amount: number;
-  memo?: string | null;
-  cleared?: string | null;
-  approved?: boolean | null;
-  flag_color?: string | null;
-  flag_name?: string | null;
-  account_id?: string | null;
-  account_name?: string | null;
-  payee_id?: string | null;
-  payee_name?: string | null;
-  category_id?: string | null;
-  category_name?: string | null;
-  transfer_account_id?: string | null;
-  transfer_transaction_id?: string | null;
-  matched_transaction_id?: string | null;
-  import_id?: string | null;
-  import_payee_name?: string | null;
-  import_payee_name_original?: string | null;
-  debt_transaction_type?: string | null;
-  subtransactions?: YnabDeltaSubtransactionRecord[];
-  deleted?: boolean;
-};
+export type YnabDeltaTransactionRecord = z.output<
+  typeof YnabTransactionRecordSchema
+>;
 
-export type YnabDeltaSubtransactionRecord = {
-  id: string;
-  transaction_id?: string | null;
-  amount: number;
-  memo?: string | null;
-  payee_id?: string | null;
-  payee_name?: string | null;
-  category_id?: string | null;
-  category_name?: string | null;
-  transfer_account_id?: string | null;
-  transfer_transaction_id?: string | null;
-  deleted?: boolean;
-};
+export type YnabDeltaSubtransactionRecord = z.output<
+  typeof YnabTransactionRecordSchema
+>["subtransactions"] extends Array<infer TRecord> | undefined
+  ? TRecord
+  : never;
 
 export interface YnabDeltaClient {
   listAccountsDelta(
@@ -139,34 +117,40 @@ const YnabErrorResponseSchema = z
   })
   .passthrough();
 
-const deltaEnvelopeSchema = <TDataKey extends string>(dataKey: TDataKey) =>
+const deltaEnvelopeSchema = <TDataKey extends string, TRecord>(
+  dataKey: TDataKey,
+  recordSchema: z.ZodType<TRecord>,
+) =>
   z
     .object({
       data: z
         .object({
           server_knowledge: z.number(),
-          [dataKey]: z.array(z.unknown()),
+          [dataKey]: z.array(recordSchema),
         })
         .passthrough(),
     })
+    // Zod's dynamic object keys lose the literal data key, so this narrows the schema to the constructed key.
     .passthrough() as unknown as z.ZodType<
-    YnabDeltaEnvelope<TDataKey, unknown>
+    YnabDeltaEnvelope<TDataKey, TRecord>
   >;
 
-const optionalCursorDeltaEnvelopeSchema = <TDataKey extends string>(
+const optionalCursorDeltaEnvelopeSchema = <TDataKey extends string, TRecord>(
   dataKey: TDataKey,
+  recordSchema: z.ZodType<TRecord>,
 ) =>
   z
     .object({
       data: z
         .object({
           server_knowledge: z.number().optional(),
-          [dataKey]: z.array(z.unknown()),
+          [dataKey]: z.array(recordSchema),
         })
         .passthrough(),
     })
+    // Zod's dynamic object keys lose the literal data key, so this narrows the schema to the constructed key.
     .passthrough() as unknown as z.ZodType<
-    YnabOptionalCursorDeltaEnvelope<TDataKey, unknown>
+    YnabOptionalCursorDeltaEnvelope<TDataKey, TRecord>
   >;
 
 const YnabCategoriesDeltaEnvelopeSchema = z
@@ -174,17 +158,17 @@ const YnabCategoriesDeltaEnvelopeSchema = z
     data: z
       .object({
         server_knowledge: z.number(),
-        category_groups: z.array(z.unknown()),
-        categories: z.array(z.unknown()).optional(),
+        category_groups: z.array(YnabCategoryGroupRecordSchema),
+        categories: z.array(YnabCategoryRecordSchema).optional(),
       })
       .passthrough(),
   })
   .passthrough() as z.ZodType<YnabCategoriesDeltaEnvelope>;
 
-async function getJson<T>(
+async function getJson<TSchema extends z.ZodType>(
   response: Response,
-  schema: z.ZodType<unknown>,
-): Promise<T> {
+  schema: TSchema,
+): Promise<z.output<TSchema>> {
   if (!response.ok) {
     let detail = response.statusText;
 
@@ -230,7 +214,7 @@ async function getJson<T>(
       );
     }
 
-    return result.data as T;
+    return result.data;
   } catch (error) {
     if (error instanceof YnabClientError) {
       throw error;
@@ -303,6 +287,7 @@ export function createYnabDeltaClient(
     endpoint: string,
     dataKey: TDataKey,
     serverKnowledge: number | undefined,
+    recordSchema: z.ZodType<TRecord>,
   ): Promise<YnabDeltaResponse<TRecord>> {
     const url = new URL(
       `${baseUrl}/plans/${encodeURIComponent(planId)}/${endpoint}`,
@@ -310,9 +295,9 @@ export function createYnabDeltaClient(
     applyServerKnowledge(url, serverKnowledge);
 
     const response = await authorizedFetch(url.toString());
-    const payload = await getJson<YnabDeltaEnvelope<TDataKey, TRecord>>(
+    const payload = await getJson(
       response,
-      deltaEnvelopeSchema(dataKey),
+      deltaEnvelopeSchema(dataKey, recordSchema),
     );
 
     return {
@@ -330,6 +315,7 @@ export function createYnabDeltaClient(
     endpoint: string,
     dataKey: TDataKey,
     serverKnowledge: number | undefined,
+    recordSchema: z.ZodType<TRecord>,
     mapRecord: (record: TRecord) => TMappedRecord,
   ): Promise<YnabDeltaResponse<TMappedRecord>> {
     const delta = await getDelta<TDataKey, TRecord>(
@@ -337,6 +323,7 @@ export function createYnabDeltaClient(
       endpoint,
       dataKey,
       serverKnowledge,
+      recordSchema,
     );
 
     return {
@@ -354,6 +341,7 @@ export function createYnabDeltaClient(
     endpoint: string,
     dataKey: TDataKey,
     serverKnowledge: number | undefined,
+    recordSchema: z.ZodType<TRecord>,
     mapRecord: (record: TRecord) => TMappedRecord,
   ): Promise<YnabDeltaResponse<TMappedRecord>> {
     const url = new URL(
@@ -362,9 +350,10 @@ export function createYnabDeltaClient(
     applyServerKnowledge(url, serverKnowledge);
 
     const response = await authorizedFetch(url.toString());
-    const payload = await getJson<
-      YnabOptionalCursorDeltaEnvelope<TDataKey, TRecord>
-    >(response, optionalCursorDeltaEnvelopeSchema(dataKey));
+    const payload = await getJson(
+      response,
+      optionalCursorDeltaEnvelopeSchema(dataKey, recordSchema),
+    );
 
     return {
       records: payload.data[dataKey].map(mapRecord),
@@ -382,10 +371,7 @@ export function createYnabDeltaClient(
     applyServerKnowledge(url, serverKnowledge);
 
     const response = await authorizedFetch(url.toString());
-    const payload = await getJson<YnabCategoriesDeltaEnvelope>(
-      response,
-      YnabCategoriesDeltaEnvelopeSchema,
-    );
+    const payload = await getJson(response, YnabCategoriesDeltaEnvelopeSchema);
     const categories = (payload.data.categories ?? []).map(toYnabCategory);
     const categoriesByGroupId = groupCategoriesByGroupId(categories);
 
@@ -404,6 +390,7 @@ export function createYnabDeltaClient(
         "accounts",
         "accounts",
         serverKnowledge,
+        YnabAccountRecordSchema,
         toYnabAccount,
       );
     },
@@ -414,6 +401,7 @@ export function createYnabDeltaClient(
         "months",
         "months",
         serverKnowledge,
+        YnabPlanMonthRecordSchema,
         toYnabMonth,
       );
     },
@@ -423,6 +411,7 @@ export function createYnabDeltaClient(
         "payees",
         "payees",
         serverKnowledge,
+        YnabPayeeRecordSchema,
         toYnabPayee,
       );
     },
@@ -436,6 +425,7 @@ export function createYnabDeltaClient(
         "payee_locations",
         "payee_locations",
         serverKnowledge,
+        YnabPayeeLocationRecordSchema,
         toYnabPayeeLocation,
       );
     },
@@ -449,6 +439,7 @@ export function createYnabDeltaClient(
         "scheduled_transactions",
         "scheduled_transactions",
         serverKnowledge,
+        YnabScheduledTransactionRecordSchema,
         toYnabScheduledTransaction,
       );
     },
@@ -458,6 +449,7 @@ export function createYnabDeltaClient(
         "transactions",
         "transactions",
         serverKnowledge,
+        YnabTransactionRecordSchema,
       );
     },
   };

@@ -11,6 +11,32 @@ type ToolCallValidationResult =
       kind: "not_tool_call" | "valid";
     };
 
+const JsonRpcIdSchema = z.union([z.string(), z.number(), z.null()]);
+
+const PotentialToolCallRequestSchema = z
+  .object({
+    method: z.literal("tools/call"),
+    params: z
+      .object({
+        name: z.string(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+const ToolCallRequestSchema = z
+  .object({
+    id: JsonRpcIdSchema.optional(),
+    method: z.literal("tools/call"),
+    params: z
+      .object({
+        arguments: z.record(z.string(), z.unknown()).optional(),
+        name: z.string(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
 function writeJsonRpcInvalidParams(
   id: string | number | null,
   message: string,
@@ -38,6 +64,17 @@ function formatZodPath(path: PropertyKey[]) {
   return path.map(String).join(".");
 }
 
+function getJsonRpcId(parsedBody: unknown) {
+  const id = z
+    .object({
+      id: JsonRpcIdSchema.optional(),
+    })
+    .passthrough()
+    .safeParse(parsedBody);
+
+  return id.success ? (id.data.id ?? null) : null;
+}
+
 function formatZodError(error: z.ZodError) {
   return error.issues
     .map((issue) => `${formatZodPath(issue.path)}: ${issue.message}`)
@@ -48,54 +85,48 @@ export function validateToolCallRequest(
   parsedBody: unknown,
   definitions: readonly SliceToolDefinition[],
 ): ToolCallValidationResult {
-  if (
-    Array.isArray(parsedBody) ||
-    !parsedBody ||
-    typeof parsedBody !== "object"
-  ) {
+  const potentialRequest = PotentialToolCallRequestSchema.safeParse(parsedBody);
+
+  if (!potentialRequest.success) {
     return { kind: "not_tool_call" };
   }
 
-  const request = parsedBody as {
-    id?: number | string | null;
-    method?: string;
-    params?: {
-      arguments?: Record<string, unknown>;
-      name?: string;
-    };
-  };
+  const request = ToolCallRequestSchema.safeParse(parsedBody);
 
-  if (
-    request.method !== "tools/call" ||
-    typeof request.params?.name !== "string"
-  ) {
-    return { kind: "not_tool_call" };
+  if (!request.success) {
+    return {
+      kind: "invalid",
+      response: writeJsonRpcInvalidParams(
+        getJsonRpcId(parsedBody),
+        `Invalid tool call request: ${formatZodError(request.error)}`,
+      ),
+    };
   }
 
   const matchingDefinition = definitions.find(
-    (definition) => definition.name === request.params?.name,
+    (definition) => definition.name === request.data.params.name,
   );
 
   if (!matchingDefinition) {
     return {
       kind: "invalid",
       response: writeJsonRpcInvalidParams(
-        request.id ?? null,
-        `Tool ${request.params.name} not found`,
+        request.data.id ?? null,
+        `Tool ${request.data.params.name} not found`,
       ),
     };
   }
 
   const parseResult = z
     .object(matchingDefinition.inputSchema)
-    .safeParse(request.params.arguments ?? {});
+    .safeParse(request.data.params.arguments ?? {});
 
   if (!parseResult.success) {
     return {
       kind: "invalid",
       response: writeJsonRpcInvalidParams(
-        request.id ?? null,
-        `Invalid arguments for tool ${request.params.name}: ${formatZodError(parseResult.error)}`,
+        request.data.id ?? null,
+        `Invalid arguments for tool ${request.data.params.name}: ${formatZodError(parseResult.error)}`,
       ),
     };
   }

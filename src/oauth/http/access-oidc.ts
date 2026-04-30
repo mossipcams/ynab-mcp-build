@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { verifyOidcIdToken } from "../core/oidc.js";
 
 export type AccessOidcConfig = {
@@ -19,20 +21,33 @@ type AccessOidcClientOptions = {
   tokenUrl: string;
 };
 
-type AccessTokenResponse = {
-  id_token?: unknown;
-};
+const AccessDiscoveryResponseSchema = z.object({
+  authorization_endpoint: z.string(),
+  issuer: z.string().optional(),
+  jwks_uri: z.string(),
+  token_endpoint: z.string(),
+});
 
-type AccessJwks = {
-  keys?: JsonWebKey[];
-};
+const AccessTokenResponseSchema = z.object({
+  id_token: z.string().min(1),
+});
 
-type AccessDiscoveryResponse = {
-  authorization_endpoint?: unknown;
-  issuer?: unknown;
-  jwks_uri?: unknown;
-  token_endpoint?: unknown;
-};
+function isJsonWebKey(value: unknown): value is JsonWebKey {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kty" in value &&
+    typeof value.kty === "string"
+  );
+}
+
+const JsonWebKeySchema = z.custom<JsonWebKey>(isJsonWebKey);
+
+const AccessJwksSchema = z.object({
+  keys: z.array(JsonWebKeySchema),
+});
+
+type AccessJwks = z.output<typeof AccessJwksSchema>;
 
 export type AccessOidcEndpoints = {
   authorizationUrl: string;
@@ -90,7 +105,7 @@ async function readJsonObject(response: Response) {
     throw new Error("Access OIDC returned an invalid JSON response.");
   }
 
-  return payload as Record<string, unknown>;
+  return payload;
 }
 
 function getEndpointOverrides(
@@ -140,27 +155,21 @@ export async function resolveAccessOidcEndpoints(options: {
         throw new Error("Access OIDC discovery request failed.");
       }
 
-      const payload = (await readJsonObject(
-        response,
-      )) as AccessDiscoveryResponse;
+      const payload = AccessDiscoveryResponseSchema.safeParse(
+        await readJsonObject(response),
+      );
 
-      if (
-        typeof payload.authorization_endpoint !== "string" ||
-        typeof payload.jwks_uri !== "string" ||
-        typeof payload.token_endpoint !== "string"
-      ) {
+      if (!payload.success) {
         throw new Error(
           "Access OIDC discovery response is missing required endpoints.",
         );
       }
 
       return {
-        authorizationUrl: payload.authorization_endpoint,
-        ...(typeof payload.issuer === "string"
-          ? { issuer: payload.issuer }
-          : {}),
-        jwksUrl: payload.jwks_uri,
-        tokenUrl: payload.token_endpoint,
+        authorizationUrl: payload.data.authorization_endpoint,
+        ...(payload.data.issuer ? { issuer: payload.data.issuer } : {}),
+        jwksUrl: payload.data.jwks_uri,
+        tokenUrl: payload.data.token_endpoint,
       };
     })(),
   );
@@ -187,13 +196,15 @@ export function createAccessOidcClient(options: AccessOidcClientOptions) {
       throw new Error("Access OIDC token exchange failed.");
     }
 
-    const payload = (await readJsonObject(response)) as AccessTokenResponse;
+    const payload = AccessTokenResponseSchema.safeParse(
+      await readJsonObject(response),
+    );
 
-    if (typeof payload.id_token !== "string" || payload.id_token.length === 0) {
+    if (!payload.success) {
       throw new Error("Access OIDC token exchange did not return an ID token.");
     }
 
-    return payload.id_token;
+    return payload.data.id_token;
   }
 
   async function fetchJwks() {
@@ -217,7 +228,15 @@ export function createAccessOidcClient(options: AccessOidcClientOptions) {
           throw new Error("Access OIDC JWKS request failed.");
         }
 
-        return readJsonObject(response) as Promise<AccessJwks>;
+        const payload = AccessJwksSchema.safeParse(
+          await readJsonObject(response),
+        );
+
+        if (!payload.success) {
+          throw new Error("Access OIDC JWKS response is missing keys.");
+        }
+
+        return payload.data;
       })(),
     );
   }

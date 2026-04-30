@@ -29,30 +29,77 @@ export type ListMoneyMovementsInput = {
   month?: string;
   fromMonth?: string;
   toMonth?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type MoneyMovementSearchResult = {
+  rows: MoneyMovementRow[];
+  totalCount: number;
+};
+
+export type MoneyMovementGroupSearchResult = {
+  rows: MoneyMovementGroupRow[];
+  totalCount: number;
+};
+
+type CountRow = {
+  count: number;
 };
 
 const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
 
+function appendMonthFilters(
+  where: string[],
+  params: Array<number | string>,
+  columnName: string,
+  input: Pick<ListMoneyMovementsInput, "fromMonth" | "month" | "toMonth">,
+) {
+  if (input.month) {
+    where.push(`${columnName} = ?`);
+    params.push(input.month);
+
+    return;
+  }
+
+  if (input.fromMonth) {
+    where.push(`${columnName} >= ?`);
+    params.push(input.fromMonth);
+  }
+
+  if (input.toMonth) {
+    where.push(`${columnName} <= ?`);
+    params.push(input.toMonth);
+  }
+}
+
+function buildLimitSql(
+  input: Pick<ListMoneyMovementsInput, "limit" | "offset">,
+) {
+  if (input.limit === undefined) {
+    return {
+      params: [],
+      sql: "",
+    };
+  }
+
+  return {
+    params: [input.limit, input.offset ?? 0],
+    sql: "LIMIT ? OFFSET ?",
+  };
+}
+
 export function createMoneyMovementsRepository(database: D1Database) {
   return {
-    async listMoneyMovements(input: ListMoneyMovementsInput) {
+    usesServerPagination: true,
+
+    async listMoneyMovements(
+      input: ListMoneyMovementsInput,
+    ): Promise<MoneyMovementSearchResult> {
       const where = ["movement.plan_id = ?", "movement.deleted = 0"];
-      const params: string[] = [input.planId];
-
-      if (input.month) {
-        where.push("movement.month = ?");
-        params.push(input.month);
-      } else {
-        if (input.fromMonth) {
-          where.push("movement.month >= ?");
-          params.push(input.fromMonth);
-        }
-
-        if (input.toMonth) {
-          where.push("movement.month <= ?");
-          params.push(input.toMonth);
-        }
-      }
+      const params: Array<number | string> = [input.planId];
+      appendMonthFilters(where, params, "movement.month", input);
+      const limit = buildLimitSql(input);
 
       const result = await database
         .prepare(
@@ -76,32 +123,32 @@ export function createMoneyMovementsRepository(database: D1Database) {
              ON to_category.plan_id = movement.plan_id
             AND to_category.id = movement.to_category_id
            WHERE ${where.join(" AND ")}
-           ORDER BY movement.moved_at DESC, movement.id`,
+           ORDER BY movement.moved_at DESC, movement.id
+           ${limit.sql}`,
+        )
+        .bind(...params, ...limit.params)
+        .all<MoneyMovementRow>();
+      const countResult = await database
+        .prepare(
+          `SELECT COUNT(*) AS count FROM ynab_money_movements movement
+           WHERE ${where.join(" AND ")}`,
         )
         .bind(...params)
-        .all<MoneyMovementRow>();
+        .all<CountRow>();
 
-      return rowsOrEmpty(result);
+      return {
+        rows: rowsOrEmpty(result),
+        totalCount: rowsOrEmpty(countResult)[0]?.count ?? 0,
+      };
     },
 
-    async listMoneyMovementGroups(input: ListMoneyMovementsInput) {
+    async listMoneyMovementGroups(
+      input: ListMoneyMovementsInput,
+    ): Promise<MoneyMovementGroupSearchResult> {
       const where = ["movement.plan_id = ?", "movement.deleted = 0"];
-      const params: string[] = [input.planId];
-
-      if (input.month) {
-        where.push("movement.month = ?");
-        params.push(input.month);
-      } else {
-        if (input.fromMonth) {
-          where.push("movement.month >= ?");
-          params.push(input.fromMonth);
-        }
-
-        if (input.toMonth) {
-          where.push("movement.month <= ?");
-          params.push(input.toMonth);
-        }
-      }
+      const params: Array<number | string> = [input.planId];
+      appendMonthFilters(where, params, "movement.month", input);
+      const limit = buildLimitSql(input);
 
       const result = await database
         .prepare(
@@ -120,12 +167,32 @@ export function createMoneyMovementsRepository(database: D1Database) {
             AND movement_group.deleted = 0
            WHERE ${where.join(" AND ")}
            GROUP BY movement.plan_id, COALESCE(movement.money_movement_group_id, movement.id)
-           ORDER BY group_created_at DESC, id`,
+           ORDER BY group_created_at DESC, id
+           ${limit.sql}`,
+        )
+        .bind(...params, ...limit.params)
+        .all<MoneyMovementGroupRow>();
+      const countResult = await database
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM (
+             SELECT 1
+             FROM ynab_money_movements movement
+             LEFT JOIN ynab_money_movement_groups movement_group
+               ON movement_group.plan_id = movement.plan_id
+              AND movement_group.id = movement.money_movement_group_id
+              AND movement_group.deleted = 0
+             WHERE ${where.join(" AND ")}
+             GROUP BY movement.plan_id, COALESCE(movement.money_movement_group_id, movement.id)
+           ) grouped_movements`,
         )
         .bind(...params)
-        .all<MoneyMovementGroupRow>();
+        .all<CountRow>();
 
-      return rowsOrEmpty(result);
+      return {
+        rows: rowsOrEmpty(result),
+        totalCount: rowsOrEmpty(countResult)[0]?.count ?? 0,
+      };
     },
   };
 }

@@ -200,148 +200,196 @@ export function createReadModelSyncService(
   options: ReadModelSyncServiceOptions,
 ) {
   const leaseSeconds = options.leaseSeconds ?? 60;
-  const endpointConfigs: Array<EndpointConfig<unknown>> = [
-    ...(options.metadataClient
-      ? [
-          {
-            endpoint: "users",
-            async fetchDelta(
-              _planId: string,
-              serverKnowledge: number | undefined,
-            ) {
-              return {
-                records: [await options.metadataClient!.getUser()],
-                serverKnowledge: serverKnowledge ?? 0,
-              };
-            },
-            async write(input: { records: unknown[]; syncedAt: string }) {
-              const [user] = input.records as YnabUser[];
+  function defineEndpoint<TRecord>(config: EndpointConfig<TRecord>) {
+    return {
+      endpoint: config.endpoint,
+      sync(input: SyncReadModelInput) {
+        return syncEndpoint(input, config);
+      },
+    };
+  }
 
-              if (!user) {
-                return { rowsUpserted: 0 };
-              }
+  const metadataClient = options.metadataClient;
+  const moneyMovementClient = options.moneyMovementClient;
+  const metadataEndpointConfigs = metadataClient
+    ? [
+        defineEndpoint<YnabUser>({
+          endpoint: "users",
+          async fetchDelta(_planId, serverKnowledge) {
+            return {
+              records: [await metadataClient.getUser()],
+              serverKnowledge: serverKnowledge ?? 0,
+            };
+          },
+          async write(input) {
+            const [user] = input.records;
 
-              if (!options.readModelRepository.upsertUser) {
-                throw new Error(
-                  "Read-model metadata repository is missing upsertUser.",
-                );
-              }
+            if (!user) {
+              return { rowsUpserted: 0 };
+            }
 
-              return options.readModelRepository.upsertUser({
-                syncedAt: input.syncedAt,
-                user,
-              });
-            },
-          } satisfies EndpointConfig<unknown>,
-          {
-            endpoint: "plans",
-            async fetchDelta(
-              planId: string,
-              serverKnowledge: number | undefined,
-            ) {
-              const [planList, plan] = await Promise.all([
-                options.metadataClient!.listPlans(),
-                options.metadataClient!.getPlan(planId),
-              ]);
-
-              return {
-                records: [{ plan, plans: planList.plans }],
-                serverKnowledge: serverKnowledge ?? 0,
-              };
-            },
-            async write(input: { records: unknown[]; syncedAt: string }) {
-              const [record] = input.records as PlansMetadataRecord[];
-
-              if (!record) {
-                return { rowsUpserted: 0 };
-              }
-
-              if (
-                !options.readModelRepository.upsertPlans ||
-                !options.readModelRepository.upsertPlanDetail
-              ) {
-                throw new Error(
-                  "Read-model metadata repository is missing plan upsert methods.",
-                );
-              }
-
-              const plansResult = await options.readModelRepository.upsertPlans(
-                {
-                  plans: record.plans,
-                  syncedAt: input.syncedAt,
-                },
+            if (!options.readModelRepository.upsertUser) {
+              throw new Error(
+                "Read-model metadata repository is missing upsertUser.",
               );
-              const planResult =
-                await options.readModelRepository.upsertPlanDetail({
-                  plan: record.plan,
-                  syncedAt: input.syncedAt,
-                });
+            }
 
-              return {
-                rowsUpserted:
-                  plansResult.rowsUpserted + planResult.rowsUpserted,
-              };
-            },
-          } satisfies EndpointConfig<unknown>,
-          {
-            endpoint: "plan_settings",
-            async fetchDelta(
-              planId: string,
-              serverKnowledge: number | undefined,
+            return options.readModelRepository.upsertUser({
+              syncedAt: input.syncedAt,
+              user,
+            });
+          },
+        }),
+        defineEndpoint<PlansMetadataRecord>({
+          endpoint: "plans",
+          async fetchDelta(planId, serverKnowledge) {
+            const [planList, plan] = await Promise.all([
+              metadataClient.listPlans(),
+              metadataClient.getPlan(planId),
+            ]);
+
+            return {
+              records: [{ plan, plans: planList.plans }],
+              serverKnowledge: serverKnowledge ?? 0,
+            };
+          },
+          async write(input) {
+            const [record] = input.records;
+
+            if (!record) {
+              return { rowsUpserted: 0 };
+            }
+
+            if (
+              !options.readModelRepository.upsertPlans ||
+              !options.readModelRepository.upsertPlanDetail
             ) {
-              return {
-                records: [
-                  await options.metadataClient!.getPlanSettings(planId),
-                ],
-                serverKnowledge: serverKnowledge ?? 0,
-              };
-            },
-            async write(input: {
-              planId: string;
-              records: unknown[];
-              syncedAt: string;
-            }) {
-              const [settings] = input.records as YnabPlanSettings[];
+              throw new Error(
+                "Read-model metadata repository is missing plan upsert methods.",
+              );
+            }
 
-              if (!settings) {
-                return { rowsUpserted: 0 };
-              }
-
-              if (!options.readModelRepository.upsertPlanSettings) {
-                throw new Error(
-                  "Read-model metadata repository is missing upsertPlanSettings.",
-                );
-              }
-
-              return options.readModelRepository.upsertPlanSettings({
-                planId: input.planId,
-                settings,
+            const plansResult = await options.readModelRepository.upsertPlans({
+              plans: record.plans,
+              syncedAt: input.syncedAt,
+            });
+            const planResult =
+              await options.readModelRepository.upsertPlanDetail({
+                plan: record.plan,
                 syncedAt: input.syncedAt,
               });
-            },
-          } satisfies EndpointConfig<unknown>,
-        ]
-      : []),
-    {
+
+            return {
+              rowsUpserted: plansResult.rowsUpserted + planResult.rowsUpserted,
+            };
+          },
+        }),
+        defineEndpoint<YnabPlanSettings>({
+          endpoint: "plan_settings",
+          async fetchDelta(planId, serverKnowledge) {
+            return {
+              records: [await metadataClient.getPlanSettings(planId)],
+              serverKnowledge: serverKnowledge ?? 0,
+            };
+          },
+          async write(input) {
+            const [settings] = input.records;
+
+            if (!settings) {
+              return { rowsUpserted: 0 };
+            }
+
+            if (!options.readModelRepository.upsertPlanSettings) {
+              throw new Error(
+                "Read-model metadata repository is missing upsertPlanSettings.",
+              );
+            }
+
+            return options.readModelRepository.upsertPlanSettings({
+              planId: input.planId,
+              settings,
+              syncedAt: input.syncedAt,
+            });
+          },
+        }),
+      ]
+    : [];
+  const moneyMovementEndpointConfigs = moneyMovementClient
+    ? [
+        defineEndpoint<MoneyMovementDeltaRecord>({
+          endpoint: "money_movements",
+          async fetchDelta(planId, serverKnowledge) {
+            const [movements, groups] = await Promise.all([
+              moneyMovementClient.listMoneyMovements(planId, serverKnowledge),
+              moneyMovementClient.listMoneyMovementGroups(
+                planId,
+                serverKnowledge,
+              ),
+            ]);
+
+            return {
+              records: [
+                {
+                  moneyMovementGroups: groups.moneyMovementGroups,
+                  moneyMovements: movements.moneyMovements,
+                },
+              ],
+              serverKnowledge: Math.max(
+                movements.serverKnowledge,
+                groups.serverKnowledge,
+              ),
+            };
+          },
+          async write(input) {
+            const [record] = input.records;
+
+            if (!record) {
+              return { rowsUpserted: 0 };
+            }
+
+            const movementGroupsResult =
+              await options.readModelRepository.upsertMoneyMovementGroups({
+                moneyMovementGroups: record.moneyMovementGroups,
+                planId: input.planId,
+                syncedAt: input.syncedAt,
+              });
+            const movementsResult =
+              await options.readModelRepository.upsertMoneyMovements({
+                moneyMovements: record.moneyMovements,
+                planId: input.planId,
+                syncedAt: input.syncedAt,
+              });
+
+            return {
+              rowsUpserted:
+                movementGroupsResult.rowsUpserted +
+                movementsResult.rowsUpserted,
+            };
+          },
+        }),
+      ]
+    : [];
+  const endpointConfigs = [
+    ...metadataEndpointConfigs,
+    defineEndpoint<YnabAccountSummary>({
       endpoint: "accounts",
       fetchDelta: (planId, serverKnowledge) =>
         options.deltaClient.listAccountsDelta(planId, serverKnowledge),
       async write(input) {
         return options.readModelRepository.upsertAccounts({
-          accounts: input.records as YnabAccountSummary[],
+          accounts: input.records,
           planId: input.planId,
           syncedAt: input.syncedAt,
         });
       },
-    },
-    {
+    }),
+    defineEndpoint<YnabCategoryGroupSummary>({
       endpoint: "categories",
       fetchDelta: (planId, serverKnowledge) =>
         options.deltaClient.listCategoriesDelta(planId, serverKnowledge),
       async write(input) {
-        const categoryGroups = input.records as YnabCategoryGroupSummary[];
         const result = await options.readModelRepository.upsertCategoryGroups({
-          categoryGroups,
+          categoryGroups: input.records,
           planId: input.planId,
           syncedAt: input.syncedAt,
         });
@@ -351,14 +399,14 @@ export function createReadModelSyncService(
             result.categoryGroupsUpserted + result.categoriesUpserted,
         };
       },
-    },
-    {
+    }),
+    defineEndpoint<YnabPlanMonthDetail>({
       endpoint: "months",
       fetchDelta: (planId, serverKnowledge) =>
         options.deltaClient.listMonthsDelta(planId, serverKnowledge),
       async write(input) {
         const result = await options.readModelRepository.upsertMonths({
-          months: input.records as YnabPlanMonthDetail[],
+          months: input.records,
           planId: input.planId,
           syncedAt: input.syncedAt,
         });
@@ -367,97 +415,33 @@ export function createReadModelSyncService(
           rowsUpserted: result.monthsUpserted + result.monthCategoriesUpserted,
         };
       },
-    },
-    ...(options.moneyMovementClient
-      ? [
-          {
-            endpoint: "money_movements",
-            async fetchDelta(
-              planId: string,
-              serverKnowledge: number | undefined,
-            ) {
-              const [movements, groups] = await Promise.all([
-                options.moneyMovementClient!.listMoneyMovements(
-                  planId,
-                  serverKnowledge,
-                ),
-                options.moneyMovementClient!.listMoneyMovementGroups(
-                  planId,
-                  serverKnowledge,
-                ),
-              ]);
-
-              return {
-                records: [
-                  {
-                    moneyMovementGroups: groups.moneyMovementGroups,
-                    moneyMovements: movements.moneyMovements,
-                  },
-                ],
-                serverKnowledge: Math.max(
-                  movements.serverKnowledge,
-                  groups.serverKnowledge,
-                ),
-              };
-            },
-            async write(input: {
-              planId: string;
-              records: unknown[];
-              syncedAt: string;
-            }) {
-              const [record] = input.records as MoneyMovementDeltaRecord[];
-
-              if (!record) {
-                return { rowsUpserted: 0 };
-              }
-
-              const movementGroupsResult =
-                await options.readModelRepository.upsertMoneyMovementGroups({
-                  moneyMovementGroups: record.moneyMovementGroups,
-                  planId: input.planId,
-                  syncedAt: input.syncedAt,
-                });
-              const movementsResult =
-                await options.readModelRepository.upsertMoneyMovements({
-                  moneyMovements: record.moneyMovements,
-                  planId: input.planId,
-                  syncedAt: input.syncedAt,
-                });
-
-              return {
-                rowsUpserted:
-                  movementGroupsResult.rowsUpserted +
-                  movementsResult.rowsUpserted,
-              };
-            },
-          } satisfies EndpointConfig<unknown>,
-        ]
-      : []),
-    {
+    }),
+    ...moneyMovementEndpointConfigs,
+    defineEndpoint<YnabPayee>({
       endpoint: "payees",
       fetchDelta: (planId, serverKnowledge) =>
         options.deltaClient.listPayeesDelta(planId, serverKnowledge),
       async write(input) {
         return options.readModelRepository.upsertPayees({
-          payees: input.records as YnabPayee[],
+          payees: input.records,
           planId: input.planId,
           syncedAt: input.syncedAt,
         });
       },
-    },
-    {
+    }),
+    defineEndpoint<YnabPayeeLocation>({
       endpoint: "payee_locations",
       fetchDelta: (planId, serverKnowledge) =>
         options.deltaClient.listPayeeLocationsDelta(planId, serverKnowledge),
       async write(input) {
         return options.readModelRepository.upsertPayeeLocations({
-          locations: input.records as YnabPayeeLocation[],
+          locations: input.records,
           planId: input.planId,
           syncedAt: input.syncedAt,
         });
       },
-    },
-    {
+    }),
+    defineEndpoint<YnabScheduledTransaction>({
       endpoint: "scheduled_transactions",
       fetchDelta: (planId, serverKnowledge) =>
         options.deltaClient.listScheduledTransactionsDelta(
@@ -467,12 +451,12 @@ export function createReadModelSyncService(
       async write(input) {
         return options.readModelRepository.upsertScheduledTransactions({
           planId: input.planId,
-          scheduledTransactions: input.records as YnabScheduledTransaction[],
+          scheduledTransactions: input.records,
           syncedAt: input.syncedAt,
         });
       },
-    },
-    {
+    }),
+    defineEndpoint<YnabDeltaTransactionRecord>({
       endpoint: "transactions",
       fetchDelta: (planId, serverKnowledge) =>
         options.deltaClient.listTransactionsDelta(planId, serverKnowledge),
@@ -480,15 +464,15 @@ export function createReadModelSyncService(
         return options.transactionsRepository.upsertTransactions({
           planId: input.planId,
           syncedAt: input.syncedAt,
-          transactions: input.records as YnabDeltaTransactionRecord[],
+          transactions: input.records,
         });
       },
-    },
+    }),
   ];
 
-  async function syncEndpoint(
+  async function syncEndpoint<TRecord>(
     input: SyncReadModelInput,
-    config: EndpointConfig<unknown>,
+    config: EndpointConfig<TRecord>,
   ): Promise<EndpointResult> {
     const lease = await options.syncStateRepository.acquireLease({
       endpoint: config.endpoint,
@@ -577,7 +561,7 @@ export function createReadModelSyncService(
       const endpointResults: EndpointResult[] = [];
 
       for (const config of endpointConfigs) {
-        endpointResults.push(await syncEndpoint(input, config));
+        endpointResults.push(await config.sync(input));
       }
 
       return {

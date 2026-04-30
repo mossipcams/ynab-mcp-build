@@ -91,6 +91,88 @@ async function createSignedIdToken(payload: Record<string, unknown>) {
 }
 
 describe("Access OIDC HTTP caching", () => {
+  it("rejects malformed discovery responses", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () =>
+        Response.json({
+          authorization_endpoint: "https://access.example.com/authorize",
+          jwks_uri: 123,
+          token_endpoint: "https://access.example.com/token",
+        }),
+      );
+
+    await expect(
+      resolveAccessOidcEndpoints({
+        config: {
+          clientId: "client-1",
+          clientSecret: "secret",
+          discoveryUrl:
+            "https://malformed-team.example.com/.well-known/openid-configuration",
+        },
+        fetch,
+      }),
+    ).rejects.toThrow(
+      "Access OIDC discovery response is missing required endpoints.",
+    );
+  });
+
+  it("rejects malformed token responses", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () =>
+        Response.json({
+          id_token: 123,
+        }),
+      );
+    const client = createAccessOidcClient({
+      clientId: "client-1",
+      clientSecret: "secret",
+      fetch,
+      jwksUrl: "https://access.example.com/certs",
+      redirectUri: "https://mcp.example.com/oidc/callback",
+      tokenUrl: "https://access.example.com/token",
+    });
+
+    await expect(client.authenticate("code-1")).rejects.toThrow(
+      "Access OIDC token exchange did not return an ID token.",
+    );
+  });
+
+  it("rejects malformed JWKS responses before token verification", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async (input) => {
+        const url = requestUrl(input);
+
+        if (url === "https://access.example.com/token") {
+          return Response.json({
+            id_token: unsignedIdToken("missing-key"),
+          });
+        }
+
+        if (url === "https://access.example.com/certs") {
+          return Response.json({
+            keys: "not-an-array",
+          });
+        }
+
+        return new Response(null, { status: 404 });
+      });
+    const client = createAccessOidcClient({
+      clientId: "client-1",
+      clientSecret: "secret",
+      fetch,
+      jwksUrl: "https://access.example.com/certs",
+      redirectUri: "https://mcp.example.com/oidc/callback",
+      tokenUrl: "https://access.example.com/token",
+    });
+
+    await expect(client.authenticate("code-1")).rejects.toThrow(
+      "Access OIDC JWKS response is missing keys.",
+    );
+  });
+
   it("caches discovery endpoints for the same discovery URL", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()

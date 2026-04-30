@@ -53,6 +53,12 @@ class FakeStatement {
       } as D1Result<T>);
     }
 
+    if (this.sql.includes("COUNT(*) AS count")) {
+      return Promise.resolve({
+        results: [{ count: 1 }],
+      } as D1Result<T>);
+    }
+
     if (this.sql.includes("FROM ynab_money_movements")) {
       return Promise.resolve({
         results: [
@@ -110,12 +116,6 @@ class FakeStatement {
             deleted: 0,
           },
         ],
-      } as D1Result<T>);
-    }
-
-    if (this.sql.includes("COUNT(*) AS count")) {
-      return Promise.resolve({
-        results: [{ count: 1 }],
       } as D1Result<T>);
     }
 

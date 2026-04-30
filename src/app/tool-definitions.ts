@@ -135,16 +135,27 @@ function hasPlanIdInput(definition: SliceToolDefinition) {
   return Object.hasOwn(definition.inputSchema, "planId");
 }
 
-function getExplicitPlanId(input: unknown) {
-  if (!input || typeof input !== "object" || !("planId" in input)) {
+function getOwnProperty(input: unknown, key: string) {
+  if (!input || typeof input !== "object" || !Object.hasOwn(input, key)) {
     return undefined;
   }
 
-  const planId = (input as { planId?: unknown }).planId;
+  const descriptor = Object.getOwnPropertyDescriptor(input, key);
+  const value: unknown = descriptor?.value;
 
-  return typeof planId === "string" && planId.trim().length > 0
-    ? planId.trim()
+  return value;
+}
+
+function getOwnNonBlankString(input: unknown, key: string) {
+  const value = getOwnProperty(input, key);
+
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
     : undefined;
+}
+
+function getExplicitPlanId(input: unknown) {
+  return getOwnNonBlankString(input, "planId");
 }
 
 function createDefaultPlanIdResolver(dependencies: {
@@ -182,12 +193,12 @@ function createDefaultPlanIdResolver(dependencies: {
   };
 }
 
-function withAutoPopulatedPlanId(
-  definition: SliceToolDefinition,
+function withAutoPopulatedPlanId<TInput, TOutput>(
+  definition: SliceToolDefinition<TInput, TOutput>,
   dependencies: {
     resolvePlanId(): Promise<string>;
   },
-): SliceToolDefinition {
+): SliceToolDefinition<TInput, TOutput> {
   if (!hasPlanIdInput(definition)) {
     return definition;
   }
@@ -195,26 +206,32 @@ function withAutoPopulatedPlanId(
   return {
     ...definition,
     execute: async (input) => {
-      const toolInput = input as unknown;
-      const explicitPlanId = getExplicitPlanId(toolInput);
+      const explicitPlanId = getExplicitPlanId(input);
 
       if (explicitPlanId) {
         return definition.execute(input);
       }
 
-      return definition.execute({
-        ...(toolInput && typeof toolInput === "object" ? toolInput : {}),
+      const inputWithPlanId = {
+        ...(input && typeof input === "object" ? input : {}),
         planId: await dependencies.resolvePlanId(),
-      } as never);
+      };
+
+      // The wrapper can only know at runtime that this schema accepts planId.
+      return definition.execute(inputWithPlanId as TInput);
     },
   };
 }
 
+function hasKnownRequiredEndpoints(
+  name: string,
+): name is keyof typeof REQUIRED_ENDPOINTS_BY_TOOL {
+  return Object.hasOwn(REQUIRED_ENDPOINTS_BY_TOOL, name);
+}
+
 function requiredEndpointsForTool(name: string) {
-  if (Object.hasOwn(REQUIRED_ENDPOINTS_BY_TOOL, name)) {
-    return REQUIRED_ENDPOINTS_BY_TOOL[
-      name as keyof typeof REQUIRED_ENDPOINTS_BY_TOOL
-    ];
+  if (hasKnownRequiredEndpoints(name)) {
+    return REQUIRED_ENDPOINTS_BY_TOOL[name];
   }
 
   if (name === "ynab_list_plans") {
@@ -267,13 +284,7 @@ function requiredEndpointsForTool(name: string) {
 }
 
 function hasMonthInput(input: unknown) {
-  if (!input || typeof input !== "object" || !("month" in input)) {
-    return false;
-  }
-
-  const month = (input as { month?: unknown }).month;
-
-  return typeof month === "string" && month.trim().length > 0;
+  return getOwnNonBlankString(input, "month") !== undefined;
 }
 
 function requiredEndpointsForExecution(
@@ -297,12 +308,10 @@ function resolveFreshnessPlanId(
   input: unknown,
   defaultPlanId: string | undefined,
 ) {
-  if (input && typeof input === "object" && "planId" in input) {
-    const planId = (input as { planId?: unknown }).planId;
+  const planId = getOwnNonBlankString(input, "planId");
 
-    if (typeof planId === "string" && planId.trim().length > 0) {
-      return planId;
-    }
+  if (planId) {
+    return planId;
   }
 
   if (defaultPlanId) {

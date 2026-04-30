@@ -1,8 +1,12 @@
 import type {
+  ListMoneyMovementsInput,
+  MoneyMovementGroupSearchResult,
   MoneyMovementGroupRow,
+  MoneyMovementSearchResult,
   MoneyMovementRow,
 } from "../../platform/ynab/read-model/money-movements-repository.js";
 import {
+  DEFAULT_LIMIT,
   formatAmountMilliunits,
   paginateEntries,
   shouldPaginateEntries,
@@ -23,19 +27,32 @@ type DbMoneyMovementsDependencies = {
   defaultPlanId?: string;
   moneyMovementsRepository: {
     listMoneyMovementGroups(input: {
-      fromMonth?: string;
       planId: string;
       month?: string;
+      fromMonth?: string;
       toMonth?: string;
-    }): Promise<MoneyMovementGroupRow[]>;
+      limit?: number;
+      offset?: number;
+    }): Promise<MoneyMovementGroupRepositoryResult>;
     listMoneyMovements(input: {
-      fromMonth?: string;
       planId: string;
       month?: string;
+      fromMonth?: string;
       toMonth?: string;
-    }): Promise<MoneyMovementRow[]>;
+      limit?: number;
+      offset?: number;
+    }): Promise<MoneyMovementRepositoryResult>;
+    usesServerPagination?: boolean;
   };
 };
+
+type MoneyMovementRepositoryResult =
+  | MoneyMovementSearchResult
+  | MoneyMovementRow[];
+
+type MoneyMovementGroupRepositoryResult =
+  | MoneyMovementGroupSearchResult
+  | MoneyMovementGroupRow[];
 
 function resolvePlanId(input: { planId?: string }, defaultPlanId?: string) {
   const inputPlanId = input.planId?.trim();
@@ -105,15 +122,40 @@ function matchesMonthRange(
 
 function buildCollectionResult<TEntry>(
   entries: TEntry[],
+  totalCount: number,
   input: DbMoneyMovementsInput,
   entryKey: "money_movements" | "money_movement_groups",
   countKey: "movement_count" | "group_count",
+  options: { useServerPagination: boolean },
   extra: Record<string, unknown> = {},
 ) {
+  if (options.useServerPagination) {
+    if (!shouldIncludePaginationMetadata(input, totalCount)) {
+      return {
+        [entryKey]: entries,
+        [countKey]: totalCount,
+        ...extra,
+      };
+    }
+
+    const pagination = getEffectivePagination(input);
+    const offset = pagination.offset ?? 0;
+
+    return {
+      [entryKey]: entries,
+      [countKey]: totalCount,
+      limit: pagination.limit,
+      offset,
+      returned_count: entries.length,
+      has_more: offset + entries.length < totalCount,
+      ...extra,
+    };
+  }
+
   if (!shouldPaginateEntries(entries, input)) {
     return {
       [entryKey]: entries,
-      [countKey]: entries.length,
+      [countKey]: totalCount,
       ...extra,
     };
   }
@@ -122,10 +164,97 @@ function buildCollectionResult<TEntry>(
 
   return {
     [entryKey]: pagedEntries.entries,
-    [countKey]: entries.length,
+    [countKey]: totalCount,
     ...pagedEntries.metadata,
     ...extra,
   };
+}
+
+function shouldIncludePaginationMetadata(
+  input: Pick<DbMoneyMovementsInput, "limit" | "offset">,
+  totalCount: number,
+) {
+  return (
+    input.limit !== undefined ||
+    input.offset !== undefined ||
+    totalCount > DEFAULT_LIMIT
+  );
+}
+
+function getEffectivePagination(
+  input: Pick<DbMoneyMovementsInput, "limit" | "offset">,
+) {
+  return {
+    limit: input.limit ?? DEFAULT_LIMIT,
+    ...(input.offset !== undefined ? { offset: input.offset } : {}),
+  };
+}
+
+function buildRepositoryInput(
+  input: DbMoneyMovementsInput,
+  planId: string,
+  options: { useServerPagination: boolean },
+): ListMoneyMovementsInput {
+  const repositoryInput: ListMoneyMovementsInput = { planId };
+
+  if (input.month) {
+    repositoryInput.month = input.month;
+  }
+
+  if (input.fromMonth) {
+    repositoryInput.fromMonth = input.fromMonth;
+  }
+
+  if (input.toMonth) {
+    repositoryInput.toMonth = input.toMonth;
+  }
+
+  if (options.useServerPagination) {
+    const pagination = getEffectivePagination(input);
+
+    repositoryInput.limit = pagination.limit;
+
+    if (pagination.offset !== undefined) {
+      repositoryInput.offset = pagination.offset;
+    }
+
+    return repositoryInput;
+  }
+
+  if (input.limit !== undefined) {
+    repositoryInput.limit = input.limit;
+  }
+
+  if (input.offset !== undefined) {
+    repositoryInput.offset = input.offset;
+  }
+
+  return repositoryInput;
+}
+
+function normalizeRepositoryResult<TRow>(
+  result: { rows: TRow[]; totalCount: number } | TRow[],
+) {
+  if (Array.isArray(result)) {
+    return {
+      rows: result,
+      totalCount: result.length,
+    };
+  }
+
+  return result;
+}
+
+function maybeFilterRowsByMonthRange<TRow extends { month?: string | null }>(
+  rows: TRow[],
+  input: DbMoneyMovementsInput,
+  options: { useServerPagination: boolean },
+) {
+  if (options.useServerPagination) {
+    return rows;
+  }
+
+  return rows.filter((row) => matchesMonthRange(row.month, input));
 }
 
 export async function searchDbMoneyMovements(
@@ -134,47 +263,55 @@ export async function searchDbMoneyMovements(
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
   const groupBy = input.groupBy ?? "movement";
-  const month = input.month;
   const filters = compactObject({
     month: input.month,
     from_month: input.fromMonth,
     to_month: input.toMonth,
   });
   const extra = Object.keys(filters).length ? filters : {};
+  const useServerPagination =
+    dependencies.moneyMovementsRepository.usesServerPagination === true;
+  const repositoryInput = buildRepositoryInput(input, planId, {
+    useServerPagination,
+  });
 
   if (groupBy === "group") {
-    const rows = (
-      await dependencies.moneyMovementsRepository.listMoneyMovementGroups({
-        ...(input.fromMonth && !month ? { fromMonth: input.fromMonth } : {}),
-        ...(month ? { month } : {}),
-        planId,
-        ...(input.toMonth && !month ? { toMonth: input.toMonth } : {}),
-      })
-    ).filter((row) => matchesMonthRange(row.month, input));
+    const result = normalizeRepositoryResult(
+      await dependencies.moneyMovementsRepository.listMoneyMovementGroups(
+        repositoryInput,
+      ),
+    );
+    const rows = maybeFilterRowsByMonthRange(result.rows, input, {
+      useServerPagination,
+    });
 
     return buildCollectionResult(
       rows.map(toDisplayMoneyMovementGroup),
+      useServerPagination ? result.totalCount : rows.length,
       input,
       "money_movement_groups",
       "group_count",
+      { useServerPagination },
       extra,
     );
   }
 
-  const rows = (
-    await dependencies.moneyMovementsRepository.listMoneyMovements({
-      ...(input.fromMonth && !month ? { fromMonth: input.fromMonth } : {}),
-      ...(month ? { month } : {}),
-      planId,
-      ...(input.toMonth && !month ? { toMonth: input.toMonth } : {}),
-    })
-  ).filter((row) => matchesMonthRange(row.month, input));
+  const result = normalizeRepositoryResult(
+    await dependencies.moneyMovementsRepository.listMoneyMovements(
+      repositoryInput,
+    ),
+  );
+  const rows = maybeFilterRowsByMonthRange(result.rows, input, {
+    useServerPagination,
+  });
 
   return buildCollectionResult(
     rows.map(toDisplayMoneyMovement),
+    useServerPagination ? result.totalCount : rows.length,
     input,
     "money_movements",
     "movement_count",
+    { useServerPagination },
     extra,
   );
 }

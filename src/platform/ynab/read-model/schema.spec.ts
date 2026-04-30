@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { YNAB_READ_MODEL_TABLES } from "./schema.js";
+
 const migrationPath = join(
   process.cwd(),
   "migrations",
@@ -34,6 +36,20 @@ function expectColumns(sql: string, tableName: string, columnNames: string[]) {
 }
 
 describe("YNAB D1 read model schema", () => {
+  it("keeps a TypeScript table contract aligned with the migration", () => {
+    const sql = readMigration();
+
+    for (const table of Object.values(YNAB_READ_MODEL_TABLES)) {
+      const body = tableSql(sql, table.name);
+
+      for (const column of table.columns) {
+        expect(body, `${table.name} should include ${column}`).toMatch(
+          new RegExp(`\\b${column}\\b`, "u"),
+        );
+      }
+    }
+  });
+
   it("creates sync coordination tables for endpoint cursors and bounded runs", () => {
     const sql = readMigration();
 

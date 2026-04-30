@@ -3,41 +3,43 @@ export type YnabSubtransactionRecord = {
 };
 
 export type YnabTransactionRecordInput = {
-  account_id?: string | null;
-  account_name?: string | null;
+  account_id?: string | null | undefined;
+  account_name?: string | null | undefined;
   amount: number;
-  approved?: boolean | null;
-  category_id?: string | null;
-  category_name?: string | null;
-  cleared?: string | null;
+  approved?: boolean | null | undefined;
+  category_id?: string | null | undefined;
+  category_name?: string | null | undefined;
+  cleared?: string | null | undefined;
   date: string;
-  debt_transaction_type?: string | null;
-  deleted?: boolean;
-  flag_color?: string | null;
-  flag_name?: string | null;
+  debt_transaction_type?: string | null | undefined;
+  deleted?: boolean | undefined;
+  flag_color?: string | null | undefined;
+  flag_name?: string | null | undefined;
   id: string;
-  import_id?: string | null;
-  import_payee_name?: string | null;
-  import_payee_name_original?: string | null;
-  matched_transaction_id?: string | null;
-  memo?: string | null;
-  payee_id?: string | null;
-  payee_name?: string | null;
-  transfer_account_id?: string | null;
-  transfer_transaction_id?: string | null;
-  subtransactions?: Array<{
-    id: string;
-    transaction_id?: string | null;
-    amount: number;
-    memo?: string | null;
-    payee_id?: string | null;
-    payee_name?: string | null;
-    category_id?: string | null;
-    category_name?: string | null;
-    transfer_account_id?: string | null;
-    transfer_transaction_id?: string | null;
-    deleted?: boolean;
-  }>;
+  import_id?: string | null | undefined;
+  import_payee_name?: string | null | undefined;
+  import_payee_name_original?: string | null | undefined;
+  matched_transaction_id?: string | null | undefined;
+  memo?: string | null | undefined;
+  payee_id?: string | null | undefined;
+  payee_name?: string | null | undefined;
+  transfer_account_id?: string | null | undefined;
+  transfer_transaction_id?: string | null | undefined;
+  subtransactions?:
+    | Array<{
+        id: string;
+        transaction_id?: string | null | undefined;
+        amount: number;
+        memo?: string | null | undefined;
+        payee_id?: string | null | undefined;
+        payee_name?: string | null | undefined;
+        category_id?: string | null | undefined;
+        category_name?: string | null | undefined;
+        transfer_account_id?: string | null | undefined;
+        transfer_transaction_id?: string | null | undefined;
+        deleted?: boolean | undefined;
+      }>
+    | undefined;
 };
 
 export function dollarsToMilliunits(amount: number) {
