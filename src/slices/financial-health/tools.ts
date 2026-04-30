@@ -13,7 +13,9 @@ import {
   requiredIdSchema,
 } from "../../shared/tool-inputs.js";
 import {
+  explainMonthDelta,
   getBudgetCleanupSummary,
+  getBudgetChangeDigest,
   getBudgetHealthSummary,
   getCashFlowSummary,
   getCashRunway,
@@ -38,6 +40,33 @@ export function getFinancialHealthToolDefinitions(
   ynabClient: YnabClient,
 ): SliceToolDefinition[] {
   return [
+    defineTool({
+      name: "ynab_explain_month_delta",
+      title: "Explain YNAB Month Delta",
+      description:
+        "Explains what changed between two budget months, including income, spending, category deltas, and transaction evidence.",
+      inputSchema: {
+        ...planIdSchema,
+        baselineMonth: monthFieldSchema,
+        comparisonMonth: monthFieldSchema,
+        topN: z.number().int().min(1).max(10).optional(),
+        detailLevel: detailLevelSchema.optional(),
+      },
+      execute: async (input) => explainMonthDelta(ynabClient, input),
+    }),
+    defineTool({
+      name: "ynab_get_budget_change_digest",
+      title: "Get YNAB Budget Change Digest",
+      description:
+        "Summarizes what changed in a budget month and what needs attention. Use for broad budget review questions like what changed, what matters, or what to inspect next.",
+      inputSchema: {
+        ...planIdSchema,
+        month: monthSelectorSchema.optional(),
+        topN: z.number().int().min(1).max(10).optional(),
+        detailLevel: detailLevelSchema.optional(),
+      },
+      execute: async (input) => getBudgetChangeDigest(ynabClient, input),
+    }),
     defineTool({
       name: "ynab_get_financial_snapshot",
       title: "Get YNAB Financial Snapshot",

@@ -24,6 +24,15 @@ import { getTransactionToolDefinitions } from "../slices/transactions/index.js";
 const DEFINITIONS_WITH_OWN_FRESHNESS = new Set(["ynab_search_transactions"]);
 
 const REQUIRED_ENDPOINTS_BY_TOOL = {
+  ynab_explain_month_delta: ["categories", "months", "transactions"],
+  ynab_get_budget_change_digest: [
+    "accounts",
+    "categories",
+    "months",
+    "transactions",
+    "scheduled_transactions",
+    "money_movements",
+  ],
   ynab_get_budget_cleanup_summary: ["categories", "months", "transactions"],
   ynab_get_budget_health_summary: ["categories", "months"],
   ynab_get_cash_flow_summary: ["months", "transactions"],

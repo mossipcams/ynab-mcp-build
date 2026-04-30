@@ -121,11 +121,17 @@ type TransactionsRepository = {
 };
 
 type MoneyMovementClient = {
-  listMoneyMovementGroups(planId: string): Promise<{
+  listMoneyMovementGroups(
+    planId: string,
+    serverKnowledge?: number,
+  ): Promise<{
     moneyMovementGroups: YnabMoneyMovementGroup[];
     serverKnowledge: number;
   }>;
-  listMoneyMovements(planId: string): Promise<{
+  listMoneyMovements(
+    planId: string,
+    serverKnowledge?: number,
+  ): Promise<{
     moneyMovements: YnabMoneyMovement[];
     serverKnowledge: number;
   }>;
@@ -366,10 +372,19 @@ export function createReadModelSyncService(
       ? [
           {
             endpoint: "money_movements",
-            async fetchDelta(planId: string) {
+            async fetchDelta(
+              planId: string,
+              serverKnowledge: number | undefined,
+            ) {
               const [movements, groups] = await Promise.all([
-                options.moneyMovementClient!.listMoneyMovements(planId),
-                options.moneyMovementClient!.listMoneyMovementGroups(planId),
+                options.moneyMovementClient!.listMoneyMovements(
+                  planId,
+                  serverKnowledge,
+                ),
+                options.moneyMovementClient!.listMoneyMovementGroups(
+                  planId,
+                  serverKnowledge,
+                ),
               ]);
 
               return {

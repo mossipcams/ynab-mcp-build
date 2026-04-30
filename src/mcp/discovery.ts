@@ -1,7 +1,9 @@
 import type { AppEnv } from "../shared/env.js";
 
 export const DISCOVERY_TOOL_NAMES = [
+  "ynab_explain_month_delta",
   "ynab_get_account",
+  "ynab_get_budget_change_digest",
   "ynab_get_budget_cleanup_summary",
   "ynab_get_budget_health_summary",
   "ynab_get_cash_flow_summary",
