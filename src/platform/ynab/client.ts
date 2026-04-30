@@ -416,7 +416,7 @@ type YnabUserResponse = {
   data: {
     user: {
       id: string;
-      name: string;
+      name?: string;
     };
   };
 };
@@ -1000,7 +1000,7 @@ const YnabUserResponseSchema = z
         user: z
           .object({
             id: z.string(),
-            name: z.string(),
+            name: z.string().optional(),
           })
           .passthrough(),
       })
@@ -1549,7 +1549,7 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
 
       return {
         id: payload.data.user.id,
-        name: payload.data.user.name,
+        name: payload.data.user.name ?? payload.data.user.id,
       };
     },
     async listPlans() {

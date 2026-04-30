@@ -241,6 +241,41 @@ describe("YNAB delta client", () => {
     ]);
   });
 
+  it("accepts payee location responses without server knowledge", async () => {
+    const requests: Array<string | URL | Request> = [];
+    const client = createYnabDeltaClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async (input) => {
+        requests.push(input);
+
+        return Response.json({
+          data: {
+            payee_locations: [
+              {
+                id: "location-1",
+                payee_id: "payee-1",
+                latitude: "41.0",
+                longitude: "-87.0",
+                deleted: false,
+              },
+            ],
+          },
+        });
+      },
+    });
+
+    await expect(
+      client.listPayeeLocationsDelta("plan-1", 105),
+    ).resolves.toMatchObject({
+      records: [{ id: "location-1", payeeId: "payee-1" }],
+      serverKnowledge: 105,
+    });
+    expect(requests.map(String)).toEqual([
+      "https://api.ynab.com/v1/plans/plan-1/payee_locations?last_knowledge_of_server=105",
+    ]);
+  });
+
   it("omits the cursor parameter when no prior server knowledge exists", async () => {
     const requests: Array<string | URL | Request> = [];
     const client = createYnabDeltaClient({

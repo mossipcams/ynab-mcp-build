@@ -72,6 +72,28 @@ describe("ynab scoped transaction client methods", () => {
   });
 });
 
+describe("ynab user client methods", () => {
+  it("accepts user responses without a display name", async () => {
+    const client = createYnabClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async () =>
+        Response.json({
+          data: {
+            user: {
+              id: "user-1",
+            },
+          },
+        }),
+    });
+
+    await expect(client.getUser()).resolves.toEqual({
+      id: "user-1",
+      name: "user-1",
+    });
+  });
+});
+
 describe("ynab plans client methods", () => {
   it("accepts plan discovery responses with no default plan", async () => {
     const client = createYnabClient({
