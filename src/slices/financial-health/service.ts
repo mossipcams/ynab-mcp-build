@@ -7,6 +7,11 @@ import type {
 import { compactObject } from "../../shared/object.js";
 import { resolvePlanId } from "../../shared/plans.js";
 import {
+  calculateLinearRegressionSlope,
+  calculatePearsonCorrelation,
+  calculateZScore,
+} from "../../shared/statistics.js";
+import {
   buildAccountSnapshotSummary,
   buildAssignedSpentSummary,
   buildVisibleCategoryHealthSummary,
@@ -55,6 +60,7 @@ export type CategoryTrendSummaryInput = {
   toMonth?: string;
   categoryId?: string;
   categoryGroupName?: string;
+  detailLevel?: DetailLevel;
 };
 
 type DisplayRollup = {
@@ -79,6 +85,8 @@ type RangeMonthSummary = {
 type DetailLevel = "brief" | "normal" | "detailed";
 
 const DIGEST_ATTENTION_THRESHOLD_MILLIUNITS = 50_000;
+const ANOMALY_Z_SCORE_THRESHOLD = 2;
+const MIN_Z_SCORE_BASELINE_MONTHS = 2;
 
 export async function getBudgetChangeDigest(
   ynabClient: YnabClient,
@@ -706,14 +714,21 @@ function buildSpendingAnomalies(
       const increase = latestSpent - baselineAverage;
       const increasePercent =
         baselineAverage > 0 ? (increase / baselineAverage) * 100 : undefined;
+      const spendingZScore = calculateZScore(latestSpent, baselineValues);
+      const hasVariableBaseline = baselineValues.some(
+        (value) => value !== baselineValues[0],
+      );
 
       return {
         category_id: category.id,
         category_name: category.name,
         latestSpent,
         baselineAverage,
+        baselineValues,
+        hasVariableBaseline,
         increase,
         increasePercent,
+        spendingZScore,
       };
     })
     .filter((entry) => entry.increase >= options.minimumDifference)
@@ -722,6 +737,12 @@ function buildSpendingAnomalies(
         ? entry.latestSpent >=
           entry.baselineAverage * options.thresholdMultiplier
         : entry.latestSpent > 0,
+    )
+    .filter((entry) =>
+      entry.baselineValues.length >= MIN_Z_SCORE_BASELINE_MONTHS &&
+      entry.hasVariableBaseline
+        ? (entry.spendingZScore ?? 0) >= ANOMALY_Z_SCORE_THRESHOLD
+        : true,
     )
     .sort(
       (left, right) =>
@@ -737,6 +758,7 @@ function buildSpendingAnomalies(
         baseline_average: formatMilliunits(Math.round(entry.baselineAverage)),
         increase: formatMilliunits(Math.round(entry.increase)),
         increase_pct: entry.increasePercent?.toFixed(2),
+        z_score: entry.spendingZScore?.toFixed(4),
       }),
     );
 }
@@ -1626,6 +1648,13 @@ export async function getCategoryTrendSummary(
       !peak || period.spentMilliunits > peak.spentMilliunits ? period : peak,
     periods[0],
   );
+  const spentSlope = calculateLinearRegressionSlope(
+    periods.map((period) => period.spentMilliunits),
+  );
+  const assignedSpentCorrelation = calculatePearsonCorrelation(
+    periods.map((period) => period.assignedMilliunits),
+    periods.map((period) => period.spentMilliunits),
+  );
 
   return {
     from_month: fromMonth,
@@ -1645,6 +1674,21 @@ export async function getCategoryTrendSummary(
       (periods[periods.length - 1]?.spentMilliunits ?? 0) -
         (periods[0]?.spentMilliunits ?? 0),
     ),
+    trend: compactObject({
+      spent_slope_per_month:
+        spentSlope === undefined
+          ? undefined
+          : formatMilliunits(Math.round(spentSlope)),
+      spent_direction:
+        spentSlope === undefined
+          ? undefined
+          : spentSlope > 0
+            ? "increasing"
+            : spentSlope < 0
+              ? "decreasing"
+              : "flat",
+      assigned_spent_correlation: assignedSpentCorrelation?.toFixed(4),
+    }),
     periods: periods.map((period) => ({
       month: period.month,
       assigned: formatMilliunits(period.assignedMilliunits),

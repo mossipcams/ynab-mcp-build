@@ -39,6 +39,7 @@
     "secrets:scan": "pnpm gitleaks:install && PATH=\"$PWD/.bin:$PATH\" gitleaks detect --no-banner --redact",
     "check:prepr": "pnpm check:pr",
     "check:pr": "pnpm check:package-manager && pnpm typegen && pnpm format:check && pnpm lint:fast && pnpm lint:types && pnpm typecheck && pnpm test:coverage && pnpm bundle:check && pnpm check:deps && pnpm check:duplication && pnpm deps:check && pnpm secrets:scan",
+    "check:github": "pnpm check:package-manager && pnpm typegen && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm bundle:check && pnpm check:deps && pnpm check:duplication && pnpm deps:check",
     "check:cf": "pnpm typegen && pnpm format:check && pnpm lint:fast && pnpm typecheck && pnpm test && pnpm bundle:check",
     "db:migrate:prod": "wrangler d1 migrations apply YOUR_DB_NAME --remote",
     "deploy:prod": "wrangler deploy",
@@ -50,6 +51,7 @@
     "@cloudflare/workers-oauth-provider": "^0.4.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "hono": "^4.12.14",
+    "simple-statistics": "7.8.9",
     "zod": "^4.3.6"
   },
   "devDependencies": {

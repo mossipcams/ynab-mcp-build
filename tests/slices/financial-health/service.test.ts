@@ -1225,6 +1225,11 @@ describe("financial health service", () => {
       average_spent: "20.00",
       peak_month: "2026-02-01",
       spent_change: "-5.00",
+      trend: {
+        spent_slope_per_month: "-2.50",
+        spent_direction: "decreasing",
+        assigned_spent_correlation: "0.0000",
+      },
       periods: [
         {
           month: "2026-01-01",
@@ -1593,6 +1598,7 @@ describe("financial health service", () => {
           baseline_average: "11.00",
           increase: "29.00",
           increase_pct: "263.64",
+          z_score: "35.5176",
         },
       ],
     });
@@ -1774,6 +1780,7 @@ describe("financial health service", () => {
           baseline_average: "11.00",
           increase: "11.00",
           increase_pct: "100.00",
+          z_score: "13.4722",
         },
         {
           category_id: "category-medium",
@@ -1782,6 +1789,7 @@ describe("financial health service", () => {
           baseline_average: "5.00",
           increase: "10.00",
           increase_pct: "200.00",
+          z_score: "0.0000",
         },
       ],
     });
