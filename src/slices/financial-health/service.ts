@@ -248,9 +248,15 @@ function endOfMonth(month: string) {
 }
 
 function currentCalendarMonth() {
+  const today = currentCalendarDate();
+
+  return `${today.slice(0, 7)}-01`;
+}
+
+function currentCalendarDate() {
   const now = new Date();
 
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  return now.toISOString().slice(0, 10);
 }
 
 function listMonthsInRange(fromMonth: string, toMonth: string) {
@@ -301,6 +307,15 @@ function toMonthKey(date: string) {
 
 function toNextDateFromMonth(asOfMonth: string) {
   return `${asOfMonth.slice(0, 7)}-01`;
+}
+
+function toCashResilienceScheduledAsOfDate(
+  month: string,
+  inputMonth: string | undefined,
+) {
+  return !isExplicitMonth(inputMonth) && month === currentCalendarMonth()
+    ? currentCalendarDate()
+    : toNextDateFromMonth(month);
 }
 
 function daysUntil(fromDate: string, toDate: string) {
@@ -1719,7 +1734,7 @@ export async function getCashResilienceSummary(
       ) / consideredMonths.length
     : 0;
   const averageDailyOutflow = averageMonthlySpending / 30;
-  const asOfDate = toNextDateFromMonth(month);
+  const asOfDate = toCashResilienceScheduledAsOfDate(month, input.month);
   const scheduledNetNext30d = scheduledTransactions
     .filter(isNonTransferScheduledTransaction)
     .filter((transaction) => {

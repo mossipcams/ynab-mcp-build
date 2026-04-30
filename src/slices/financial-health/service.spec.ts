@@ -10,6 +10,7 @@ import {
   getCategoryTrendSummary,
   getFinancialHealthCheck,
   getFinancialSnapshot,
+  getIncomeSummary,
   getMonthlyReview,
   getNetWorthTrajectory,
   getRecurringExpenseSummary,
@@ -1153,6 +1154,135 @@ describe("financial health service", () => {
       coverage_months: "3.00",
       runway_days: "90.00",
       scheduled_net_next_30d: "-15.00",
+    });
+  });
+
+  it("uses the same current 30-day scheduled net as upcoming obligations", async () => {
+    // DEFECT: cash resilience labeled the current-month 7-day scheduled net as the next 30-day net.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-24T17:00:00.000Z"));
+
+    const scheduledTransactions = [
+      {
+        id: "week-paycheck",
+        dateFirst: "2026-04-01",
+        dateNext: "2026-04-27",
+        amount: 1082530,
+        payeeName: "Payroll",
+        deleted: false,
+      },
+      {
+        id: "later-income",
+        dateFirst: "2026-04-01",
+        dateNext: "2026-05-10",
+        amount: 58050,
+        payeeName: "Reimbursement",
+        deleted: false,
+      },
+    ];
+    const ynabClient = {
+      listAccounts: async () => [
+        {
+          id: "cash",
+          name: "Checking",
+          type: "checking",
+          closed: false,
+          deleted: false,
+          balance: 9000000,
+        },
+      ],
+      listPlanMonths: async () => [
+        { month: "2026-02-01", deleted: false, activity: -3000000 },
+        { month: "2026-03-01", deleted: false, activity: -3000000 },
+        { month: "2026-04-01", deleted: false, activity: -3000000 },
+      ],
+      listScheduledTransactions: async () => scheduledTransactions,
+    } as unknown as YnabClient;
+
+    await expect(
+      getUpcomingObligations(ynabClient, {
+        asOfDate: "2026-04-24",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      windows: {
+        "7d": {
+          net_upcoming: "1082.53",
+        },
+        "30d": {
+          net_upcoming: "1140.58",
+        },
+      },
+    });
+
+    await expect(
+      getCashResilienceSummary(ynabClient, {
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      month: "2026-04-01",
+      scheduled_net_next_30d: "1140.58",
+    });
+  });
+
+  it("rounds income averages and medians from integer milliunits to cents", async () => {
+    // DEFECT: formatting through floating-point toFixed drifted exact half-cent income statistics down.
+    const ynabClient = {
+      listPlanMonths: async () => [
+        { month: "2026-01-01", deleted: false, activity: 0 },
+        { month: "2026-02-01", deleted: false, activity: 0 },
+        { month: "2026-03-01", deleted: false, activity: 0 },
+        { month: "2026-04-01", deleted: false, activity: 0 },
+      ],
+      listTransactions: async () => [
+        {
+          id: "income-jan",
+          date: "2026-01-15",
+          amount: 7000550,
+          payeeName: "Payroll",
+          cleared: "cleared",
+          approved: true,
+          deleted: false,
+        },
+        {
+          id: "income-feb",
+          date: "2026-02-15",
+          amount: 5181310,
+          payeeName: "Payroll",
+          cleared: "cleared",
+          approved: true,
+          deleted: false,
+        },
+        {
+          id: "income-mar",
+          date: "2026-03-15",
+          amount: 5181320,
+          payeeName: "Payroll",
+          cleared: "cleared",
+          approved: true,
+          deleted: false,
+        },
+        {
+          id: "income-apr",
+          date: "2026-04-15",
+          amount: 3881800,
+          payeeName: "Payroll",
+          cleared: "cleared",
+          approved: true,
+          deleted: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getIncomeSummary(ynabClient, {
+        fromMonth: "2026-01-01",
+        planId: "plan-1",
+        toMonth: "2026-04-01",
+      }),
+    ).resolves.toMatchObject({
+      average_monthly_income: "5311.25",
+      median_monthly_income: "5181.32",
     });
   });
 });
