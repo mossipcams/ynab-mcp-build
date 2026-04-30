@@ -234,6 +234,28 @@ describe("repository preflight tooling", () => {
     );
   });
 
+  it("runs GitHub Actions on pushes to main", () => {
+    // DEFECT: main branch merges can skip CI and deployment when the workflow only handles pull requests.
+    const workflow = readRootFile(".github/workflows/ci.yml");
+
+    expect(workflow).toContain("push:");
+    expect(workflow).toContain("branches:");
+    expect(workflow).toContain("- main");
+  });
+
+  it("deploys the Worker after the main branch quality gate", () => {
+    // DEFECT: production Workers can stay stale when CI validates PRs but never deploys successful main merges.
+    const workflow = readRootFile(".github/workflows/ci.yml");
+
+    expect(workflow).toContain("deploy:");
+    expect(workflow).toContain("needs: quality-gate");
+    expect(workflow).toContain("github.ref == 'refs/heads/main'");
+    expect(workflow).toContain("github.event_name == 'push'");
+    expect(workflow).toContain("pnpm exec wrangler deploy");
+    expect(workflow).toContain("CLOUDFLARE_API_TOKEN");
+    expect(workflow).toContain("CLOUDFLARE_ACCOUNT_ID");
+  });
+
   it("runs CI before creating a GitHub pull request", () => {
     // DEFECT: PR creation can bypass the shared preflight suite and open a branch with known local failures.
     const prePrScript = readRootFile("scripts/pre-pr.mjs");
