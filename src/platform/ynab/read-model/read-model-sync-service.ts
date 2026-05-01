@@ -1,3 +1,4 @@
+import { YnabClientError } from "../client.js";
 import type {
   YnabAccountSummary,
   YnabCategoryGroupSummary,
@@ -46,6 +47,25 @@ type SyncStateRepository = {
     leaseOwner: string;
     error: string;
     now: string;
+  }): Promise<void>;
+};
+
+type SyncRunRepository = {
+  startEndpointRun(input: {
+    id: string;
+    planId: string;
+    endpoint: string;
+    startedAt: string;
+    serverKnowledgeBefore: number | null;
+  }): Promise<void>;
+  finishEndpointRun(input: {
+    id: string;
+    finishedAt: string;
+    status: "ok" | "failed";
+    serverKnowledgeAfter: number | null;
+    rowsUpserted: number;
+    rowsDeleted: number;
+    error: string | null;
   }): Promise<void>;
 };
 
@@ -147,6 +167,7 @@ type MetadataClient = {
 export type ReadModelSyncServiceOptions = {
   deltaClient: YnabDeltaClient;
   syncStateRepository: SyncStateRepository;
+  syncRunRepository?: SyncRunRepository;
   readModelRepository: ReadModelRepository;
   transactionsRepository: TransactionsRepository;
   metadataClient?: MetadataClient;
@@ -154,10 +175,13 @@ export type ReadModelSyncServiceOptions = {
   leaseSeconds?: number;
 };
 
+export type ReadModelSyncProfile = "full" | "hot_financial" | "reference";
+
 export type SyncReadModelInput = {
   planId: string;
   leaseOwner: string;
   now: string;
+  profile?: ReadModelSyncProfile;
 };
 
 type EndpointResult = {
@@ -167,6 +191,10 @@ type EndpointResult = {
   rowsUpserted?: number;
   rowsDeleted?: number;
   serverKnowledge?: number;
+};
+
+type EndpointRunResult = EndpointResult & {
+  shouldStopRun?: boolean;
 };
 
 type EndpointConfig<TRecord> = {
@@ -192,19 +220,75 @@ type PlansMetadataRecord = {
   plans: YnabPlanList["plans"];
 };
 
+const syncProfileEndpoints: Record<
+  ReadModelSyncProfile,
+  readonly string[] | null
+> = {
+  full: null,
+  hot_financial: [
+    "accounts",
+    "categories",
+    "months",
+    "scheduled_transactions",
+    "transactions",
+  ],
+  reference: [
+    "users",
+    "plans",
+    "plan_settings",
+    "money_movements",
+    "payees",
+    "payee_locations",
+  ],
+};
+
 function toErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Read-model sync failed.";
+}
+
+function shouldStopRunAfterError(error: unknown) {
+  return (
+    error instanceof YnabClientError &&
+    (error.category === "auth" ||
+      error.category === "not_found" ||
+      error.category === "rate_limit")
+  );
+}
+
+function resolveLeaseSeconds(input: {
+  configuredLeaseSeconds?: number;
+  profile: ReadModelSyncProfile;
+}) {
+  if (input.configuredLeaseSeconds !== undefined) {
+    return input.configuredLeaseSeconds;
+  }
+
+  switch (input.profile) {
+    case "full":
+      return 300;
+    case "reference":
+      return 120;
+    case "hot_financial":
+      return 60;
+  }
+}
+
+async function ignoreRunHistoryFailure(operation: Promise<void>) {
+  try {
+    await operation;
+  } catch {
+    // Run history is diagnostic; cursor safety is owned by sync state updates.
+  }
 }
 
 export function createReadModelSyncService(
   options: ReadModelSyncServiceOptions,
 ) {
-  const leaseSeconds = options.leaseSeconds ?? 60;
   function defineEndpoint<TRecord>(config: EndpointConfig<TRecord>) {
     return {
       endpoint: config.endpoint,
-      sync(input: SyncReadModelInput) {
-        return syncEndpoint(input, config);
+      sync(input: SyncReadModelInput, leaseSeconds: number) {
+        return syncEndpoint(input, config, leaseSeconds);
       },
     };
   }
@@ -473,7 +557,8 @@ export function createReadModelSyncService(
   async function syncEndpoint<TRecord>(
     input: SyncReadModelInput,
     config: EndpointConfig<TRecord>,
-  ): Promise<EndpointResult> {
+    leaseSeconds: number,
+  ): Promise<EndpointRunResult> {
     const lease = await options.syncStateRepository.acquireLease({
       endpoint: config.endpoint,
       leaseOwner: input.leaseOwner,
@@ -495,6 +580,19 @@ export function createReadModelSyncService(
         input.planId,
         config.endpoint,
       );
+    const runId = `${input.leaseOwner}:${config.endpoint}`;
+
+    if (options.syncRunRepository) {
+      await ignoreRunHistoryFailure(
+        options.syncRunRepository.startEndpointRun({
+          endpoint: config.endpoint,
+          id: runId,
+          planId: input.planId,
+          serverKnowledgeBefore: previousServerKnowledge,
+          startedAt: input.now,
+        }),
+      );
+    }
 
     try {
       const delta = await config.fetchDelta(
@@ -519,11 +617,39 @@ export function createReadModelSyncService(
       });
 
       if (!cursorResult.advanced) {
+        if (options.syncRunRepository) {
+          await ignoreRunHistoryFailure(
+            options.syncRunRepository.finishEndpointRun({
+              error: cursorResult.reason,
+              finishedAt: input.now,
+              id: runId,
+              rowsDeleted,
+              rowsUpserted: writeResult.rowsUpserted,
+              serverKnowledgeAfter: delta.serverKnowledge,
+              status: "failed",
+            }),
+          );
+        }
+
         return {
           endpoint: config.endpoint,
           reason: cursorResult.reason,
           status: "failed",
         };
+      }
+
+      if (options.syncRunRepository) {
+        await ignoreRunHistoryFailure(
+          options.syncRunRepository.finishEndpointRun({
+            error: null,
+            finishedAt: input.now,
+            id: runId,
+            rowsDeleted,
+            rowsUpserted: writeResult.rowsUpserted,
+            serverKnowledgeAfter: delta.serverKnowledge,
+            status: "ok",
+          }),
+        );
       }
 
       return {
@@ -548,9 +674,24 @@ export function createReadModelSyncService(
         // Preserve the primary endpoint failure result even when failure bookkeeping is unavailable.
       }
 
+      if (options.syncRunRepository) {
+        await ignoreRunHistoryFailure(
+          options.syncRunRepository.finishEndpointRun({
+            error: message,
+            finishedAt: input.now,
+            id: runId,
+            rowsDeleted: 0,
+            rowsUpserted: 0,
+            serverKnowledgeAfter: null,
+            status: "failed",
+          }),
+        );
+      }
+
       return {
         endpoint: config.endpoint,
         reason: message,
+        shouldStopRun: shouldStopRunAfterError(error),
         status: "failed",
       };
     }
@@ -559,13 +700,34 @@ export function createReadModelSyncService(
   return {
     async syncReadModel(input: SyncReadModelInput) {
       const endpointResults: EndpointResult[] = [];
+      const profile = input.profile ?? "full";
+      const leaseSeconds = resolveLeaseSeconds({
+        ...(options.leaseSeconds !== undefined
+          ? { configuredLeaseSeconds: options.leaseSeconds }
+          : {}),
+        profile,
+      });
+      const profileEndpoints = syncProfileEndpoints[profile];
+      const selectedEndpointConfigs = profileEndpoints
+        ? endpointConfigs.filter((config) =>
+            profileEndpoints.includes(config.endpoint),
+          )
+        : endpointConfigs;
 
-      for (const config of endpointConfigs) {
-        endpointResults.push(await config.sync(input));
+      for (const config of selectedEndpointConfigs) {
+        const result = await config.sync(input, leaseSeconds);
+        const { shouldStopRun, ...endpointResult } = result;
+
+        endpointResults.push(endpointResult);
+
+        if (shouldStopRun) {
+          break;
+        }
       }
 
       return {
         endpointResults,
+        profile,
         status: endpointResults.some((result) => result.status === "failed")
           ? ("failed" as const)
           : ("ok" as const),

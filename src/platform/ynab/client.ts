@@ -2,7 +2,12 @@ import { z } from "zod";
 
 import { mapTransactionRecord } from "./mappers.js";
 
-export type YnabClientErrorCategory = "internal" | "rate_limit" | "upstream";
+export type YnabClientErrorCategory =
+  | "auth"
+  | "internal"
+  | "not_found"
+  | "rate_limit"
+  | "upstream";
 
 export class YnabClientError extends Error {
   category: YnabClientErrorCategory;
@@ -906,12 +911,16 @@ async function getJson<TSchema extends z.ZodType>(
       throw new YnabClientError(message, "rate_limit", true);
     }
 
-    if (response.status >= 500) {
-      throw new YnabClientError(message, "upstream", true);
+    if (response.status === 401 || response.status === 403) {
+      throw new YnabClientError(message, "auth", false);
     }
 
-    if (response.status === 401) {
-      throw new YnabClientError(message, "internal", false);
+    if (response.status === 404) {
+      throw new YnabClientError(message, "not_found", false);
+    }
+
+    if (response.status >= 500) {
+      throw new YnabClientError(message, "upstream", true);
     }
 
     throw new YnabClientError(message, "internal", false);

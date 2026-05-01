@@ -82,10 +82,13 @@ export interface YnabDeltaClient {
 type CreateYnabDeltaClientOptions = {
   accessToken: string;
   baseUrl: string;
+  delay?: (milliseconds: number) => Promise<void>;
   fetchFn?: typeof fetch;
+  retryDelayMs?: (input: { attempt: number; status?: number }) => number;
 };
 
 const YNAB_REQUEST_ATTEMPTS = 2;
+const DEFAULT_RETRY_DELAY_MS = 500;
 
 type YnabDeltaEnvelope<TDataKey extends string, TRecord> = {
   data: {
@@ -195,6 +198,14 @@ async function getJson<TSchema extends z.ZodType>(
       throw new YnabClientError(message, "rate_limit", true);
     }
 
+    if (response.status === 401 || response.status === 403) {
+      throw new YnabClientError(message, "auth", false);
+    }
+
+    if (response.status === 404) {
+      throw new YnabClientError(message, "not_found", false);
+    }
+
     if (response.status >= 500) {
       throw new YnabClientError(message, "upstream", true);
     }
@@ -240,6 +251,16 @@ export function createYnabDeltaClient(
   options: CreateYnabDeltaClientOptions,
 ): YnabDeltaClient {
   const fetchFn = options.fetchFn ?? fetch;
+  const delay =
+    options.delay ??
+    ((milliseconds: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, milliseconds);
+      }));
+  const retryDelayMs =
+    options.retryDelayMs ??
+    ((input: { attempt: number }) =>
+      DEFAULT_RETRY_DELAY_MS * 2 ** (input.attempt - 1));
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const authorizationHeaders = {
     Authorization: `Bearer ${options.accessToken}`,
@@ -256,12 +277,23 @@ export function createYnabDeltaClient(
           attempt < YNAB_REQUEST_ATTEMPTS &&
           (response.status === 429 || response.status >= 500)
         ) {
+          await delay(
+            retryDelayMs({
+              attempt,
+              status: response.status,
+            }),
+          );
           continue;
         }
 
         return response;
       } catch (error) {
         if (attempt < YNAB_REQUEST_ATTEMPTS) {
+          await delay(
+            retryDelayMs({
+              attempt,
+            }),
+          );
           continue;
         }
 

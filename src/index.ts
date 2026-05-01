@@ -49,7 +49,14 @@ export default {
     executionContext: ExecutionContext,
   ) {
     executionContext.waitUntil(
-      runScheduledReadModelSyncAndReport(env, controller.scheduledTime),
+      runScheduledReadModelSyncAndReport(
+        env,
+        controller.scheduledTime,
+        {},
+        {
+          cron: controller.cron,
+        },
+      ),
     );
   },
 } satisfies ExportedHandler<Env>;

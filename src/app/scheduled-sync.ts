@@ -1,8 +1,10 @@
 import { createYnabClient, type YnabClient } from "../platform/ynab/client.js";
 import { createYnabDeltaClient } from "../platform/ynab/delta-client.js";
 import { createReadModelSyncRepository } from "../platform/ynab/read-model/read-model-sync-repository.js";
+import { createSyncRunRepository } from "../platform/ynab/read-model/sync-run-repository.js";
 import {
   createReadModelSyncService,
+  type ReadModelSyncProfile,
   type SyncReadModelInput,
 } from "../platform/ynab/read-model/read-model-sync-service.js";
 import { createSyncStateRepository } from "../platform/ynab/read-model/sync-state-repository.js";
@@ -15,10 +17,24 @@ type ScheduledReadModelSyncResult =
     >
   | { status: "failed"; reason: string };
 
+const scheduledFailureStage = Symbol("scheduledFailureStage");
+
+type StagedScheduledFailure = {
+  [scheduledFailureStage]?: "plan_discovery";
+};
+
 type ScheduledSyncDependencies = {
   createReadModelSyncService?: typeof createReadModelSyncService;
   ynabClient?: Pick<YnabClient, "listPlans">;
 };
+
+type ScheduledSyncOptions = {
+  cron?: string;
+};
+
+export const HOT_READ_MODEL_SYNC_CRON = "*/5 * * * *";
+export const REFERENCE_READ_MODEL_SYNC_CRON = "2 * * * *";
+export const FULL_READ_MODEL_SYNC_CRON = "17 3 * * *";
 
 function resolveScheduledAppEnv(env: Env) {
   return resolveAppEnv({
@@ -27,8 +43,33 @@ function resolveScheduledAppEnv(env: Env) {
   } as unknown as Partial<Env>);
 }
 
+export function resolveScheduledSyncProfile(
+  cron: string | undefined,
+): ReadModelSyncProfile {
+  switch (cron) {
+    case undefined:
+      return "full";
+    case HOT_READ_MODEL_SYNC_CRON:
+      return "hot_financial";
+    case REFERENCE_READ_MODEL_SYNC_CRON:
+      return "reference";
+    case FULL_READ_MODEL_SYNC_CRON:
+      return "full";
+    default:
+      return "full";
+  }
+}
+
 function toErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Scheduled D1 sync failed.";
+}
+
+function withPlanDiscoveryStage(result: { status: "failed"; reason: string }) {
+  Object.defineProperty(result, scheduledFailureStage, {
+    value: "plan_discovery",
+  });
+
+  return result;
 }
 
 function createMoneyMovementClient(accessToken: string, baseUrl: string) {
@@ -138,6 +179,7 @@ function createProductionReadModelSyncService(
       metadataClient,
       moneyMovementClient,
       readModelRepository: createReadModelSyncRepository(database),
+      syncRunRepository: createSyncRunRepository(database),
       syncStateRepository: createSyncStateRepository(database),
       transactionsRepository: createTransactionsRepository(database),
     }),
@@ -148,6 +190,7 @@ export async function runScheduledReadModelSync(
   env: Env,
   scheduledTime: number,
   dependencies: ScheduledSyncDependencies = {},
+  options: ScheduledSyncOptions = {},
 ): Promise<ScheduledReadModelSyncResult> {
   const appEnv = resolveScheduledAppEnv(env);
 
@@ -179,10 +222,10 @@ export async function runScheduledReadModelSync(
         : {}),
     });
   } catch (error) {
-    return {
-      reason: `plan_discovery: ${toErrorMessage(error)}`,
+    return withPlanDiscoveryStage({
+      reason: toErrorMessage(error),
       status: "failed",
-    };
+    });
   }
 
   if (!planId) {
@@ -207,6 +250,7 @@ export async function runScheduledReadModelSync(
           appEnv.ynabApiBaseUrl,
         ),
         readModelRepository: createReadModelSyncRepository(appEnv.ynabDatabase),
+        syncRunRepository: createSyncRunRepository(appEnv.ynabDatabase),
         syncStateRepository: createSyncStateRepository(appEnv.ynabDatabase),
         transactionsRepository: createTransactionsRepository(
           appEnv.ynabDatabase,
@@ -225,6 +269,9 @@ export async function runScheduledReadModelSync(
     leaseOwner: `scheduled:${scheduledTime}`,
     now: new Date(scheduledTime).toISOString(),
     planId,
+    ...(options.cron
+      ? { profile: resolveScheduledSyncProfile(options.cron) }
+      : {}),
   };
 
   return service.syncReadModel(input);
@@ -234,17 +281,22 @@ export async function runScheduledReadModelSyncAndReport(
   env: Env,
   scheduledTime: number,
   dependencies: ScheduledSyncDependencies = {},
+  options: ScheduledSyncOptions = {},
 ): Promise<ScheduledReadModelSyncResult> {
   const result = await runScheduledReadModelSync(
     env,
     scheduledTime,
     dependencies,
+    options,
   );
 
   if (result.status === "failed") {
     const detail =
       "reason" in result
-        ? result.reason
+        ? (result as StagedScheduledFailure)[scheduledFailureStage] ===
+          "plan_discovery"
+          ? `plan_discovery: ${result.reason}`
+          : result.reason
         : result.endpointResults
             .filter((endpointResult) => endpointResult.status === "failed")
             .map(

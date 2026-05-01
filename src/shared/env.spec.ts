@@ -88,4 +88,8 @@ describe("resolveAppEnv", () => {
       } as Partial<Env> & { YNAB_READ_SOURCE: string }),
     ).toThrowError("YNAB_READ_SOURCE must be d1.");
   });
+
+  it("defaults the read-model freshness warning window to hot-poll expectations", () => {
+    expect(resolveAppEnv({}).ynabStaleAfterMinutes).toBe(30);
+  });
 });

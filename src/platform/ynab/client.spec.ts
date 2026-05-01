@@ -73,6 +73,20 @@ describe("ynab scoped transaction client methods", () => {
 });
 
 describe("ynab user client methods", () => {
+  it("classifies 401 responses as auth failures for sync fail-fast behavior", async () => {
+    const client = createYnabClient({
+      accessToken: "expired-token",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async () =>
+        Response.json({ error: { detail: "Unauthorized" } }, { status: 401 }),
+    });
+
+    await expect(client.getUser()).rejects.toMatchObject({
+      category: "auth",
+      retryable: false,
+    });
+  });
+
   it("accepts user responses without a display name", async () => {
     const client = createYnabClient({
       accessToken: "pat-secret",
