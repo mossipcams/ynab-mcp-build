@@ -118,6 +118,13 @@ function placeholders(count: number) {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 
+function escapeLikePattern(value: string) {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("%", "\\%")
+    .replaceAll("_", "\\_");
+}
+
 function orderByClause(sort: SearchTransactionsInput["sort"]) {
   switch (sort ?? "date_desc") {
     case "date_asc":
@@ -183,8 +190,8 @@ function buildSearchWhere(
   }
 
   if (input.payeeSearch) {
-    where.push("payee_name LIKE ?");
-    params.push(`%${input.payeeSearch}%`);
+    where.push("payee_name LIKE ? ESCAPE '\\'");
+    params.push(`%${escapeLikePattern(input.payeeSearch)}%`);
   }
 
   if (input.approved !== undefined) {
@@ -453,28 +460,72 @@ export function createTransactionsRepository(database: D1Database) {
         .all<TransactionTotalsRow>();
       const categoryResult = await database
         .prepare(
-          `SELECT category_id,
-                  COALESCE(category_name, 'Uncategorized') AS name,
-                  COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
-                  COUNT(*) AS transaction_count
-           FROM ynab_transactions
-           WHERE ${search.whereClause} AND amount_milliunits < 0
-           GROUP BY category_id, COALESCE(category_name, 'Uncategorized')
-           ORDER BY amount_milliunits DESC, name ASC
+          `SELECT rollup.category_id,
+                  COALESCE(category.name, rollup.name, 'Uncategorized') AS name,
+                  rollup.amount_milliunits,
+                  rollup.transaction_count
+           FROM (
+             SELECT MAX(plan_id) AS plan_id,
+                    MAX(category_id) AS category_id,
+                    MIN(category_name) AS name,
+                    COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
+                    COUNT(*) AS transaction_count
+             FROM (
+               SELECT CASE
+                        WHEN category_id IS NOT NULL THEN 'id:' || category_id
+                        WHEN category_name IS NOT NULL THEN 'name:' || category_name
+                        ELSE 'none:uncategorized'
+                      END AS category_key,
+                      plan_id,
+                      category_id,
+                      category_name,
+                      amount_milliunits
+               FROM ynab_transactions
+               WHERE ${search.whereClause} AND amount_milliunits < 0
+             )
+             GROUP BY category_key
+           ) rollup
+           LEFT JOIN ynab_categories category
+             ON category.plan_id = rollup.plan_id
+            AND category.id = rollup.category_id
+            AND category.deleted = 0
+           ORDER BY rollup.amount_milliunits DESC, name ASC
            LIMIT ?`,
         )
         .bind(...search.params, topN)
         .all<TransactionRollupRow>();
       const payeeResult = await database
         .prepare(
-          `SELECT payee_id,
-                  COALESCE(payee_name, 'Unknown Payee') AS name,
-                  COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
-                  COUNT(*) AS transaction_count
-           FROM ynab_transactions
-           WHERE ${search.whereClause} AND amount_milliunits < 0
-           GROUP BY payee_id, COALESCE(payee_name, 'Unknown Payee')
-           ORDER BY amount_milliunits DESC, name ASC
+          `SELECT rollup.payee_id,
+                  COALESCE(payee.name, rollup.name, 'Unknown Payee') AS name,
+                  rollup.amount_milliunits,
+                  rollup.transaction_count
+           FROM (
+             SELECT MAX(plan_id) AS plan_id,
+                    MAX(payee_id) AS payee_id,
+                    MIN(payee_name) AS name,
+                    COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
+                    COUNT(*) AS transaction_count
+             FROM (
+               SELECT CASE
+                        WHEN payee_id IS NOT NULL THEN 'id:' || payee_id
+                        WHEN payee_name IS NOT NULL THEN 'name:' || payee_name
+                        ELSE 'none:unknown'
+                      END AS payee_key,
+                      plan_id,
+                      payee_id,
+                      payee_name,
+                      amount_milliunits
+               FROM ynab_transactions
+               WHERE ${search.whereClause} AND amount_milliunits < 0
+             )
+             GROUP BY payee_key
+           ) rollup
+           LEFT JOIN ynab_payees payee
+             ON payee.plan_id = rollup.plan_id
+            AND payee.id = rollup.payee_id
+            AND payee.deleted = 0
+           ORDER BY rollup.amount_milliunits DESC, name ASC
            LIMIT ?`,
         )
         .bind(...search.params, topN)

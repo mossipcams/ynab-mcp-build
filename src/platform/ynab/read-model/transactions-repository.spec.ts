@@ -246,6 +246,23 @@ describe("transactions repository", () => {
     ]);
   });
 
+  it("escapes SQL LIKE wildcards when searching payee names", async () => {
+    const db = new FakeD1Database();
+    db.allResults = [[{ count: 0 }], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.searchTransactions({
+      limit: 25,
+      payeeSearch: "_%",
+      planId: "plan-1",
+    });
+
+    expect(db.allCalls[0]?.sql).toContain("payee_name LIKE ? ESCAPE '\\'");
+    expect(db.allCalls[0]?.params).toEqual(["plan-1", "%\\_\\%%"]);
+  });
+
   it("searches by absolute transaction amount when absolute filters are provided", async () => {
     // DEFECT: signed amount filters are surprising for budget users looking for transactions over or under an absolute size.
     const db = new FakeD1Database();
@@ -358,5 +375,43 @@ describe("transactions repository", () => {
       "account-1",
       5,
     ]);
+  });
+
+  it("rolls up summary categories and payees by tagged ids before current display names", async () => {
+    const db = new FakeD1Database();
+    db.allResults = [[{ inflow_milliunits: 0, outflow_milliunits: 0 }], [], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.summarizeTransactions({
+      planId: "plan-1",
+      topN: 5,
+    });
+
+    const categorySql = db.allCalls[1]!.sql;
+    const payeeSql = db.allCalls[2]!.sql;
+    expect(categorySql).toContain("LEFT JOIN ynab_categories category");
+    expect(categorySql).toContain(
+      "COALESCE(category.name, rollup.name, 'Uncategorized') AS name",
+    );
+    expect(categorySql).toContain("THEN 'id:' || category_id");
+    expect(categorySql).toContain("THEN 'name:' || category_name");
+    expect(categorySql).toContain("ELSE 'none:uncategorized'");
+    expect(categorySql).toContain("GROUP BY category_key");
+    expect(categorySql).not.toContain(
+      "GROUP BY category_id, COALESCE(category_name, 'Uncategorized')",
+    );
+    expect(payeeSql).toContain("LEFT JOIN ynab_payees payee");
+    expect(payeeSql).toContain(
+      "COALESCE(payee.name, rollup.name, 'Unknown Payee') AS name",
+    );
+    expect(payeeSql).toContain("THEN 'id:' || payee_id");
+    expect(payeeSql).toContain("THEN 'name:' || payee_name");
+    expect(payeeSql).toContain("ELSE 'none:unknown'");
+    expect(payeeSql).toContain("GROUP BY payee_key");
+    expect(payeeSql).not.toContain(
+      "GROUP BY payee_id, COALESCE(payee_name, 'Unknown Payee')",
+    );
   });
 });
