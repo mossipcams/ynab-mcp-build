@@ -12,6 +12,7 @@ import type {
   YnabScheduledTransaction,
   YnabUser,
 } from "../client.js";
+import { runD1Batches } from "./d1-batch.js";
 
 type UpsertResult = {
   rowsUpserted: number;
@@ -27,8 +28,6 @@ type UpsertMonthsResult = {
   monthsUpserted: number;
 };
 
-const D1_BATCH_SIZE = 50;
-
 function toIntegerBoolean(value: boolean | null | undefined) {
   if (value === undefined || value === null) {
     return null;
@@ -37,22 +36,13 @@ function toIntegerBoolean(value: boolean | null | undefined) {
   return value ? 1 : 0;
 }
 
-async function runBatch(
-  database: D1Database,
-  statements: D1PreparedStatement[],
-): Promise<void> {
-  for (let index = 0; index < statements.length; index += D1_BATCH_SIZE) {
-    await database.batch(statements.slice(index, index + D1_BATCH_SIZE));
-  }
-}
-
 export function createReadModelSyncRepository(database: D1Database) {
   return {
     async upsertUser(input: {
       syncedAt: string;
       user: YnabUser;
     }): Promise<UpsertResult> {
-      await runBatch(database, [
+      await runD1Batches(database, [
         database
           .prepare(
             `INSERT INTO ynab_users (
@@ -107,7 +97,7 @@ export function createReadModelSyncRepository(database: D1Database) {
           ),
       );
 
-      await runBatch(database, statements);
+      await runD1Batches(database, statements);
 
       return { rowsUpserted: input.plans.length };
     },
@@ -116,7 +106,7 @@ export function createReadModelSyncRepository(database: D1Database) {
       plan: YnabPlanDetail;
       syncedAt: string;
     }): Promise<UpsertResult> {
-      await runBatch(database, [
+      await runD1Batches(database, [
         database
           .prepare(
             `INSERT INTO ynab_plans (
@@ -158,7 +148,7 @@ export function createReadModelSyncRepository(database: D1Database) {
       settings: YnabPlanSettings;
       syncedAt: string;
     }): Promise<UpsertResult> {
-      await runBatch(database, [
+      await runD1Batches(database, [
         database
           .prepare(
             `INSERT INTO ynab_plan_settings (
@@ -274,7 +264,7 @@ export function createReadModelSyncRepository(database: D1Database) {
           ),
       );
 
-      await runBatch(database, statements);
+      await runD1Batches(database, statements);
 
       return { rowsUpserted: input.accounts.length };
     },
@@ -413,7 +403,7 @@ export function createReadModelSyncRepository(database: D1Database) {
         ),
       );
 
-      await runBatch(database, [...groupStatements, ...categoryStatements]);
+      await runD1Batches(database, [...groupStatements, ...categoryStatements]);
 
       return {
         categoriesUpserted: categoryStatements.length,
@@ -568,7 +558,7 @@ export function createReadModelSyncRepository(database: D1Database) {
         ),
       );
 
-      await runBatch(database, [
+      await runD1Batches(database, [
         ...monthStatements,
         ...monthCategoryStatements,
       ]);
@@ -615,7 +605,7 @@ export function createReadModelSyncRepository(database: D1Database) {
           ),
       );
 
-      await runBatch(database, statements);
+      await runD1Batches(database, statements);
 
       return { rowsUpserted: input.payees.length };
     },
@@ -659,7 +649,7 @@ export function createReadModelSyncRepository(database: D1Database) {
           ),
       );
 
-      await runBatch(database, statements);
+      await runD1Batches(database, statements);
 
       return { rowsUpserted: input.locations.length };
     },
@@ -787,7 +777,7 @@ export function createReadModelSyncRepository(database: D1Database) {
         return [transactionStatement, ...subtransactionStatements];
       });
 
-      await runBatch(database, statements);
+      await runD1Batches(database, statements);
 
       return { rowsUpserted: input.scheduledTransactions.length };
     },
@@ -846,7 +836,7 @@ export function createReadModelSyncRepository(database: D1Database) {
           ),
       );
 
-      await runBatch(database, statements);
+      await runD1Batches(database, statements);
 
       return { rowsUpserted: input.moneyMovements.length };
     },
@@ -893,7 +883,7 @@ export function createReadModelSyncRepository(database: D1Database) {
           ),
       );
 
-      await runBatch(database, statements);
+      await runD1Batches(database, statements);
 
       return { rowsUpserted: input.moneyMovementGroups.length };
     },

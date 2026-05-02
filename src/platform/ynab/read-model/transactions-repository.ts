@@ -1,4 +1,5 @@
 import type { YnabDeltaTransactionRecord } from "../delta-client.js";
+import { runD1Batches } from "./d1-batch.js";
 
 const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
 
@@ -103,8 +104,6 @@ type TransactionRollupRow = {
 };
 
 const toMilliunits = (value: number | null) => value ?? 0;
-
-const D1_BATCH_SIZE = 50;
 
 function toIntegerBoolean(value: boolean | null | undefined) {
   if (value === undefined || value === null) {
@@ -228,15 +227,6 @@ function buildSearchWhere(
     params,
     whereClause: where.join(" AND "),
   };
-}
-
-async function runBatch(
-  database: D1Database,
-  statements: D1PreparedStatement[],
-): Promise<void> {
-  for (let index = 0; index < statements.length; index += D1_BATCH_SIZE) {
-    await database.batch(statements.slice(index, index + D1_BATCH_SIZE));
-  }
 }
 
 export function createTransactionsRepository(database: D1Database) {
@@ -382,7 +372,7 @@ export function createTransactionsRepository(database: D1Database) {
         return [transactionStatement, ...subtransactionStatements];
       });
 
-      await runBatch(database, statements);
+      await runD1Batches(database, statements);
 
       return {
         rowsUpserted: input.transactions.length,
@@ -396,7 +386,7 @@ export function createTransactionsRepository(database: D1Database) {
       input: SearchTransactionsInput,
     ): Promise<TransactionSearchResult> {
       const search = buildSearchWhere(input);
-      const countResult = await database
+      const countResultPromise = database
         .prepare(
           `SELECT COUNT(*) AS count
            FROM ynab_transactions
@@ -406,7 +396,7 @@ export function createTransactionsRepository(database: D1Database) {
         .all<TransactionCountRow>();
       const rowParams = [...search.params, input.limit, input.offset ?? 0];
 
-      const result = await database
+      const resultPromise = database
         .prepare(
           `SELECT id,
                   date,
@@ -437,6 +427,10 @@ export function createTransactionsRepository(database: D1Database) {
         )
         .bind(...rowParams)
         .all<TransactionSearchRow>();
+      const [countResult, result] = await Promise.all([
+        countResultPromise,
+        resultPromise,
+      ]);
 
       return {
         rows: rowsOrEmpty(result),
@@ -449,7 +443,7 @@ export function createTransactionsRepository(database: D1Database) {
     ): Promise<TransactionSummaryResult> {
       const search = buildSearchWhere(input);
       const topN = Math.max(input.topN ?? 5, 1);
-      const totalsResult = await database
+      const totalsResultPromise = database
         .prepare(
           `SELECT COALESCE(SUM(CASE WHEN amount_milliunits >= 0 THEN amount_milliunits ELSE 0 END), 0) AS inflow_milliunits,
                   COALESCE(SUM(CASE WHEN amount_milliunits < 0 THEN -amount_milliunits ELSE 0 END), 0) AS outflow_milliunits
@@ -458,7 +452,7 @@ export function createTransactionsRepository(database: D1Database) {
         )
         .bind(...search.params)
         .all<TransactionTotalsRow>();
-      const categoryResult = await database
+      const categoryResultPromise = database
         .prepare(
           `SELECT rollup.category_id,
                   COALESCE(category.name, rollup.name, 'Uncategorized') AS name,
@@ -494,7 +488,7 @@ export function createTransactionsRepository(database: D1Database) {
         )
         .bind(...search.params, topN)
         .all<TransactionRollupRow>();
-      const payeeResult = await database
+      const payeeResultPromise = database
         .prepare(
           `SELECT rollup.payee_id,
                   COALESCE(payee.name, rollup.name, 'Unknown Payee') AS name,
@@ -530,6 +524,11 @@ export function createTransactionsRepository(database: D1Database) {
         )
         .bind(...search.params, topN)
         .all<TransactionRollupRow>();
+      const [totalsResult, categoryResult, payeeResult] = await Promise.all([
+        totalsResultPromise,
+        categoryResultPromise,
+        payeeResultPromise,
+      ]);
       const totals = rowsOrEmpty(totalsResult)[0];
 
       return {

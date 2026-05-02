@@ -246,6 +246,105 @@ describe("read-model sync service", () => {
     );
   });
 
+  it("does not block endpoint delta fetches on diagnostic run-history writes", async () => {
+    // DEFECT: slow diagnostic sync-run storage can delay the actual sync endpoint work.
+    const deltaClient = {
+      listAccountsDelta: vi.fn(async () => ({
+        records: [{ id: "account-1" }],
+        serverKnowledge: 201,
+      })),
+      listCategoriesDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 202,
+      })),
+      listMonthsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 203,
+      })),
+      listPayeesDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 204,
+      })),
+      listPayeeLocationsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 205,
+      })),
+      listScheduledTransactionsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 206,
+      })),
+      listTransactionsDelta: vi.fn(async () => ({
+        records: [],
+        serverKnowledge: 207,
+      })),
+    } as unknown as YnabDeltaClient;
+    const syncStateRepository = createSyncStateRepository();
+    let resolveStartRun: () => void = () => undefined;
+    const startRun = new Promise<void>((resolve) => {
+      resolveStartRun = resolve;
+    });
+    const syncRunRepository = {
+      finishEndpointRun: vi.fn(async () => undefined),
+      startEndpointRun: vi.fn((input: { endpoint: string }) =>
+        input.endpoint === "accounts" ? startRun : Promise.resolve(),
+      ),
+    };
+    const readModelRepository = {
+      upsertAccounts: vi.fn(async () => ({ rowsUpserted: 1 })),
+      upsertCategoryGroups: vi.fn(async () => ({
+        categoriesUpserted: 0,
+        categoryGroupsUpserted: 0,
+      })),
+      upsertMonths: vi.fn(async () => ({
+        monthCategoriesUpserted: 0,
+        monthsUpserted: 0,
+      })),
+      upsertMoneyMovementGroups: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertMoneyMovements: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertPayees: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertPayeeLocations: vi.fn(async () => ({ rowsUpserted: 0 })),
+      upsertScheduledTransactions: vi.fn(async () => ({ rowsUpserted: 0 })),
+    };
+    const transactionsRepository = {
+      upsertTransactions: vi.fn(async () => ({
+        rowsDeleted: 0,
+        rowsUpserted: 0,
+      })),
+    };
+    const service = createReadModelSyncService({
+      deltaClient,
+      readModelRepository,
+      syncRunRepository,
+      syncStateRepository,
+      transactionsRepository,
+    });
+
+    const result = service.syncReadModel({
+      leaseOwner: "cron:123",
+      now: "2026-04-28T12:00:00.000Z",
+      planId: "plan-1",
+      profile: "hot_financial",
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(syncRunRepository.startEndpointRun).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: "accounts" }),
+    );
+    expect(deltaClient.listAccountsDelta).toHaveBeenCalledWith("plan-1", 101);
+
+    resolveStartRun();
+
+    await expect(result).resolves.toMatchObject({
+      endpointResults: expect.arrayContaining([
+        expect.objectContaining({ endpoint: "accounts", status: "ok" }),
+      ]),
+      status: "ok",
+    });
+  });
+
   it("stops the current poll when a global YNAB failure would burn the remaining request budget", async () => {
     const deltaClient = {
       listAccountsDelta: vi.fn(async () => {
