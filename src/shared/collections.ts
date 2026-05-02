@@ -29,7 +29,12 @@ function normalizeNumber(
 }
 
 export function formatAmountMilliunits(value: number) {
-  return (value / 1000).toFixed(2);
+  const cents = Math.sign(value) * Math.round(Math.abs(value) / 10);
+  const absoluteCents = Math.abs(cents);
+  const dollars = Math.trunc(absoluteCents / 100);
+  const remainingCents = String(absoluteCents % 100).padStart(2, "0");
+
+  return `${cents < 0 ? "-" : ""}${dollars}.${remainingCents}`;
 }
 
 export function hasProjectionControls<FieldName extends string>(

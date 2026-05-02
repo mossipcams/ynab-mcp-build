@@ -130,7 +130,24 @@ function resolveLimit(limit: number | undefined) {
 }
 
 function toMilliunits(value: number) {
-  return Math.round(value * 1000);
+  const sign = value < 0 ? -1 : 1;
+  const absoluteValue = Math.abs(value);
+  const decimalText = absoluteValue.toString();
+
+  if (decimalText.includes("e")) {
+    return sign * Math.round(absoluteValue * 1000);
+  }
+
+  const [wholePart, fractionalPart = ""] = decimalText.split(".");
+  const wholeMilliunits = Number(wholePart) * 1000;
+  const fractionalMilliunits = Number(
+    fractionalPart.slice(0, 3).padEnd(3, "0"),
+  );
+  const shouldRoundUp = Number(fractionalPart[3] ?? "0") >= 5;
+
+  return (
+    sign * (wholeMilliunits + fractionalMilliunits + (shouldRoundUp ? 1 : 0))
+  );
 }
 
 function addMonths(month: string, offset: number) {
@@ -259,7 +276,8 @@ function buildTransactionSummary(rows: TransactionSearchRow[], topN = 5) {
       .sort(
         (left, right) =>
           right.amountMilliunits - left.amountMilliunits ||
-          left.name.localeCompare(right.name),
+          left.name.localeCompare(right.name) ||
+          (left.id ?? "").localeCompare(right.id ?? ""),
       )
       .slice(0, topN)
       .map((entry) =>
