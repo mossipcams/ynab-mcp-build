@@ -120,7 +120,7 @@ export function createScheduledTransactionsRepository(database: D1Database) {
     ): Promise<ScheduledTransactionSearchResult> {
       const search = buildScheduledTransactionSearch(input);
       const limit = buildLimitSql(input);
-      const result = await database
+      const resultPromise = database
         .prepare(
           `${selectScheduledTransactionSql(search.where)}
            ORDER BY COALESCE(date_next, date_first), id
@@ -128,13 +128,17 @@ export function createScheduledTransactionsRepository(database: D1Database) {
         )
         .bind(...search.params, ...limit.params)
         .all<ScheduledTransactionRow>();
-      const countResult = await database
+      const countResultPromise = database
         .prepare(
           `SELECT COUNT(*) AS count FROM ynab_scheduled_transactions
            WHERE ${search.where}`,
         )
         .bind(...search.params)
         .all<CountRow>();
+      const [result, countResult] = await Promise.all([
+        resultPromise,
+        countResultPromise,
+      ]);
 
       return {
         rows: rowsOrEmpty(result),

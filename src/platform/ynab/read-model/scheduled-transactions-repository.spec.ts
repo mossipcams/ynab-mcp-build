@@ -17,14 +17,16 @@ class FakeStatement {
     this.db.calls.push({ sql: this.sql, params });
 
     return {
-      all: async () => ({ results: this.db.nextResults.shift() }),
+      all: async () => ({
+        results: await Promise.resolve(this.db.nextResults.shift()),
+      }),
     } as unknown as D1PreparedStatement;
   }
 }
 
 class FakeD1Database {
   calls: BoundStatement[] = [];
-  nextResults: Array<unknown[] | undefined> = [];
+  nextResults: Array<unknown[] | Promise<unknown[]> | undefined> = [];
 
   prepare(sql: string) {
     return new FakeStatement(this, sql) as unknown as D1PreparedStatement;
@@ -144,5 +146,44 @@ describe("scheduled transactions read-model repository", () => {
     ).resolves.toBeNull();
 
     expect(db.calls[0]?.sql).toContain("deleted = 0");
+  });
+
+  it("starts scheduled transaction page and count reads without waiting for the page result", async () => {
+    // DEFECT: scheduled transaction search serialized count reads behind page latency.
+    const db = new FakeD1Database();
+    let resolvePage: (rows: unknown[]) => void = () => undefined;
+    const pageRows = new Promise<unknown[]>((resolve) => {
+      resolvePage = resolve;
+    });
+    const rows = [
+      {
+        id: "scheduled-1",
+        date_first: "2026-04-01",
+        amount_milliunits: -45000,
+        deleted: 0,
+      },
+    ];
+    db.nextResults.push(pageRows, [{ count: 1 }]);
+    const repository = createScheduledTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    const result = repository.listScheduledTransactions({
+      limit: 25,
+      planId: "plan-1",
+    });
+
+    await Promise.resolve();
+
+    expect(db.calls).toHaveLength(2);
+    expect(db.calls[0]?.sql).toContain("LIMIT ? OFFSET ?");
+    expect(db.calls[1]?.sql).toContain("COUNT(*) AS count");
+
+    resolvePage(rows);
+
+    await expect(result).resolves.toEqual({
+      rows,
+      totalCount: 1,
+    });
   });
 });

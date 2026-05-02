@@ -582,17 +582,18 @@ export function createReadModelSyncService(
       );
     const runId = `${input.leaseOwner}:${config.endpoint}`;
 
-    if (options.syncRunRepository) {
-      await ignoreRunHistoryFailure(
-        options.syncRunRepository.startEndpointRun({
-          endpoint: config.endpoint,
-          id: runId,
-          planId: input.planId,
-          serverKnowledgeBefore: previousServerKnowledge,
-          startedAt: input.now,
-        }),
-      );
-    }
+    const startEndpointRun =
+      options.syncRunRepository === undefined
+        ? Promise.resolve()
+        : ignoreRunHistoryFailure(
+            options.syncRunRepository.startEndpointRun({
+              endpoint: config.endpoint,
+              id: runId,
+              planId: input.planId,
+              serverKnowledgeBefore: previousServerKnowledge,
+              startedAt: input.now,
+            }),
+          );
 
     try {
       const delta = await config.fetchDelta(
@@ -618,6 +619,7 @@ export function createReadModelSyncService(
 
       if (!cursorResult.advanced) {
         if (options.syncRunRepository) {
+          await startEndpointRun;
           await ignoreRunHistoryFailure(
             options.syncRunRepository.finishEndpointRun({
               error: cursorResult.reason,
@@ -639,6 +641,7 @@ export function createReadModelSyncService(
       }
 
       if (options.syncRunRepository) {
+        await startEndpointRun;
         await ignoreRunHistoryFailure(
           options.syncRunRepository.finishEndpointRun({
             error: null,
@@ -675,6 +678,7 @@ export function createReadModelSyncService(
       }
 
       if (options.syncRunRepository) {
+        await startEndpointRun;
         await ignoreRunHistoryFailure(
           options.syncRunRepository.finishEndpointRun({
             error: message,

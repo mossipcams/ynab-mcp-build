@@ -25,15 +25,18 @@ class FakeStatement {
   all<T>() {
     this.db.allCalls.push({ sql: this.sql, params: this.params });
 
-    return Promise.resolve({
-      results: (this.db.allResults.shift() ?? []) as T[],
-    } as D1Result<T>);
+    return Promise.resolve(this.db.allResults.shift() ?? []).then(
+      (results) =>
+        ({
+          results: results as T[],
+        }) as D1Result<T>,
+    );
   }
 }
 
 class FakeD1Database {
   allCalls: BoundStatement[] = [];
-  allResults: unknown[][] = [];
+  allResults: Array<unknown[] | Promise<unknown[]>> = [];
   batchCalls: BoundStatement[][] = [];
   batchStatements: BoundStatement[] = [];
 
@@ -246,6 +249,46 @@ describe("transactions repository", () => {
     ]);
   });
 
+  it("starts transaction count and page reads without waiting for the count result", async () => {
+    // DEFECT: independent D1 reads serialized on count latency before fetching the requested page.
+    const db = new FakeD1Database();
+    let resolveCount: (rows: unknown[]) => void = () => undefined;
+    const countRows = new Promise<unknown[]>((resolve) => {
+      resolveCount = resolve;
+    });
+    const rows = [
+      {
+        amount_milliunits: -12000,
+        date: "2026-04-12",
+        deleted: 0,
+        id: "txn-1",
+        payee_name: "Market",
+      },
+    ];
+    db.allResults = [countRows, rows];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    const result = repository.searchTransactions({
+      limit: 25,
+      planId: "plan-1",
+    });
+
+    await Promise.resolve();
+
+    expect(db.allCalls).toHaveLength(2);
+    expect(db.allCalls[0]?.sql).toContain("COUNT(*) AS count");
+    expect(db.allCalls[1]?.sql).toContain("LIMIT ? OFFSET ?");
+
+    resolveCount([{ count: 1 }]);
+
+    await expect(result).resolves.toEqual({
+      rows,
+      totalCount: 1,
+    });
+  });
+
   it("escapes SQL LIKE wildcards when searching payee names", async () => {
     const db = new FakeD1Database();
     db.allResults = [[{ count: 0 }], []];
@@ -375,6 +418,42 @@ describe("transactions repository", () => {
       "account-1",
       5,
     ]);
+  });
+
+  it("starts independent transaction summary aggregate reads together", async () => {
+    // DEFECT: summary aggregates can serialize three independent D1 reads and amplify tool latency.
+    const db = new FakeD1Database();
+    let resolveTotals: (rows: unknown[]) => void = () => undefined;
+    const totalsRows = new Promise<unknown[]>((resolve) => {
+      resolveTotals = resolve;
+    });
+    db.allResults = [totalsRows, [], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    const result = repository.summarizeTransactions({
+      planId: "plan-1",
+      topN: 5,
+    });
+
+    await Promise.resolve();
+
+    expect(db.allCalls).toHaveLength(3);
+    expect(db.allCalls[0]?.sql).toContain("inflow_milliunits");
+    expect(db.allCalls[1]?.sql).toContain("LEFT JOIN ynab_categories");
+    expect(db.allCalls[2]?.sql).toContain("LEFT JOIN ynab_payees");
+
+    resolveTotals([{ inflow_milliunits: 5000, outflow_milliunits: 12000 }]);
+
+    await expect(result).resolves.toEqual({
+      totals: {
+        inflowMilliunits: 5000,
+        outflowMilliunits: 12000,
+      },
+      topCategories: [],
+      topPayees: [],
+    });
   });
 
   it("rolls up summary categories and payees by tagged ids before current display names", async () => {
