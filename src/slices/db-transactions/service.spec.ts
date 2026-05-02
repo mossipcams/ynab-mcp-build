@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it, vi } from "vitest";
 
 import { searchTransactions } from "./service.js";
@@ -58,6 +59,50 @@ describe("DB-backed transaction service", () => {
         returned_count: 1,
       },
       status: "ok",
+    });
+  });
+
+  it("reports no additional page at the exact pagination end boundary", async () => {
+    // DEFECT: has_more can stay true when offset plus returned rows lands exactly on the total count.
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => ({
+        rows: [
+          {
+            amount_milliunits: -12000,
+            date: "2026-04-12",
+            deleted: 0,
+            id: "txn-100",
+            payee_name: "Market",
+          },
+        ],
+        totalCount: 101,
+      })),
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-04-28T12:00:00.000Z",
+        stale: false,
+        warning: null,
+      })),
+    };
+
+    const result = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      {
+        limit: 1,
+        offset: 100,
+      },
+    );
+
+    expect(result).toMatchObject({
+      data: {
+        has_more: false,
+        limit: 1,
+        match_count: 101,
+        offset: 100,
+        returned_count: 1,
+      },
     });
   });
 
@@ -303,6 +348,52 @@ describe("DB-backed transaction service", () => {
     );
   });
 
+  it("maps leap-year February and December month filters to exact calendar ranges", async () => {
+    // DEFECT: month range math can miss leap days or fail when rolling December into January.
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => ({
+        rows: [],
+        totalCount: 0,
+      })),
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-04-28T12:00:00.000Z",
+        stale: false,
+        warning: null,
+      })),
+    };
+
+    await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      {
+        month: "2024-02-01",
+      },
+    );
+    await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      {
+        month: "2026-12-01",
+      },
+    );
+
+    expect(transactionsRepository.searchTransactions).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        endDate: "2024-02-29",
+        startDate: "2024-02-01",
+      }),
+    );
+    expect(transactionsRepository.searchTransactions).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        endDate: "2026-12-31",
+        startDate: "2026-12-01",
+      }),
+    );
+  });
+
   it("treats public amount filters as decimal currency units", async () => {
     const transactionsRepository = {
       searchTransactions: vi.fn(async () => ({
@@ -380,6 +471,109 @@ describe("DB-backed transaction service", () => {
           max_abs_amount: "200.00",
           min_abs_amount: "100.00",
         },
+      },
+    });
+  });
+
+  it("rounds half-milliunit amount filters symmetrically by magnitude", async () => {
+    // DEFECT: Math.round biases negative half-milliunit filters toward zero and makes min/max boundaries asymmetric.
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 1_000_000 }),
+        async (milliunits) => {
+          const transactionsRepository = {
+            searchTransactions: vi.fn(async () => ({
+              rows: [],
+              totalCount: 0,
+            })),
+          };
+          const freshness = {
+            getFreshness: vi.fn(async () => ({
+              health_status: "ok",
+              last_synced_at: "2026-04-28T12:00:00.000Z",
+              stale: false,
+              warning: null,
+            })),
+          };
+          const halfMilliunitAmount = (milliunits + 0.5) / 1000;
+
+          await searchTransactions(
+            { defaultPlanId: "plan-1", freshness, transactionsRepository },
+            {
+              maxAmount: halfMilliunitAmount,
+              minAmount: -halfMilliunitAmount,
+            },
+          );
+
+          expect(
+            transactionsRepository.searchTransactions,
+          ).toHaveBeenCalledWith(
+            expect.objectContaining({
+              maxAmountMilliunits: milliunits + 1,
+              minAmountMilliunits: -(milliunits + 1),
+            }),
+          );
+        },
+      ),
+    );
+  });
+
+  it("uses deterministic tie-breaking for local summary rollups with equal amounts and names", async () => {
+    // DEFECT: equal summary rollups can flicker based on repository row order when amount and display name tie.
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => ({
+        rows: [
+          {
+            id: "txn-category-b",
+            date: "2026-04-11",
+            amount_milliunits: -10000,
+            category_id: "category-b",
+            category_name: "Shared",
+            payee_id: "payee-b",
+            payee_name: "Shared",
+            deleted: 0,
+          },
+          {
+            id: "txn-category-a",
+            date: "2026-04-12",
+            amount_milliunits: -10000,
+            category_id: "category-a",
+            category_name: "Shared",
+            payee_id: "payee-a",
+            payee_name: "Shared",
+            deleted: 0,
+          },
+        ],
+        totalCount: 2,
+      })),
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-04-28T12:00:00.000Z",
+        stale: false,
+        warning: null,
+      })),
+    };
+
+    const result = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      { includeSummary: true },
+    );
+
+    expect(result.data).toMatchObject({
+      top_categories: [
+        expect.objectContaining({ id: "category-a", name: "Shared" }),
+        expect.objectContaining({ id: "category-b", name: "Shared" }),
+      ],
+      top_payees: [
+        expect.objectContaining({ id: "payee-a", name: "Shared" }),
+        expect.objectContaining({ id: "payee-b", name: "Shared" }),
+      ],
+      totals: {
+        net: "-20.00",
+        total_inflow: "0.00",
+        total_outflow: "20.00",
       },
     });
   });

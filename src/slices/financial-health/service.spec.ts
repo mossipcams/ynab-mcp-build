@@ -641,6 +641,87 @@ describe("financial health service", () => {
     });
   });
 
+  it("excludes hidden and deleted categories from spending anomaly calculations", async () => {
+    // DEFECT: hidden or deleted categories can dominate anomaly rankings and surface stale budget noise.
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories:
+          month === "2026-04-01"
+            ? [
+                {
+                  id: "visible",
+                  name: "Visible",
+                  activity: -500000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+                {
+                  id: "hidden",
+                  name: "Hidden",
+                  activity: -900000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: true,
+                },
+                {
+                  id: "deleted",
+                  name: "Deleted",
+                  activity: -800000,
+                  balance: 0,
+                  deleted: true,
+                  hidden: false,
+                },
+              ]
+            : [
+                {
+                  id: "visible",
+                  name: "Visible",
+                  activity: -100000,
+                  balance: 0,
+                  deleted: false,
+                  hidden: false,
+                },
+                {
+                  id: "hidden",
+                  name: "Hidden",
+                  activity: 0,
+                  balance: 0,
+                  deleted: false,
+                  hidden: true,
+                },
+                {
+                  id: "deleted",
+                  name: "Deleted",
+                  activity: 0,
+                  balance: 0,
+                  deleted: true,
+                  hidden: false,
+                },
+              ],
+      }),
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingAnomalies(ynabClient, {
+        baselineMonths: 1,
+        latestMonth: "2026-04-01",
+        minimumDifference: 100,
+        planId: "plan-1",
+        thresholdMultiplier: 1,
+      }),
+    ).resolves.toMatchObject({
+      anomaly_count: 1,
+      anomalies: [
+        expect.objectContaining({
+          category_name: "Visible",
+          increase: "400.00",
+        }),
+      ],
+    });
+  });
+
   it("omits zero-dollar scheduled rows and exposes signed upcoming obligation amounts", async () => {
     // DEFECT: zero-dollar scheduled rows can crowd upcoming obligations and positive display amounts hide outflow signs.
     const ynabClient = {
@@ -751,6 +832,141 @@ describe("financial health service", () => {
         }),
       ],
     });
+  });
+
+  it("detects recurring expenses at monthly cadence and amount-stability boundaries", async () => {
+    // DEFECT: exact cadence or stability thresholds can be excluded by off-by-one comparison errors.
+    const ynabClient = {
+      listTransactions: async () => [
+        {
+          id: "cadence-25-a",
+          amount: -100000,
+          date: "2026-01-01",
+          deleted: false,
+          payeeId: "cadence-25",
+          payeeName: "Cadence 25",
+        },
+        {
+          id: "cadence-25-b",
+          amount: -100000,
+          date: "2026-01-26",
+          deleted: false,
+          payeeId: "cadence-25",
+          payeeName: "Cadence 25",
+        },
+        {
+          id: "cadence-25-c",
+          amount: -100000,
+          date: "2026-02-20",
+          deleted: false,
+          payeeId: "cadence-25",
+          payeeName: "Cadence 25",
+        },
+        {
+          id: "cadence-35-a",
+          amount: -200000,
+          date: "2026-01-01",
+          deleted: false,
+          payeeId: "cadence-35",
+          payeeName: "Cadence 35",
+        },
+        {
+          id: "cadence-35-b",
+          amount: -200000,
+          date: "2026-02-05",
+          deleted: false,
+          payeeId: "cadence-35",
+          payeeName: "Cadence 35",
+        },
+        {
+          id: "cadence-35-c",
+          amount: -200000,
+          date: "2026-03-12",
+          deleted: false,
+          payeeId: "cadence-35",
+          payeeName: "Cadence 35",
+        },
+        {
+          id: "stable-50-a",
+          amount: -50000,
+          date: "2026-01-15",
+          deleted: false,
+          payeeId: "stable-50",
+          payeeName: "Stable 50",
+        },
+        {
+          id: "stable-50-b",
+          amount: -100000,
+          date: "2026-02-15",
+          deleted: false,
+          payeeId: "stable-50",
+          payeeName: "Stable 50",
+        },
+        {
+          id: "stable-50-c",
+          amount: -150000,
+          date: "2026-03-15",
+          deleted: false,
+          payeeId: "stable-50",
+          payeeName: "Stable 50",
+        },
+        {
+          id: "unstable-a",
+          amount: -49000,
+          date: "2026-01-20",
+          deleted: false,
+          payeeId: "unstable",
+          payeeName: "Unstable",
+        },
+        {
+          id: "unstable-b",
+          amount: -100000,
+          date: "2026-02-20",
+          deleted: false,
+          payeeId: "unstable",
+          payeeName: "Unstable",
+        },
+        {
+          id: "unstable-c",
+          amount: -151000,
+          date: "2026-03-20",
+          deleted: false,
+          payeeId: "unstable",
+          payeeName: "Unstable",
+        },
+      ],
+    } as unknown as YnabClient;
+
+    const summary = await getRecurringExpenseSummary(ynabClient, {
+      fromDate: "2026-01-01",
+      planId: "plan-1",
+      toDate: "2026-03-31",
+      topN: 10,
+    });
+
+    expect(
+      summary.recurring_expenses.map((expense) => expense.payee_name),
+    ).toEqual(["Cadence 35", "Cadence 25", "Stable 50"]);
+    expect(summary.recurring_expenses).toEqual([
+      expect.objectContaining({
+        average_amount: "200.00",
+        cadence: "monthly",
+        occurrence_count: 3,
+        payee_name: "Cadence 35",
+      }),
+      expect.objectContaining({
+        average_amount: "100.00",
+        cadence: "monthly",
+        occurrence_count: 3,
+        payee_name: "Cadence 25",
+      }),
+      expect.objectContaining({
+        average_amount: "100.00",
+        cadence: "monthly",
+        occurrence_count: 3,
+        payee_name: "Stable 50",
+      }),
+    ]);
   });
 
   it("returns a neutral digest for a quiet month", async () => {
@@ -1206,6 +1422,128 @@ describe("financial health service", () => {
       runway_days: "90.00",
       scheduled_net_next_30d: "-15.00",
     });
+  });
+
+  it("includes scheduled obligations exactly at 7, 14, and 30 days and excludes day 31", async () => {
+    // DEFECT: upcoming obligation windows can drift at inclusive day boundaries and double-count outside the 30-day horizon.
+    const ynabClient = {
+      listScheduledTransactions: async () => [
+        {
+          id: "due-today",
+          amount: -1000,
+          dateNext: "2026-04-01",
+          deleted: false,
+          payeeName: "Today",
+        },
+        {
+          id: "due-7",
+          amount: -7000,
+          dateNext: "2026-04-08",
+          deleted: false,
+          payeeName: "Seven",
+        },
+        {
+          id: "due-14",
+          amount: -14000,
+          dateNext: "2026-04-15",
+          deleted: false,
+          payeeName: "Fourteen",
+        },
+        {
+          id: "due-30",
+          amount: -30000,
+          dateNext: "2026-05-01",
+          deleted: false,
+          payeeName: "Thirty",
+        },
+        {
+          id: "due-31",
+          amount: -31000,
+          dateNext: "2026-05-02",
+          deleted: false,
+          payeeName: "Thirty One",
+        },
+        {
+          id: "past",
+          amount: -5000,
+          dateNext: "2026-03-31",
+          deleted: false,
+          payeeName: "Past",
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getUpcomingObligations(ynabClient, {
+        asOfDate: "2026-04-01",
+        planId: "plan-1",
+        topN: 10,
+      }),
+    ).resolves.toMatchObject({
+      obligation_count: 4,
+      windows: {
+        "7d": {
+          obligation_count: 2,
+          total_outflows: "8.00",
+        },
+        "14d": {
+          obligation_count: 3,
+          total_outflows: "22.00",
+        },
+        "30d": {
+          obligation_count: 4,
+          total_outflows: "52.00",
+        },
+      },
+      top_due: [
+        expect.objectContaining({ id: "due-today" }),
+        expect.objectContaining({ id: "due-7" }),
+        expect.objectContaining({ id: "due-14" }),
+        expect.objectContaining({ id: "due-30" }),
+      ],
+    });
+  });
+
+  it("classifies cash resilience status at coverage month boundaries", async () => {
+    // DEFECT: coverage boundary comparisons can classify exact threshold values into the lower risk bucket.
+    const makeClient = (balance: number) =>
+      ({
+        listAccounts: async () => [
+          {
+            id: "cash",
+            name: "Checking",
+            type: "checking",
+            closed: false,
+            deleted: false,
+            balance,
+          },
+        ],
+        listPlanMonths: async () => [
+          { month: "2026-02-01", deleted: false, activity: -30000 },
+          { month: "2026-03-01", deleted: false, activity: -30000 },
+          { month: "2026-04-01", deleted: false, activity: -30000 },
+        ],
+        listScheduledTransactions: async () => [],
+      }) as unknown as YnabClient;
+
+    await expect(
+      getCashResilienceSummary(makeClient(30000), {
+        month: "2026-04-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({ coverage_months: "1.00", status: "thin" });
+    await expect(
+      getCashResilienceSummary(makeClient(90000), {
+        month: "2026-04-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({ coverage_months: "3.00", status: "solid" });
+    await expect(
+      getCashResilienceSummary(makeClient(180000), {
+        month: "2026-04-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({ coverage_months: "6.00", status: "strong" });
   });
 
   it("uses the same current 30-day scheduled net as upcoming obligations", async () => {
