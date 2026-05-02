@@ -148,7 +148,7 @@ export function createScheduledTransactionsRepository(database: D1Database) {
     }) {
       const result = await database
         .prepare(
-          `${selectScheduledTransactionSql("plan_id = ? AND id = ?")}
+          `${selectScheduledTransactionSql("plan_id = ? AND id = ? AND deleted = 0")}
            LIMIT 1`,
         )
         .bind(input.planId, input.scheduledTransactionId)

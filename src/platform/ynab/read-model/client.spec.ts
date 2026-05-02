@@ -79,6 +79,15 @@ class FakeD1Database {
       return false;
     }
 
+    if (
+      sql.includes("FROM ynab_scheduled_transactions") &&
+      sql.includes("deleted = 0") &&
+      row.deleted !== 0 &&
+      row.deleted !== false
+    ) {
+      return false;
+    }
+
     if (/(?:^|\s)id = \?/u.test(sql) && !sql.includes("payee_id = ?")) {
       const idParam = params[1] ?? params[0];
       if (row.id !== idParam) {
@@ -130,6 +139,89 @@ class FakeD1Database {
 }
 
 describe("YNAB read-model client", () => {
+  it("preserves account on-budget status when listing accounts", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_accounts = [
+      {
+        plan_id: "plan-1",
+        id: "checking",
+        name: "Checking",
+        type: "checking",
+        on_budget: 1,
+        closed: 0,
+        balance_milliunits: 200000,
+        deleted: 0,
+      },
+      {
+        plan_id: "plan-1",
+        id: "ira",
+        name: "Roth IRA",
+        type: "otherAsset",
+        on_budget: 0,
+        closed: 0,
+        balance_milliunits: 500000,
+        deleted: 0,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(client.listAccounts("plan-1")).resolves.toEqual([
+      expect.objectContaining({
+        id: "checking",
+        onBudget: true,
+      }),
+      expect.objectContaining({
+        id: "ira",
+        onBudget: false,
+      }),
+    ]);
+  });
+
+  it("preserves scheduled transfer metadata when listing scheduled transactions", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_scheduled_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "scheduled-transfer",
+        date_first: "2026-05-01",
+        date_next: "2026-06-01",
+        amount_milliunits: 33000,
+        payee_name: "Transfer : Checking",
+        category_name: "Uncategorized",
+        account_name: "Savings",
+        transfer_account_id: "checking-account",
+        deleted: 0,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(client.listScheduledTransactions("plan-1")).resolves.toEqual([
+      expect.objectContaining({
+        id: "scheduled-transfer",
+        transferAccountId: "checking-account",
+      }),
+    ]);
+  });
+
+  it("does not return deleted scheduled transactions from exact lookup", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_scheduled_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "scheduled-deleted",
+        date_first: "2026-05-01",
+        date_next: "2026-06-01",
+        amount_milliunits: -45000,
+        deleted: 1,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(
+      client.getScheduledTransaction("plan-1", "scheduled-deleted"),
+    ).rejects.toThrow("scheduled-deleted was not found");
+  });
+
   it("applies both start and end date predicates when listing transactions", async () => {
     const db = new FakeD1Database();
     db.rows.ynab_transactions = [
@@ -657,10 +749,7 @@ describe("YNAB read-model client", () => {
     ]);
     await expect(
       client.getScheduledTransaction("plan-1", "sched-1"),
-    ).resolves.toMatchObject({
-      id: "sched-1",
-      deleted: true,
-    });
+    ).rejects.toThrow("sched-1 was not found");
     await expect(client.listPayees("plan-1")).resolves.toEqual([
       {
         id: "payee-1",

@@ -18,6 +18,30 @@ type CategoryLike = {
   categoryGroupName?: string;
 };
 
+const trackingAccountTypes = new Set([
+  "autoLoan",
+  "mortgage",
+  "otherAsset",
+  "otherLiability",
+  "studentLoan",
+]);
+
+function isInternalCategory(category: CategoryLike) {
+  return (
+    category.categoryGroupName === "Internal Master Category" ||
+    category.name === "Inflow: Ready to Assign" ||
+    category.name === "Uncategorized"
+  );
+}
+
+function isSpendableCashAccount(account: AccountLike) {
+  return (
+    account.onBudget !== false ||
+    account.type === undefined ||
+    !trackingAccountTypes.has(account.type)
+  );
+}
+
 export function formatMilliunits(value: number) {
   const cents = Math.sign(value) * Math.round(Math.abs(value) / 10);
   const absoluteCents = Math.abs(cents);
@@ -51,6 +75,9 @@ export function buildAccountSnapshotSummary<TAccount extends AccountLike>(
   const positiveAccounts = activeAccounts.filter(
     (account) => (account.balance ?? 0) >= 0,
   );
+  const positiveOnBudgetAccounts = positiveAccounts.filter((account) =>
+    isSpendableCashAccount(account),
+  );
   const negativeAccounts = activeAccounts.filter(
     (account) => (account.balance ?? 0) < 0,
   );
@@ -63,7 +90,7 @@ export function buildAccountSnapshotSummary<TAccount extends AccountLike>(
       (sum, account) => sum + (account.balance ?? 0),
       0,
     ),
-    liquidCashMilliunits: positiveAccounts.reduce(
+    liquidCashMilliunits: positiveOnBudgetAccounts.reduce(
       (sum, account) => sum + (account.balance ?? 0),
       0,
     ),
@@ -77,7 +104,8 @@ export function buildVisibleCategoryHealthSummary<
   TCategory extends CategoryLike,
 >(categories: TCategory[]) {
   const visibleCategories = categories.filter(
-    (category) => !category.deleted && !category.hidden,
+    (category) =>
+      !category.deleted && !category.hidden && !isInternalCategory(category),
   );
 
   return {

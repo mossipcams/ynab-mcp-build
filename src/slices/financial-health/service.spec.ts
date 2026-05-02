@@ -101,6 +101,57 @@ describe("financial health service", () => {
     ]);
   });
 
+  it("uses transaction outflows for monthly review spent when reimbursements make category activity positive", async () => {
+    // DEFECT: reimbursement-heavy months can show top spending but report spent as zero from net category activity.
+    const ynabClient = {
+      getPlanMonth: async () => ({
+        month: "2026-05-01",
+        income: 300000,
+        budgeted: 200000,
+        activity: 150000,
+        toBeBudgeted: 0,
+        categories: [],
+      }),
+      listTransactions: async () => [
+        {
+          id: "reimbursement",
+          date: "2026-05-01",
+          amount: 250000,
+          deleted: false,
+        },
+        {
+          id: "rent",
+          date: "2026-05-01",
+          amount: -100000,
+          categoryId: "rent-category",
+          categoryName: "Rent",
+          payeeName: "Landlord",
+          accountName: "Checking",
+          deleted: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getMonthlyReview(ynabClient, {
+        month: "2026-05-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      assigned: "200.00",
+      spent: "100.00",
+      assigned_vs_spent: "100.00",
+      top_spending_categories: [
+        {
+          id: "rent-category",
+          name: "Rent",
+          amount: "100.00",
+          transaction_count: 1,
+        },
+      ],
+    });
+  });
+
   it("aggregates category group trends from category membership when month categories omit group names", async () => {
     // DEFECT: read-model month category rows can omit category_group_name and make group trends report all zeroes.
     const ynabClient = {
