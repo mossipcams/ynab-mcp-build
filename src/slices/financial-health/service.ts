@@ -1256,6 +1256,14 @@ export async function getMonthlyReview(
   const outflowMilliunits = monthTransactions
     .filter((transaction) => transaction.amount < 0)
     .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  const spentMilliunits =
+    monthTransactions.length > 0
+      ? outflowMilliunits
+      : toSpentFromActivity(monthDetail.activity);
+  const assignedSpentSummary = buildAssignedSpentSummary(
+    monthDetail.budgeted ?? 0,
+    spentMilliunits,
+  );
 
   return {
     month: monthDetail.month,
@@ -1267,9 +1275,9 @@ export async function getMonthlyReview(
     available_total: budgetHealth.available_total,
     overspent_total: budgetHealth.overspent_total,
     underfunded_total: budgetHealth.underfunded_total,
-    assigned: budgetHealth.assigned,
-    spent: budgetHealth.spent,
-    assigned_vs_spent: budgetHealth.assigned_vs_spent,
+    assigned: assignedSpentSummary.assigned,
+    spent: assignedSpentSummary.spent,
+    assigned_vs_spent: assignedSpentSummary.assigned_vs_spent,
     top_spending_categories: toMonthSpendingRollups(monthTransactions, topN),
     ...(input.detailLevel === "detailed"
       ? {

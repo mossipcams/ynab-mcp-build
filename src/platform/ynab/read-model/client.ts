@@ -151,6 +151,7 @@ type ScheduledTransactionRow = {
   payee_name?: string | null;
   category_name?: string | null;
   account_name?: string | null;
+  transfer_account_id?: string | null;
   deleted?: number | null;
 };
 
@@ -237,6 +238,7 @@ function toAccount(row: AccountRow): YnabAccountSummary {
     id: row.id,
     name: row.name,
     type: row.type,
+    onBudget: toBoolean(row.on_budget),
     closed: toRequiredBoolean(row.closed),
     deleted: toBoolean(row.deleted),
     balance: row.balance_milliunits ?? 0,
@@ -333,6 +335,7 @@ function toScheduledTransaction(
     payeeName: row.payee_name,
     categoryName: row.category_name,
     accountName: row.account_name,
+    transferAccountId: row.transfer_account_id,
     deleted: toBoolean(row.deleted),
   });
 }
@@ -765,7 +768,7 @@ export function createYnabReadModelClient(
     async listAccounts(planId: string): Promise<YnabAccountSummary[]> {
       return (
         await all<AccountRow>(
-          `SELECT id, name, type, closed, deleted, balance_milliunits
+          `SELECT id, name, type, on_budget, closed, deleted, balance_milliunits
          FROM ynab_accounts
          WHERE plan_id = ?
          ORDER BY name, id`,
@@ -860,6 +863,7 @@ export function createYnabReadModelClient(
                 payee_name,
                 category_name,
                 account_name,
+                transfer_account_id,
                 deleted
          FROM ynab_scheduled_transactions
          WHERE plan_id = ?
@@ -883,9 +887,10 @@ export function createYnabReadModelClient(
                   payee_name,
                   category_name,
                   account_name,
+                  transfer_account_id,
                   deleted
            FROM ynab_scheduled_transactions
-           WHERE plan_id = ? AND id = ?
+           WHERE plan_id = ? AND id = ? AND deleted = 0
            LIMIT 1`,
             planId,
             scheduledTransactionId,

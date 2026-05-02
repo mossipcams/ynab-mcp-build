@@ -128,4 +128,21 @@ describe("scheduled transactions read-model repository", () => {
       "SELECT COUNT(*) AS count FROM ynab_scheduled_transactions",
     );
   });
+
+  it("filters deleted tombstones from exact scheduled transaction lookup", async () => {
+    const db = new FakeD1Database();
+    db.nextResults.push([]);
+    const repository = createScheduledTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await expect(
+      repository.getScheduledTransaction({
+        planId: "plan-1",
+        scheduledTransactionId: "scheduled-deleted",
+      }),
+    ).resolves.toBeNull();
+
+    expect(db.calls[0]?.sql).toContain("deleted = 0");
+  });
 });
