@@ -14,7 +14,8 @@ The current product surface is an HTTP MCP server:
 - Discovery document: `GET /.well-known/mcp.json`
 - OAuth routes: `GET /.well-known/openid-configuration`, `GET /authorize`,
   `GET /oidc/callback`
-- Scheduled sync: hourly Wrangler cron, `0 * * * *`
+- Scheduled sync: Wrangler cron profiles for hot financial data, reference data,
+  and full refreshes
 
 The server is intentionally Worker-native. Production code should stay on
 web-standard APIs and avoid Node-only runtime assumptions, Express compatibility
@@ -69,7 +70,8 @@ The source is organized around explicit runtime seams:
 
 - `src/http/**`: Hono routes and HTTP transport concerns
 - `src/mcp/**`: MCP SDK imports, server creation, registration, discovery, and
-  MCP result formatting
+  MCP result formatting, except for the streamable HTTP transport adapter owned
+  by `src/http/routes/mcp.ts`
 - `src/slices/**`: product logic and tool definitions
 - `src/platform/ynab/**`: YNAB API clients and D1 read-model repositories
 - `src/oauth/core/**`: runtime-agnostic OAuth rules
@@ -78,7 +80,9 @@ The source is organized around explicit runtime seams:
 - `src/shared/**`: runtime-agnostic helpers
 
 `src/slices/**` can expose tool definitions, but registration happens from the
-MCP/app layer. DB-backed slices use the public `ynab_*` tool names while reading
+MCP/app layer. `src/app/tool-definitions.ts` wires D1 read-model clients,
+repositories, freshness checks, and default-plan resolution into those
+definitions. DB-backed slices use the public `ynab_*` tool names while reading
 through read-model repositories.
 
 ## Requirements
@@ -156,6 +160,7 @@ MCP_SERVER_VERSION=0.1.0
 YNAB_API_BASE_URL=https://api.ynab.com/v1
 YNAB_READ_SOURCE=d1
 YNAB_STALE_AFTER_MINUTES=30
+triggers.crons=[*/5 * * * *, 2 * * * *, 17 3 * * *]
 YNAB_DB
 OAUTH_STATE
 ```
@@ -224,14 +229,24 @@ flow.
 
 ## D1 Sync
 
-The Worker exports a scheduled handler. On each cron invocation it:
+The Worker exports a scheduled handler. Wrangler invokes it with three cron
+profiles:
+
+- `*/5 * * * *`: hot financial sync for accounts, categories, months,
+  scheduled transactions, and transactions.
+- `2 * * * *`: reference sync for users, plans, plan settings, money movements,
+  payees, and payee locations.
+- `17 3 * * *`: full sync for every configured endpoint.
+
+On each cron invocation the handler:
 
 1. Resolves the app environment with OAuth disabled for the scheduled path.
 2. Requires `YNAB_ACCESS_TOKEN` and `YNAB_DB`.
-3. Chooses `YNAB_DEFAULT_PLAN_ID` when configured.
-4. Otherwise asks YNAB for plans and uses YNAB's default plan, falling back to
+3. Chooses the sync profile from the cron string.
+4. Chooses `YNAB_DEFAULT_PLAN_ID` when configured.
+5. Otherwise asks YNAB for plans and uses YNAB's default plan, falling back to
    the first returned plan.
-5. Runs the read-model sync service for that single plan.
+6. Runs the read-model sync service for that single plan.
 
 The sync service processes endpoint configs sequentially. For each endpoint it:
 
@@ -278,9 +293,10 @@ and confirm `MCP_PUBLIC_URL` is configured in the deployed environment.
 
 ## Operational Notes
 
-- The hourly scheduled sync runs one plan per invocation: the configured
+- Scheduled sync runs one plan per invocation: the configured
   `YNAB_DEFAULT_PLAN_ID`, YNAB's default plan, or the first plan returned by
-  YNAB. It does not fan out across every budget automatically.
+  YNAB. The hot, reference, and full cron profiles vary endpoint coverage, not
+  plan coverage, so sync does not fan out across every budget automatically.
 - If OAuth is enabled and `MCP_PUBLIC_URL` is missing, request handling fails at
   environment resolution before routes run.
 - If the read model has never synced an endpoint required by a tool, the tool
