@@ -28,7 +28,7 @@ const DEFAULT_APP_ENV: AppEnv = {
   oauthEnabled: false,
   ynabApiBaseUrl: "https://api.ynab.com/v1",
   ynabReadSource: "d1",
-  ynabStaleAfterMinutes: 360,
+  ynabStaleAfterMinutes: 30,
 };
 
 function getOptionalString(value: unknown) {

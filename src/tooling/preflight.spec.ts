@@ -289,7 +289,11 @@ describe("repository preflight tooling", () => {
       };
     }>("wrangler.jsonc");
 
-    expect(wranglerConfig.triggers?.crons).toEqual(["0 * * * *"]);
+    expect(wranglerConfig.triggers?.crons).toEqual([
+      "*/5 * * * *",
+      "2 * * * *",
+      "17 3 * * *",
+    ]);
   });
 
   it("keeps README DB-backed tool status current", () => {

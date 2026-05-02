@@ -155,7 +155,7 @@ MCP_SERVER_NAME=ynab-mcp-build
 MCP_SERVER_VERSION=0.1.0
 YNAB_API_BASE_URL=https://api.ynab.com/v1
 YNAB_READ_SOURCE=d1
-YNAB_STALE_AFTER_MINUTES=360
+YNAB_STALE_AFTER_MINUTES=30
 YNAB_DB
 OAUTH_STATE
 ```
@@ -182,7 +182,7 @@ Important environment behavior:
 - `ACCESS_TEAM_DOMAIN`, `ACCESS_CLIENT_ID`, and `ACCESS_CLIENT_SECRET` must be
   provided together for Cloudflare Access OIDC.
 - `YNAB_STALE_AFTER_MINUTES` controls the read-model freshness threshold and
-  defaults to `360`.
+  defaults to `30`.
 
 Useful optional settings:
 

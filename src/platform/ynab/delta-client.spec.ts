@@ -1,8 +1,30 @@
 import { describe, expect, it } from "vitest";
 
+import { YnabClientError } from "./client.js";
 import { createYnabDeltaClient } from "./delta-client.js";
 
 describe("YNAB delta client", () => {
+  it.each([
+    [401, "auth"],
+    [403, "auth"],
+    [404, "not_found"],
+    [429, "rate_limit"],
+  ] as const)(
+    "classifies %s responses so sync can choose a resilient failure path",
+    async (status, category) => {
+      const client = createYnabDeltaClient({
+        accessToken: "pat-secret",
+        baseUrl: "https://api.ynab.com/v1",
+        fetchFn: async () =>
+          Response.json({ error: { detail: "upstream said no" } }, { status }),
+      });
+
+      await expect(client.listAccountsDelta("plan-1")).rejects.toMatchObject({
+        category,
+      } satisfies Partial<YnabClientError>);
+    },
+  );
+
   it("rejects malformed delta envelopes at the external boundary", async () => {
     const client = createYnabDeltaClient({
       accessToken: "pat-secret",
@@ -320,5 +342,41 @@ describe("YNAB delta client", () => {
     expect(requests.map(String)).toEqual([
       "https://api.ynab.com/v1/plans/plan-1/transactions",
     ]);
+  });
+
+  it("backs off before retrying transient upstream responses", async () => {
+    let requestCount = 0;
+    const delays: number[] = [];
+    const client = createYnabDeltaClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      delay: async (milliseconds) => {
+        delays.push(milliseconds);
+      },
+      fetchFn: async () => {
+        requestCount += 1;
+
+        if (requestCount === 1) {
+          return Response.json(
+            { error: { detail: "try later" } },
+            { status: 429 },
+          );
+        }
+
+        return Response.json({
+          data: {
+            accounts: [],
+            server_knowledge: 12,
+          },
+        });
+      },
+      retryDelayMs: () => 750,
+    });
+
+    await expect(client.listAccountsDelta("plan-1")).resolves.toMatchObject({
+      serverKnowledge: 12,
+    });
+    expect(delays).toEqual([750]);
+    expect(requestCount).toBe(2);
   });
 });

@@ -3,6 +3,7 @@ import { defineConfig, defineProject } from "vitest/config";
 
 const unitIncludes = [
   "tests/architecture/**/*.test.ts",
+  "src/app/**/*.spec.ts",
   "src/tooling/**/*.spec.ts",
   "src/shared/**/*.spec.ts",
   "src/platform/**/*.spec.ts",

@@ -130,8 +130,8 @@ describe("ynab client transport errors", () => {
     } satisfies Partial<YnabClientError>);
   });
 
-  it("maps 401 responses into non-retryable internal misconfiguration errors", async () => {
-    // DEFECT: an invalid worker PAT can be misclassified as client auth failure and send operators debugging the wrong system.
+  it("maps 401 responses into non-retryable auth failures", async () => {
+    // DEFECT: an invalid worker PAT can be misclassified as an endpoint-local failure and keep polling with bad credentials.
     const client = createYnabClient({
       accessToken: "pat-secret",
       baseUrl: "https://api.ynab.com/v1",
@@ -153,7 +153,7 @@ describe("ynab client transport errors", () => {
     });
 
     await expect(client.getUser()).rejects.toMatchObject({
-      category: "internal",
+      category: "auth",
       retryable: false,
     } satisfies Partial<YnabClientError>);
   });
