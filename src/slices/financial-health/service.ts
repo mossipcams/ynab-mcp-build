@@ -69,6 +69,13 @@ type DisplayRollup = {
   transaction_count?: number;
 };
 
+type SpendingCategoryLine = {
+  transactionId: string;
+  amountMilliunits: number;
+  categoryId?: string;
+  categoryName?: string;
+};
+
 type FinancialHealthCategory = NonNullable<
   YnabPlanMonthDetail["categories"]
 >[number];
@@ -621,6 +628,75 @@ function isNonTransferRangeTransaction(
     !transaction.transferAccountId &&
     monthKey >= fromMonth &&
     monthKey <= toMonth
+  );
+}
+
+function toSpendingCategoryLine(input: {
+  transactionId: string;
+  amount: number;
+  categoryId: string | null | undefined;
+  categoryName: string | null | undefined;
+}): SpendingCategoryLine | null {
+  if (input.amount === 0) {
+    return null;
+  }
+
+  const line: SpendingCategoryLine = {
+    amountMilliunits: -input.amount,
+    transactionId: input.transactionId,
+  };
+
+  if (input.categoryId) {
+    line.categoryId = input.categoryId;
+  }
+
+  if (input.categoryName) {
+    line.categoryName = input.categoryName;
+  }
+
+  return line;
+}
+
+function toSpendingCategoryLines(
+  transaction: YnabTransaction,
+): SpendingCategoryLine[] {
+  const subtransactions =
+    transaction.subtransactions?.filter(
+      (subtransaction) =>
+        !subtransaction.deleted && !subtransaction.transferAccountId,
+    ) ?? [];
+
+  if (subtransactions.length === 0) {
+    const line = toSpendingCategoryLine({
+      amount: transaction.amount,
+      categoryId: transaction.categoryId,
+      categoryName: transaction.categoryName,
+      transactionId: transaction.id,
+    });
+
+    return line ? [line] : [];
+  }
+
+  return subtransactions.flatMap((subtransaction) => {
+    const line = toSpendingCategoryLine({
+      amount: subtransaction.amount,
+      categoryId: subtransaction.categoryId,
+      categoryName: subtransaction.categoryName,
+      transactionId: transaction.id,
+    });
+
+    return line ? [line] : [];
+  });
+}
+
+function isReadyToAssignIncome(transaction: YnabTransaction) {
+  const categoryName = transaction.categoryName?.trim().toLowerCase();
+
+  return (
+    categoryName === undefined ||
+    categoryName === "" ||
+    categoryName === "ready to assign" ||
+    categoryName === "inflow: ready to assign"
   );
 }
 
@@ -1381,12 +1457,12 @@ export async function getSpendingSummary(
       id?: string;
       name: string;
       amountMilliunits: number;
-      transactionCount: number;
+      transactionIds: Set<string>;
     }
   >();
   const categoryGroupRollups = new Map<
     string,
-    { name: string; amountMilliunits: number; transactionCount: number }
+    { name: string; amountMilliunits: number; transactionIds: Set<string> }
   >();
   const payeeRollups = new Map<
     string,
@@ -1403,38 +1479,55 @@ export async function getSpendingSummary(
       isNonTransferRangeTransaction(transaction, fromMonth, toMonth) &&
       transaction.amount < 0,
   );
+  const spendingEntries = spendingTransactions
+    .map((transaction) => {
+      const lines = toSpendingCategoryLines(transaction);
+      const spendMilliunits = lines.reduce(
+        (sum, line) => sum + line.amountMilliunits,
+        0,
+      );
 
-  for (const transaction of spendingTransactions) {
-    const spendMilliunits = Math.abs(transaction.amount);
-    const categoryId = transaction.categoryId ?? "uncategorized";
-    const categoryName = transaction.categoryName ?? "Uncategorized";
-    const groupName = categoryGroupLookup.get(categoryId) ?? "Uncategorized";
+      return {
+        lines,
+        spendMilliunits,
+        transaction,
+      };
+    })
+    .filter((entry) => entry.spendMilliunits > 0);
+
+  for (const { lines, spendMilliunits, transaction } of spendingEntries) {
     const payeeId = transaction.payeeId ?? "unknown-payee";
     const payeeName = transaction.payeeName ?? "Unknown Payee";
 
-    const categoryRollup = categoryRollups.get(categoryId);
-    if (categoryRollup) {
-      categoryRollup.amountMilliunits += spendMilliunits;
-      categoryRollup.transactionCount += 1;
-    } else {
-      categoryRollups.set(categoryId, {
-        ...(transaction.categoryId ? { id: transaction.categoryId } : {}),
-        name: categoryName,
-        amountMilliunits: spendMilliunits,
-        transactionCount: 1,
-      });
-    }
+    for (const line of lines) {
+      const categoryId = line.categoryId ?? "uncategorized";
+      const categoryName = line.categoryName ?? "Uncategorized";
+      const groupName = categoryGroupLookup.get(categoryId) ?? "Uncategorized";
 
-    const groupRollup = categoryGroupRollups.get(groupName);
-    if (groupRollup) {
-      groupRollup.amountMilliunits += spendMilliunits;
-      groupRollup.transactionCount += 1;
-    } else {
-      categoryGroupRollups.set(groupName, {
-        name: groupName,
-        amountMilliunits: spendMilliunits,
-        transactionCount: 1,
-      });
+      const categoryRollup = categoryRollups.get(categoryId);
+      if (categoryRollup) {
+        categoryRollup.amountMilliunits += line.amountMilliunits;
+        categoryRollup.transactionIds.add(line.transactionId);
+      } else {
+        categoryRollups.set(categoryId, {
+          ...(line.categoryId ? { id: line.categoryId } : {}),
+          name: categoryName,
+          amountMilliunits: line.amountMilliunits,
+          transactionIds: new Set([line.transactionId]),
+        });
+      }
+
+      const groupRollup = categoryGroupRollups.get(groupName);
+      if (groupRollup) {
+        groupRollup.amountMilliunits += line.amountMilliunits;
+        groupRollup.transactionIds.add(line.transactionId);
+      } else {
+        categoryGroupRollups.set(groupName, {
+          name: groupName,
+          amountMilliunits: line.amountMilliunits,
+          transactionIds: new Set([line.transactionId]),
+        });
+      }
     }
 
     const payeeRollup = payeeRollups.get(payeeId);
@@ -1455,8 +1548,8 @@ export async function getSpendingSummary(
     (sum, month) => sum + month.budgeted,
     0,
   );
-  const spentMilliunits = spendingTransactions.reduce(
-    (sum, transaction) => sum + Math.abs(transaction.amount),
+  const spentMilliunits = spendingEntries.reduce(
+    (sum, entry) => sum + entry.spendMilliunits,
     0,
   );
 
@@ -1464,13 +1557,14 @@ export async function getSpendingSummary(
     from_month: fromMonth,
     to_month: toMonth,
     ...buildAssignedSpentSummary(assignedMilliunits, spentMilliunits),
-    transaction_count: spendingTransactions.length,
+    transaction_count: spendingEntries.length,
     average_transaction: formatMilliunits(
-      spendingTransactions.length
-        ? Math.round(spentMilliunits / spendingTransactions.length)
+      spendingEntries.length
+        ? Math.round(spentMilliunits / spendingEntries.length)
         : 0,
     ),
     top_categories: Array.from(categoryRollups.values())
+      .filter((entry) => entry.amountMilliunits > 0)
       .sort(
         (left, right) =>
           right.amountMilliunits - left.amountMilliunits ||
@@ -1482,10 +1576,11 @@ export async function getSpendingSummary(
           id: entry.id,
           name: entry.name,
           amount: formatMilliunits(entry.amountMilliunits),
-          transaction_count: entry.transactionCount,
+          transaction_count: entry.transactionIds.size,
         }),
       ),
     top_category_groups: Array.from(categoryGroupRollups.values())
+      .filter((entry) => entry.amountMilliunits > 0)
       .sort(
         (left, right) =>
           right.amountMilliunits - left.amountMilliunits ||
@@ -1496,7 +1591,7 @@ export async function getSpendingSummary(
         compactObject({
           name: entry.name,
           amount: formatMilliunits(entry.amountMilliunits),
-          transaction_count: entry.transactionCount,
+          transaction_count: entry.transactionIds.size,
         }),
       ),
     top_payees: Array.from(payeeRollups.values())
@@ -1517,7 +1612,7 @@ export async function getSpendingSummary(
     ...(input.detailLevel === "detailed"
       ? {
           example_transactions: toExampleTransactions(
-            spendingTransactions,
+            spendingEntries.map((entry) => entry.transaction),
             topN,
           ),
         }
@@ -1886,17 +1981,25 @@ export async function getIncomeSummary(
   input: FinancialHealthRangeInput,
 ) {
   const topN = resolveTopN(input);
-  const { fromMonth, toMonth, transactions } = await getRangeContext(
+  const { fromMonth, toMonth, months, transactions } = await getRangeContext(
     ynabClient,
     input,
   );
   const incomeTransactions = transactions.filter(
     (transaction) =>
       isNonTransferRangeTransaction(transaction, fromMonth, toMonth) &&
-      transaction.amount > 0,
+      transaction.amount > 0 &&
+      isReadyToAssignIncome(transaction),
+  );
+  const hasSyncedMonthIncome = months.some((month) => month.income !== 0);
+  const syncedIncomeByMonth = new Map(
+    months.map((month) => [month.month, month.income] as const),
   );
   const incomeByMonth = new Map(
-    listMonthsInRange(fromMonth, toMonth).map((month) => [month, 0]),
+    listMonthsInRange(fromMonth, toMonth).map((month) => [
+      month,
+      hasSyncedMonthIncome ? (syncedIncomeByMonth.get(month) ?? 0) : 0,
+    ]),
   );
   const incomeByPayee = new Map<
     string,
@@ -1910,10 +2013,13 @@ export async function getIncomeSummary(
 
   for (const transaction of incomeTransactions) {
     const month = toMonthKey(transaction.date);
-    incomeByMonth.set(
-      month,
-      (incomeByMonth.get(month) ?? 0) + transaction.amount,
-    );
+
+    if (!hasSyncedMonthIncome) {
+      incomeByMonth.set(
+        month,
+        (incomeByMonth.get(month) ?? 0) + transaction.amount,
+      );
+    }
 
     const payeeKey = transaction.payeeId ?? "unknown-payee";
     const current = incomeByPayee.get(payeeKey);
@@ -1994,9 +2100,8 @@ function detectCadence(dates: string[]) {
   const intervals = sortedDates
     .slice(1)
     .map((date, index) => daysUntil(sortedDates[index]!, date));
-  const averageInterval = average(intervals);
 
-  if (averageInterval >= 25 && averageInterval <= 35) {
+  if (intervals.every((interval) => interval >= 25 && interval <= 35)) {
     return "monthly";
   }
 

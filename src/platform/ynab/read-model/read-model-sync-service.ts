@@ -418,7 +418,7 @@ export function createReadModelSyncService(
                   moneyMovements: movements.moneyMovements,
                 },
               ],
-              serverKnowledge: Math.max(
+              serverKnowledge: Math.min(
                 movements.serverKnowledge,
                 groups.serverKnowledge,
               ),

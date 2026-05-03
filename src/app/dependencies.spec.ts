@@ -16,12 +16,17 @@ function createD1Env(overrides: Record<string, unknown> = {}) {
   } as unknown as Env;
 }
 
+function createOkSyncResult() {
+  return {
+    endpointResults: [],
+    profile: "full" as const,
+    status: "ok" as const,
+  };
+}
+
 describe("runScheduledReadModelSync", () => {
   it("builds and runs the read-model sync service for D1 deployments", async () => {
-    const syncReadModel = vi.fn(async () => ({
-      endpointResults: [],
-      status: "ok" as const,
-    }));
+    const syncReadModel = vi.fn(async () => createOkSyncResult());
     const ynabClient = {
       listPlans: vi.fn(),
     };
@@ -60,15 +65,13 @@ describe("runScheduledReadModelSync", () => {
     });
     expect(result).toEqual({
       endpointResults: [],
+      profile: "full",
       status: "ok",
     });
   });
 
   it("discovers the YNAB default plan when no default plan id is configured", async () => {
-    const syncReadModel = vi.fn(async () => ({
-      endpointResults: [],
-      status: "ok" as const,
-    }));
+    const syncReadModel = vi.fn(async () => createOkSyncResult());
     const ynabClient = {
       listPlans: vi.fn(async () => ({
         defaultPlan: {
@@ -103,15 +106,13 @@ describe("runScheduledReadModelSync", () => {
     );
     expect(result).toEqual({
       endpointResults: [],
+      profile: "full",
       status: "ok",
     });
   });
 
   it("falls back to the first YNAB plan when the API does not mark a default", async () => {
-    const syncReadModel = vi.fn(async () => ({
-      endpointResults: [],
-      status: "ok" as const,
-    }));
+    const syncReadModel = vi.fn(async () => createOkSyncResult());
     const ynabClient = {
       listPlans: vi.fn(async () => ({
         defaultPlan: null,

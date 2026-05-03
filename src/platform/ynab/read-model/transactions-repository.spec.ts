@@ -223,6 +223,10 @@ describe("transactions repository", () => {
       "category-2",
       "category-1",
       "category-2",
+      "category-1",
+      "category-2",
+      "category-1",
+      "category-2",
       "%market%",
       -20000,
       -1000,
@@ -237,6 +241,10 @@ describe("transactions repository", () => {
       "2026-04-01",
       "2026-04-30",
       "account-1",
+      "category-1",
+      "category-2",
+      "category-1",
+      "category-2",
       "category-1",
       "category-2",
       "category-1",
@@ -321,8 +329,12 @@ describe("transactions repository", () => {
       planId: "plan-1",
     });
 
-    expect(db.allCalls[0]?.sql).toContain("ABS(amount_milliunits) >= ?");
-    expect(db.allCalls[0]?.sql).toContain("ABS(amount_milliunits) <= ?");
+    expect(db.allCalls[0]?.sql).toContain(
+      "ABS(ynab_transactions.amount_milliunits) >= ?",
+    );
+    expect(db.allCalls[0]?.sql).toContain(
+      "ABS(ynab_transactions.amount_milliunits) <= ?",
+    );
     expect(db.allCalls[0]?.params).toEqual(["plan-1", 100000, 200000]);
   });
 
@@ -347,7 +359,31 @@ describe("transactions repository", () => {
       "plan-1",
       "uncategorized-category-id",
       "uncategorized-category-id",
+      "uncategorized-category-id",
+      "uncategorized-category-id",
     ]);
+  });
+
+  it("matches category filters against split subtransactions", async () => {
+    // DEFECT: category drilldowns can miss split transactions whose parent has no category.
+    const db = new FakeD1Database();
+    db.allResults = [[{ count: 0 }], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.searchTransactions({
+      categoryIds: ["category-1"],
+      limit: 25,
+      planId: "plan-1",
+    });
+
+    const countSql = db.allCalls[0]!.sql;
+    expect(countSql).toContain("ynab_transactions.category_id IN (?)");
+    expect(countSql).toContain("FROM ynab_subtransactions");
+    expect(countSql).toContain("subtransaction_filter.category_id IN (?)");
+    expect(countSql).toContain("subtransaction_filter.category_id IS NULL");
+    expect(countSql).toContain("NOT EXISTS");
   });
 
   it("summarizes all matching transactions without page limits", async () => {
@@ -492,5 +528,51 @@ describe("transactions repository", () => {
     expect(payeeSql).not.toContain(
       "GROUP BY payee_id, COALESCE(payee_name, 'Unknown Payee')",
     );
+  });
+
+  it("rolls up summary categories from split subtransaction lines", async () => {
+    // DEFECT: split parent category totals can miss or misclassify large subtransaction amounts.
+    const db = new FakeD1Database();
+    db.allResults = [[{ inflow_milliunits: 0, outflow_milliunits: 0 }], [], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.summarizeTransactions({
+      planId: "plan-1",
+      topN: 5,
+    });
+
+    const categorySql = db.allCalls[1]!.sql;
+    expect(categorySql).toContain("FROM ynab_subtransactions subtransaction");
+    expect(categorySql).toContain("UNION ALL");
+    expect(categorySql).toContain("NOT EXISTS");
+    expect(categorySql).toContain("COUNT(DISTINCT transaction_id)");
+    expect(categorySql).toContain("subtransaction.category_id");
+  });
+
+  it("keeps category-filtered summary totals and payees scoped to matching split lines", async () => {
+    // DEFECT: category drilldowns can admit a split parent, then summarize the full parent amount.
+    const db = new FakeD1Database();
+    db.allResults = [[{ inflow_milliunits: 0, outflow_milliunits: 0 }], [], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.summarizeTransactions({
+      categoryIds: ["groceries"],
+      planId: "plan-1",
+      topN: 5,
+    });
+
+    const totalsSql = db.allCalls[0]!.sql;
+    const categorySql = db.allCalls[1]!.sql;
+    const payeeSql = db.allCalls[2]!.sql;
+    expect(totalsSql).toContain("FROM transaction_lines");
+    expect(totalsSql).toContain("transaction_lines.category_id IN (?)");
+    expect(payeeSql).toContain("FROM transaction_lines");
+    expect(payeeSql).toContain("transaction_lines.category_id IN (?)");
+    expect(payeeSql).toContain("COUNT(DISTINCT transaction_id)");
+    expect(categorySql).toContain("transaction_lines.category_id IN (?)");
   });
 });

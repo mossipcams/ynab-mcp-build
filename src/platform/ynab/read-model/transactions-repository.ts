@@ -140,36 +140,58 @@ function orderByClause(sort: SearchTransactionsInput["sort"]) {
 function buildSearchWhere(
   input: Omit<SearchTransactionsInput, "limit" | "offset" | "sort">,
 ) {
-  const where = ["plan_id = ?"];
+  const where = ["ynab_transactions.plan_id = ?"];
   const params: Array<string | number> = [input.planId];
 
   if (input.startDate) {
-    where.push("date >= ?");
+    where.push("ynab_transactions.date >= ?");
     params.push(input.startDate);
   }
 
   if (input.endDate) {
-    where.push("date <= ?");
+    where.push("ynab_transactions.date <= ?");
     params.push(input.endDate);
   }
 
   if (!input.includeDeleted) {
-    where.push("deleted = 0");
+    where.push("ynab_transactions.deleted = 0");
   }
 
   if (!input.includeTransfers) {
-    where.push("transfer_account_id IS NULL");
+    where.push("ynab_transactions.transfer_account_id IS NULL");
   }
 
   if (input.accountIds?.length) {
-    where.push(`account_id IN (${placeholders(input.accountIds.length)})`);
+    where.push(
+      `ynab_transactions.account_id IN (${placeholders(input.accountIds.length)})`,
+    );
     params.push(...input.accountIds);
   }
 
   if (input.categoryIds?.length) {
     const categoryPlaceholders = placeholders(input.categoryIds.length);
     where.push(
-      `(category_id IN (${categoryPlaceholders}) OR (category_id IS NULL AND EXISTS (
+      `(ynab_transactions.category_id IN (${categoryPlaceholders})
+       OR EXISTS (
+        SELECT 1
+        FROM ynab_subtransactions subtransaction_filter
+        WHERE subtransaction_filter.plan_id = ynab_transactions.plan_id
+          AND subtransaction_filter.transaction_id = ynab_transactions.id
+          AND subtransaction_filter.deleted = 0
+          AND subtransaction_filter.category_id IN (${categoryPlaceholders})
+        LIMIT 1
+       )
+       OR (
+        ynab_transactions.category_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM ynab_subtransactions subtransaction_filter
+          WHERE subtransaction_filter.plan_id = ynab_transactions.plan_id
+            AND subtransaction_filter.transaction_id = ynab_transactions.id
+            AND subtransaction_filter.deleted = 0
+          LIMIT 1
+        )
+        AND EXISTS (
         SELECT 1
         FROM ynab_categories cat
         WHERE cat.plan_id = ynab_transactions.plan_id
@@ -177,49 +199,72 @@ function buildSearchWhere(
           AND cat.name = 'Uncategorized'
           AND cat.deleted = 0
         LIMIT 1
-      )))`,
+        )
+       )
+       OR EXISTS (
+        SELECT 1
+        FROM ynab_subtransactions subtransaction_filter
+        WHERE subtransaction_filter.plan_id = ynab_transactions.plan_id
+          AND subtransaction_filter.transaction_id = ynab_transactions.id
+          AND subtransaction_filter.deleted = 0
+          AND subtransaction_filter.category_id IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM ynab_categories cat
+            WHERE cat.plan_id = ynab_transactions.plan_id
+              AND cat.id IN (${categoryPlaceholders})
+              AND cat.name = 'Uncategorized'
+              AND cat.deleted = 0
+            LIMIT 1
+          )
+        LIMIT 1
+       ))`,
     );
+    params.push(...input.categoryIds);
+    params.push(...input.categoryIds);
     params.push(...input.categoryIds);
     params.push(...input.categoryIds);
   }
 
   if (input.payeeIds?.length) {
-    where.push(`payee_id IN (${placeholders(input.payeeIds.length)})`);
+    where.push(
+      `ynab_transactions.payee_id IN (${placeholders(input.payeeIds.length)})`,
+    );
     params.push(...input.payeeIds);
   }
 
   if (input.payeeSearch) {
-    where.push("payee_name LIKE ? ESCAPE '\\'");
+    where.push("ynab_transactions.payee_name LIKE ? ESCAPE '\\'");
     params.push(`%${escapeLikePattern(input.payeeSearch)}%`);
   }
 
   if (input.approved !== undefined) {
-    where.push("approved = ?");
+    where.push("ynab_transactions.approved = ?");
     params.push(input.approved ? 1 : 0);
   }
 
   if (input.cleared) {
-    where.push("cleared = ?");
+    where.push("ynab_transactions.cleared = ?");
     params.push(input.cleared);
   }
 
   if (input.minAmountMilliunits !== undefined) {
-    where.push("amount_milliunits >= ?");
+    where.push("ynab_transactions.amount_milliunits >= ?");
     params.push(input.minAmountMilliunits);
   }
 
   if (input.maxAmountMilliunits !== undefined) {
-    where.push("amount_milliunits <= ?");
+    where.push("ynab_transactions.amount_milliunits <= ?");
     params.push(input.maxAmountMilliunits);
   }
 
   if (input.minAbsAmountMilliunits !== undefined) {
-    where.push("ABS(amount_milliunits) >= ?");
+    where.push("ABS(ynab_transactions.amount_milliunits) >= ?");
     params.push(input.minAbsAmountMilliunits);
   }
 
   if (input.maxAbsAmountMilliunits !== undefined) {
-    where.push("ABS(amount_milliunits) <= ?");
+    where.push("ABS(ynab_transactions.amount_milliunits) <= ?");
     params.push(input.maxAbsAmountMilliunits);
   }
 
@@ -227,6 +272,83 @@ function buildSearchWhere(
     params,
     whereClause: where.join(" AND "),
   };
+}
+
+function buildCategoryLineWhere(
+  input: Pick<TransactionSummaryInput, "categoryIds">,
+): { params: Array<string | number>; whereClause: string } {
+  if (!input.categoryIds?.length) {
+    return {
+      params: [],
+      whereClause: "",
+    };
+  }
+
+  const categoryPlaceholders = placeholders(input.categoryIds.length);
+
+  return {
+    params: [...input.categoryIds, ...input.categoryIds],
+    whereClause: ` AND (
+      transaction_lines.category_id IN (${categoryPlaceholders})
+      OR (
+        transaction_lines.category_id IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM ynab_categories cat
+          WHERE cat.plan_id = transaction_lines.plan_id
+            AND cat.id IN (${categoryPlaceholders})
+            AND cat.name = 'Uncategorized'
+            AND cat.deleted = 0
+          LIMIT 1
+        )
+      )
+    )`,
+  };
+}
+
+function buildTransactionLinesCte(searchWhereClause: string) {
+  return `WITH matching_transactions AS (
+             SELECT plan_id,
+                    id,
+                    payee_id,
+                    payee_name,
+                    category_id,
+                    category_name,
+                    amount_milliunits
+             FROM ynab_transactions
+             WHERE ${searchWhereClause}
+           ),
+           transaction_lines AS (
+             SELECT matching_transactions.plan_id,
+                    matching_transactions.id AS transaction_id,
+                    COALESCE(subtransaction.payee_id, matching_transactions.payee_id) AS payee_id,
+                    COALESCE(subtransaction.payee_name, matching_transactions.payee_name) AS payee_name,
+                    subtransaction.category_id,
+                    subtransaction.category_name,
+                    subtransaction.amount_milliunits
+             FROM matching_transactions
+             JOIN ynab_subtransactions subtransaction
+               ON subtransaction.plan_id = matching_transactions.plan_id
+              AND subtransaction.transaction_id = matching_transactions.id
+              AND subtransaction.deleted = 0
+             UNION ALL
+             SELECT matching_transactions.plan_id,
+                    matching_transactions.id AS transaction_id,
+                    matching_transactions.payee_id,
+                    matching_transactions.payee_name,
+                    matching_transactions.category_id,
+                    matching_transactions.category_name,
+                    matching_transactions.amount_milliunits
+             FROM matching_transactions
+             WHERE NOT EXISTS (
+               SELECT 1
+               FROM ynab_subtransactions subtransaction
+               WHERE subtransaction.plan_id = matching_transactions.plan_id
+                 AND subtransaction.transaction_id = matching_transactions.id
+                 AND subtransaction.deleted = 0
+               LIMIT 1
+             )
+           )`;
 }
 
 export function createTransactionsRepository(database: D1Database) {
@@ -442,19 +564,32 @@ export function createTransactionsRepository(database: D1Database) {
       input: TransactionSummaryInput,
     ): Promise<TransactionSummaryResult> {
       const search = buildSearchWhere(input);
+      const categoryLineWhere = buildCategoryLineWhere(input);
+      const transactionLinesCte = buildTransactionLinesCte(search.whereClause);
+      const isLineScopedSummary = categoryLineWhere.whereClause !== "";
       const topN = Math.max(input.topN ?? 5, 1);
       const totalsResultPromise = database
         .prepare(
-          `SELECT COALESCE(SUM(CASE WHEN amount_milliunits >= 0 THEN amount_milliunits ELSE 0 END), 0) AS inflow_milliunits,
+          isLineScopedSummary
+            ? `${transactionLinesCte}
+           SELECT COALESCE(SUM(CASE WHEN amount_milliunits >= 0 THEN amount_milliunits ELSE 0 END), 0) AS inflow_milliunits,
+                  COALESCE(SUM(CASE WHEN amount_milliunits < 0 THEN -amount_milliunits ELSE 0 END), 0) AS outflow_milliunits
+           FROM transaction_lines
+           WHERE 1 = 1${categoryLineWhere.whereClause}`
+            : `SELECT COALESCE(SUM(CASE WHEN amount_milliunits >= 0 THEN amount_milliunits ELSE 0 END), 0) AS inflow_milliunits,
                   COALESCE(SUM(CASE WHEN amount_milliunits < 0 THEN -amount_milliunits ELSE 0 END), 0) AS outflow_milliunits
            FROM ynab_transactions
            WHERE ${search.whereClause}`,
         )
-        .bind(...search.params)
+        .bind(
+          ...search.params,
+          ...(isLineScopedSummary ? categoryLineWhere.params : []),
+        )
         .all<TransactionTotalsRow>();
       const categoryResultPromise = database
         .prepare(
-          `SELECT rollup.category_id,
+          `${transactionLinesCte}
+           SELECT rollup.category_id,
                   COALESCE(category.name, rollup.name, 'Uncategorized') AS name,
                   rollup.amount_milliunits,
                   rollup.transaction_count
@@ -463,7 +598,7 @@ export function createTransactionsRepository(database: D1Database) {
                     MAX(category_id) AS category_id,
                     MIN(category_name) AS name,
                     COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
-                    COUNT(*) AS transaction_count
+                    COUNT(DISTINCT transaction_id) AS transaction_count
              FROM (
                SELECT CASE
                         WHEN category_id IS NOT NULL THEN 'id:' || category_id
@@ -473,9 +608,10 @@ export function createTransactionsRepository(database: D1Database) {
                       plan_id,
                       category_id,
                       category_name,
-                      amount_milliunits
-               FROM ynab_transactions
-               WHERE ${search.whereClause} AND amount_milliunits < 0
+                      amount_milliunits,
+                      transaction_id
+               FROM transaction_lines
+               WHERE amount_milliunits < 0${categoryLineWhere.whereClause}
              )
              GROUP BY category_key
            ) rollup
@@ -486,11 +622,45 @@ export function createTransactionsRepository(database: D1Database) {
            ORDER BY rollup.amount_milliunits DESC, name ASC
            LIMIT ?`,
         )
-        .bind(...search.params, topN)
+        .bind(...search.params, ...categoryLineWhere.params, topN)
         .all<TransactionRollupRow>();
       const payeeResultPromise = database
         .prepare(
-          `SELECT rollup.payee_id,
+          isLineScopedSummary
+            ? `${transactionLinesCte}
+           SELECT rollup.payee_id,
+                  COALESCE(payee.name, rollup.name, 'Unknown Payee') AS name,
+                  rollup.amount_milliunits,
+                  rollup.transaction_count
+           FROM (
+             SELECT MAX(plan_id) AS plan_id,
+                    MAX(payee_id) AS payee_id,
+                    MIN(payee_name) AS name,
+                    COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
+                    COUNT(DISTINCT transaction_id) AS transaction_count
+             FROM (
+               SELECT CASE
+                        WHEN payee_id IS NOT NULL THEN 'id:' || payee_id
+                        WHEN payee_name IS NOT NULL THEN 'name:' || payee_name
+                        ELSE 'none:unknown'
+                      END AS payee_key,
+                      plan_id,
+                      payee_id,
+                      payee_name,
+                      amount_milliunits,
+                      transaction_id
+               FROM transaction_lines
+               WHERE amount_milliunits < 0${categoryLineWhere.whereClause}
+             )
+             GROUP BY payee_key
+           ) rollup
+           LEFT JOIN ynab_payees payee
+             ON payee.plan_id = rollup.plan_id
+            AND payee.id = rollup.payee_id
+            AND payee.deleted = 0
+           ORDER BY rollup.amount_milliunits DESC, name ASC
+           LIMIT ?`
+            : `SELECT rollup.payee_id,
                   COALESCE(payee.name, rollup.name, 'Unknown Payee') AS name,
                   rollup.amount_milliunits,
                   rollup.transaction_count
@@ -522,7 +692,11 @@ export function createTransactionsRepository(database: D1Database) {
            ORDER BY rollup.amount_milliunits DESC, name ASC
            LIMIT ?`,
         )
-        .bind(...search.params, topN)
+        .bind(
+          ...search.params,
+          ...(isLineScopedSummary ? categoryLineWhere.params : []),
+          topN,
+        )
         .all<TransactionRollupRow>();
       const [totalsResult, categoryResult, payeeResult] = await Promise.all([
         totalsResultPromise,

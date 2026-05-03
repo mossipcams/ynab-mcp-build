@@ -43,10 +43,17 @@ describe("collection helpers", () => {
         fc.option(fc.integer({ min: -50, max: 250 }), { nil: undefined }),
         fc.option(fc.integer({ min: -50, max: 250 }), { nil: undefined }),
         (entries, limitInput, offsetInput) => {
-          const result = paginateEntries(entries, {
-            limit: limitInput,
-            offset: offsetInput,
-          });
+          const paginationOptions: { limit?: number; offset?: number } = {};
+
+          if (limitInput !== undefined) {
+            paginationOptions.limit = limitInput;
+          }
+
+          if (offsetInput !== undefined) {
+            paginationOptions.offset = offsetInput;
+          }
+
+          const result = paginateEntries(entries, paginationOptions);
           const expectedLimit = Math.max(
             Math.trunc(limitInput ?? DEFAULT_LIMIT),
             1,
