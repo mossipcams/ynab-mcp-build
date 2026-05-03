@@ -8,7 +8,11 @@ type ToolCallValidationResult =
       response: Response;
     }
   | {
-      kind: "not_tool_call" | "valid";
+      kind: "not_tool_call";
+    }
+  | {
+      definition: SliceToolDefinition;
+      kind: "valid";
     };
 
 const JsonRpcIdSchema = z.union([z.string(), z.number(), z.null()]);
@@ -131,5 +135,8 @@ export function validateToolCallRequest(
     };
   }
 
-  return { kind: "valid" };
+  return {
+    definition: matchingDefinition,
+    kind: "valid",
+  };
 }

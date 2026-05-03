@@ -217,9 +217,13 @@ export function registerMcpRoutes(
       }
 
       const requestOptions = parsedBody !== undefined ? { parsedBody } : {};
+      const mcpToolDefinitions =
+        validation.kind === "valid"
+          ? [validation.definition]
+          : registeredToolDefinitions;
       const response = await handleMcpHttpRequest(
         env,
-        registeredToolDefinitions,
+        mcpToolDefinitions,
         context.req.raw,
         requestOptions,
       );
