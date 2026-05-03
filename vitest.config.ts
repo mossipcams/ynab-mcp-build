@@ -20,6 +20,7 @@ const unitIncludes = [
 const workersIncludes = [
   "src/app/dependencies.spec.ts",
   "src/http/routes/mcp.spec.ts",
+  "src/http/routes/mcp-sdk-path.spec.ts",
   "src/http/routes/oauth.spec.ts",
   "src/index.oauth-provider.spec.ts",
   "src/shared/env.oauth-provider.spec.ts",
