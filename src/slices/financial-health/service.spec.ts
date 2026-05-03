@@ -14,6 +14,7 @@ import {
   getMonthlyReview,
   getNetWorthTrajectory,
   getRecurringExpenseSummary,
+  getSpendingSummary,
   getSpendingAnomalies,
   getUpcomingObligations,
 } from "./service.js";
@@ -146,6 +147,112 @@ describe("financial health service", () => {
           id: "rent-category",
           name: "Rent",
           amount: "100.00",
+          transaction_count: 1,
+        },
+      ],
+    });
+  });
+
+  it("rolls spending summary categories up from split subtransactions", async () => {
+    // DEFECT: split parent transactions with no category can hide large spending in top category summaries.
+    const ynabClient = {
+      listCategories: async () => [
+        {
+          id: "food-group",
+          name: "Food",
+          deleted: false,
+          hidden: false,
+          categories: [
+            {
+              id: "groceries",
+              name: "Groceries",
+              deleted: false,
+              hidden: false,
+            },
+          ],
+        },
+        {
+          id: "home-group",
+          name: "Home",
+          deleted: false,
+          hidden: false,
+          categories: [
+            {
+              id: "household",
+              name: "Household",
+              deleted: false,
+              hidden: false,
+            },
+          ],
+        },
+      ],
+      listPlanMonths: async () => [
+        {
+          month: "2026-05-01",
+          budgeted: 120000,
+          activity: -100000,
+          deleted: false,
+        },
+      ],
+      listTransactions: async () => [
+        {
+          id: "split-target",
+          date: "2026-05-12",
+          amount: -100000,
+          payeeName: "Target",
+          deleted: false,
+          subtransactions: [
+            {
+              id: "split-groceries",
+              amount: -30000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+            },
+            {
+              id: "split-household",
+              amount: -70000,
+              categoryId: "household",
+              categoryName: "Household",
+              deleted: false,
+            },
+          ],
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingSummary(ynabClient, {
+        fromMonth: "2026-05-01",
+        planId: "plan-1",
+        toMonth: "2026-05-01",
+      }),
+    ).resolves.toMatchObject({
+      spent: "100.00",
+      transaction_count: 1,
+      top_categories: [
+        {
+          id: "household",
+          name: "Household",
+          amount: "70.00",
+          transaction_count: 1,
+        },
+        {
+          id: "groceries",
+          name: "Groceries",
+          amount: "30.00",
+          transaction_count: 1,
+        },
+      ],
+      top_category_groups: [
+        {
+          name: "Home",
+          amount: "70.00",
+          transaction_count: 1,
+        },
+        {
+          name: "Food",
+          amount: "30.00",
           transaction_count: 1,
         },
       ],
@@ -969,6 +1076,73 @@ describe("financial health service", () => {
     ]);
   });
 
+  it("rejects recurring expenses whose monthly cadence only matches on average", async () => {
+    // DEFECT: irregular purchase dates can average to monthly and create false recurring bills.
+    const ynabClient = {
+      listTransactions: async () => [
+        {
+          id: "rent-jan",
+          amount: -100000,
+          date: "2026-01-01",
+          deleted: false,
+          payeeId: "rent",
+          payeeName: "Rent",
+        },
+        {
+          id: "rent-feb",
+          amount: -100000,
+          date: "2026-02-01",
+          deleted: false,
+          payeeId: "rent",
+          payeeName: "Rent",
+        },
+        {
+          id: "rent-mar",
+          amount: -100000,
+          date: "2026-03-01",
+          deleted: false,
+          payeeId: "rent",
+          payeeName: "Rent",
+        },
+        {
+          id: "travel-jan",
+          amount: -900000,
+          date: "2026-01-01",
+          deleted: false,
+          payeeId: "travel",
+          payeeName: "Travel",
+        },
+        {
+          id: "travel-feb",
+          amount: -900000,
+          date: "2026-02-20",
+          deleted: false,
+          payeeId: "travel",
+          payeeName: "Travel",
+        },
+        {
+          id: "travel-mar",
+          amount: -900000,
+          date: "2026-03-05",
+          deleted: false,
+          payeeId: "travel",
+          payeeName: "Travel",
+        },
+      ],
+    } as unknown as YnabClient;
+
+    const summary = await getRecurringExpenseSummary(ynabClient, {
+      fromDate: "2026-01-01",
+      planId: "plan-1",
+      toDate: "2026-03-31",
+      topN: 10,
+    });
+
+    expect(
+      summary.recurring_expenses.map((expense) => expense.payee_name),
+    ).toEqual(["Rent"]);
+  });
+
   it("returns a neutral digest for a quiet month", async () => {
     // DEFECT: digest can hallucinate financial concerns when synced data has no notable changes.
     const ynabClient = {
@@ -1672,6 +1846,154 @@ describe("financial health service", () => {
     ).resolves.toMatchObject({
       average_monthly_income: "5311.25",
       median_monthly_income: "5181.32",
+    });
+  });
+
+  it("uses month income totals and excludes reimbursements from income sources", async () => {
+    // DEFECT: positive category reimbursements can inflate income totals and source rankings.
+    const ynabClient = {
+      listPlanMonths: async () => [
+        {
+          month: "2026-05-01",
+          income: 300000,
+          budgeted: 0,
+          activity: 0,
+          deleted: false,
+        },
+      ],
+      listTransactions: async () => [
+        {
+          id: "payroll",
+          date: "2026-05-15",
+          amount: 300000,
+          payeeId: "employer",
+          payeeName: "Employer",
+          categoryName: "Inflow: Ready to Assign",
+          deleted: false,
+        },
+        {
+          id: "dining-refund",
+          date: "2026-05-16",
+          amount: 50000,
+          payeeId: "restaurant",
+          payeeName: "Restaurant Refund",
+          categoryId: "dining",
+          categoryName: "Dining",
+          deleted: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getIncomeSummary(ynabClient, {
+        fromMonth: "2026-05-01",
+        planId: "plan-1",
+        toMonth: "2026-05-01",
+      }),
+    ).resolves.toMatchObject({
+      income_total: "300.00",
+      average_monthly_income: "300.00",
+      top_income_sources: [
+        {
+          id: "employer",
+          name: "Employer",
+          amount: "300.00",
+          transaction_count: 1,
+        },
+      ],
+      months: [
+        {
+          month: "2026-05-01",
+          income: "300.00",
+        },
+      ],
+    });
+  });
+
+  it("nets positive split subtransaction lines in spending summary category rollups", async () => {
+    // DEFECT: split-line returns can make top category totals exceed the net spent total.
+    const ynabClient = {
+      listCategories: async () => [
+        {
+          id: "food-group",
+          name: "Food",
+          deleted: false,
+          hidden: false,
+          categories: [
+            {
+              id: "groceries",
+              name: "Groceries",
+              deleted: false,
+              hidden: false,
+            },
+          ],
+        },
+      ],
+      listPlanMonths: async () => [
+        {
+          month: "2026-05-01",
+          budgeted: 100000,
+          activity: -70000,
+          deleted: false,
+        },
+      ],
+      listTransactions: async () => [
+        {
+          id: "split-return",
+          date: "2026-05-12",
+          amount: -70000,
+          payeeName: "Market",
+          deleted: false,
+          subtransactions: [
+            {
+              id: "split-purchase",
+              amount: -100000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+            },
+            {
+              id: "split-return-line",
+              amount: 30000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+            },
+          ],
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingSummary(ynabClient, {
+        fromMonth: "2026-05-01",
+        planId: "plan-1",
+        toMonth: "2026-05-01",
+      }),
+    ).resolves.toMatchObject({
+      spent: "70.00",
+      top_categories: [
+        {
+          id: "groceries",
+          name: "Groceries",
+          amount: "70.00",
+          transaction_count: 1,
+        },
+      ],
+      top_category_groups: [
+        {
+          name: "Food",
+          amount: "70.00",
+          transaction_count: 1,
+        },
+      ],
+      top_payees: [
+        {
+          name: "Market",
+          amount: "70.00",
+          transaction_count: 1,
+        },
+      ],
     });
   });
 });

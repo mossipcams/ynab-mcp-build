@@ -789,7 +789,7 @@ describe("read-model sync service", () => {
         endpoint: "money_movements",
         rowsDeleted: 0,
         rowsUpserted: 2,
-        serverKnowledge: 209,
+        serverKnowledge: 208,
       }),
     );
     expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
@@ -916,7 +916,7 @@ describe("read-model sync service", () => {
     expect(syncStateRepository.advanceCursor).toHaveBeenCalledWith(
       expect.objectContaining({
         endpoint: "money_movements",
-        serverKnowledge: 55,
+        serverKnowledge: 50,
       }),
     );
   });
