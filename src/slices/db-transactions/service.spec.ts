@@ -194,7 +194,7 @@ describe("DB-backed transaction service", () => {
           to_date: "2026-04-30",
         },
         has_more: false,
-        limit: 999,
+        limit: 500,
         match_count: 1,
         offset: 0,
         returned_count: 1,

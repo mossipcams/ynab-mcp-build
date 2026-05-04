@@ -75,9 +75,7 @@ export function registerOAuthHttpRoutes(
 
       if (env.accessOidc) {
         const state = crypto.randomUUID();
-        const kv =
-          env.oauthKvNamespace ??
-          (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
+        const kv = env.oauthKvNamespace;
         const accessEndpoints = await resolveAccessOidcEndpoints({
           config: env.accessOidc,
           fetch: accessOidcFetch,
@@ -143,9 +141,7 @@ export function registerOAuthHttpRoutes(
     }
 
     try {
-      const kv =
-        env.oauthKvNamespace ??
-        (context.env as { OAUTH_KV?: KVNamespace }).OAUTH_KV;
+      const kv = env.oauthKvNamespace;
       const accessEndpoints = await resolveAccessOidcEndpoints({
         config: env.accessOidc,
         fetch: accessOidcFetch,

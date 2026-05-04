@@ -374,34 +374,38 @@ export function createOAuthCore(options: CreateOAuthCoreOptions) {
   }
 
   async function refreshAccessToken(input: RefreshTokenExchangeInput) {
-    const rotation = await options.store.rotateRefreshToken(input.refreshToken);
+    const resource = validateResource(
+      input.resource ?? options.protectedResource,
+      options.protectedResource,
+    );
+    const rotation = await options.store.rotateRefreshToken({
+      clientId: input.clientId,
+      now: options.now(),
+      resource,
+      token: input.refreshToken,
+    });
 
     if (rotation.status !== "rotated") {
       if (rotation.status === "not_found") {
         throw new Error("Refresh token is invalid or has already been used.");
       }
 
+      if (rotation.status === "expired") {
+        throw new Error("Refresh token has expired.");
+      }
+
+      if (rotation.status === "invalid_client") {
+        throw new Error("Refresh token does not belong to this client.");
+      }
+
+      if (rotation.status === "invalid_resource") {
+        throw new Error("resource does not match the refresh token.");
+      }
+
       throw new Error("Refresh token replay detected; token family revoked.");
     }
 
     const refreshToken = rotation.record;
-
-    if (refreshToken.expiresAt <= options.now()) {
-      throw new Error("Refresh token has expired.");
-    }
-
-    if (refreshToken.clientId !== input.clientId) {
-      throw new Error("Refresh token does not belong to this client.");
-    }
-
-    const resource = validateResource(
-      input.resource ?? refreshToken.resource,
-      options.protectedResource,
-    );
-
-    if (refreshToken.resource !== resource) {
-      throw new Error("resource does not match the refresh token.");
-    }
 
     const accessToken = await createAccessTokenRecord(options, {
       clientId: refreshToken.clientId,

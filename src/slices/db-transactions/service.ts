@@ -331,6 +331,10 @@ function formatTransactionSummary(summary: TransactionSummaryResult) {
   };
 }
 
+function resolveOffset(offset: number | undefined) {
+  return Math.max(offset ?? 0, 0);
+}
+
 function buildTransactionCollectionResult(
   rows: TransactionSearchRow[],
   totalCount: number,
@@ -352,14 +356,14 @@ function buildTransactionCollectionResult(
     };
   }
 
-  const offset = Math.max(input.offset ?? 0, 0);
-  const requestedLimit = Math.max(input.limit ?? DEFAULT_LIMIT, 1);
+  const offset = resolveOffset(input.offset);
+  const effectiveLimit = resolveLimit(input.limit);
 
   return {
     transactions,
     match_count: totalCount,
     offset,
-    limit: requestedLimit,
+    limit: effectiveLimit,
     returned_count: rows.length,
     has_more: offset + rows.length < totalCount,
     ...extra,
@@ -416,7 +420,7 @@ export async function searchTransactions(
     await dependencies.transactionsRepository.searchTransactions({
       ...repositoryFilters,
       limit: resolveLimit(input.limit),
-      offset: Math.max(input.offset ?? 0, 0),
+      offset: resolveOffset(input.offset),
       ...(input.sort ? { sort: input.sort } : {}),
     });
   const sort = input.sort ?? "date_desc";

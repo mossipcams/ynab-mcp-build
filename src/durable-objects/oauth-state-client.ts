@@ -81,7 +81,13 @@ const OAuthRefreshTokenRotationResultSchema = z.discriminatedUnion("status", [
   z
     .object({
       record: OAuthRefreshTokenSchema.optional(),
-      status: z.union([z.literal("not_found"), z.literal("replay_detected")]),
+      status: z.union([
+        z.literal("expired"),
+        z.literal("invalid_client"),
+        z.literal("invalid_resource"),
+        z.literal("not_found"),
+        z.literal("replay_detected"),
+      ]),
     })
     .transform((result) => {
       if (result.record === undefined) {
@@ -206,9 +212,18 @@ export function createDurableObjectOAuthStore(fetcher: FetchLike): OAuthStore {
     async registerClient(record) {
       await postJson(fetcher, "/clients", record);
     },
-    async rotateRefreshToken(token) {
+    async rotateRefreshToken(input) {
+      const payload =
+        typeof input === "string"
+          ? { token: input }
+          : {
+              clientId: input.clientId,
+              now: input.now,
+              resource: input.resource,
+              token: input.token,
+            };
       const response = await postJson(fetcher, "/refresh-tokens/rotate", {
-        token,
+        ...payload,
       });
 
       return readJsonResponse(response, OAuthRefreshTokenRotationResultSchema);
