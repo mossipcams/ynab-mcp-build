@@ -306,6 +306,14 @@ function buildCategoryLineWhere(
   };
 }
 
+function buildTransferLineWhere(
+  input: Pick<TransactionSummaryInput, "includeTransfers">,
+) {
+  return input.includeTransfers
+    ? ""
+    : " AND transaction_lines.transfer_account_id IS NULL";
+}
+
 function buildTransactionLinesCte(searchWhereClause: string) {
   return `WITH matching_transactions AS (
              SELECT plan_id,
@@ -314,6 +322,7 @@ function buildTransactionLinesCte(searchWhereClause: string) {
                     payee_name,
                     category_id,
                     category_name,
+                    transfer_account_id,
                     amount_milliunits
              FROM ynab_transactions
              WHERE ${searchWhereClause}
@@ -325,6 +334,7 @@ function buildTransactionLinesCte(searchWhereClause: string) {
                     COALESCE(subtransaction.payee_name, matching_transactions.payee_name) AS payee_name,
                     subtransaction.category_id,
                     subtransaction.category_name,
+                    subtransaction.transfer_account_id,
                     subtransaction.amount_milliunits
              FROM matching_transactions
              JOIN ynab_subtransactions subtransaction
@@ -338,6 +348,7 @@ function buildTransactionLinesCte(searchWhereClause: string) {
                     matching_transactions.payee_name,
                     matching_transactions.category_id,
                     matching_transactions.category_name,
+                    matching_transactions.transfer_account_id,
                     matching_transactions.amount_milliunits
              FROM matching_transactions
              WHERE NOT EXISTS (
@@ -346,7 +357,6 @@ function buildTransactionLinesCte(searchWhereClause: string) {
                WHERE subtransaction.plan_id = matching_transactions.plan_id
                  AND subtransaction.transaction_id = matching_transactions.id
                  AND subtransaction.deleted = 0
-               LIMIT 1
              )
            )`;
 }
@@ -601,26 +611,19 @@ export function createTransactionsRepository(database: D1Database) {
     ): Promise<TransactionSummaryResult> {
       const search = buildSearchWhere(input);
       const categoryLineWhere = buildCategoryLineWhere(input);
+      const transferLineWhere = buildTransferLineWhere(input);
+      const lineWhereClause = `${transferLineWhere}${categoryLineWhere.whereClause}`;
       const transactionLinesCte = buildTransactionLinesCte(search.whereClause);
-      const isLineScopedSummary = categoryLineWhere.whereClause !== "";
       const topN = Math.max(input.topN ?? 5, 1);
       const totalsResultPromise = database
         .prepare(
-          isLineScopedSummary
-            ? `${transactionLinesCte}
+          `${transactionLinesCte}
            SELECT COALESCE(SUM(CASE WHEN amount_milliunits >= 0 THEN amount_milliunits ELSE 0 END), 0) AS inflow_milliunits,
                   COALESCE(SUM(CASE WHEN amount_milliunits < 0 THEN -amount_milliunits ELSE 0 END), 0) AS outflow_milliunits
            FROM transaction_lines
-           WHERE 1 = 1${categoryLineWhere.whereClause}`
-            : `SELECT COALESCE(SUM(CASE WHEN amount_milliunits >= 0 THEN amount_milliunits ELSE 0 END), 0) AS inflow_milliunits,
-                  COALESCE(SUM(CASE WHEN amount_milliunits < 0 THEN -amount_milliunits ELSE 0 END), 0) AS outflow_milliunits
-           FROM ynab_transactions
-           WHERE ${search.whereClause}`,
+           WHERE 1 = 1${lineWhereClause}`,
         )
-        .bind(
-          ...search.params,
-          ...(isLineScopedSummary ? categoryLineWhere.params : []),
-        )
+        .bind(...search.params, ...categoryLineWhere.params)
         .all<TransactionTotalsRow>();
       const categoryResultPromise = database
         .prepare(
@@ -647,7 +650,7 @@ export function createTransactionsRepository(database: D1Database) {
                       amount_milliunits,
                       transaction_id
                FROM transaction_lines
-               WHERE amount_milliunits < 0${categoryLineWhere.whereClause}
+               WHERE amount_milliunits < 0${lineWhereClause}
              )
              GROUP BY category_key
            ) rollup
@@ -662,8 +665,7 @@ export function createTransactionsRepository(database: D1Database) {
         .all<TransactionRollupRow>();
       const payeeResultPromise = database
         .prepare(
-          isLineScopedSummary
-            ? `${transactionLinesCte}
+          `${transactionLinesCte}
            SELECT rollup.payee_id,
                   COALESCE(payee.name, rollup.name, 'Unknown Payee') AS name,
                   rollup.amount_milliunits,
@@ -686,53 +688,18 @@ export function createTransactionsRepository(database: D1Database) {
                       amount_milliunits,
                       transaction_id
                FROM transaction_lines
-               WHERE amount_milliunits < 0${categoryLineWhere.whereClause}
+               WHERE amount_milliunits < 0${lineWhereClause}
              )
              GROUP BY payee_key
            ) rollup
            LEFT JOIN ynab_payees payee
              ON payee.plan_id = rollup.plan_id
-            AND payee.id = rollup.payee_id
-            AND payee.deleted = 0
-           ORDER BY rollup.amount_milliunits DESC, name ASC
-           LIMIT ?`
-            : `SELECT rollup.payee_id,
-                  COALESCE(payee.name, rollup.name, 'Unknown Payee') AS name,
-                  rollup.amount_milliunits,
-                  rollup.transaction_count
-           FROM (
-             SELECT MAX(plan_id) AS plan_id,
-                    MAX(payee_id) AS payee_id,
-                    MIN(payee_name) AS name,
-                    COALESCE(SUM(-amount_milliunits), 0) AS amount_milliunits,
-                    COUNT(*) AS transaction_count
-             FROM (
-               SELECT CASE
-                        WHEN payee_id IS NOT NULL THEN 'id:' || payee_id
-                        WHEN payee_name IS NOT NULL THEN 'name:' || payee_name
-                        ELSE 'none:unknown'
-                      END AS payee_key,
-                      plan_id,
-                      payee_id,
-                      payee_name,
-                      amount_milliunits
-               FROM ynab_transactions
-               WHERE ${search.whereClause} AND amount_milliunits < 0
-             )
-             GROUP BY payee_key
-           ) rollup
-           LEFT JOIN ynab_payees payee
-             ON payee.plan_id = rollup.plan_id
-            AND payee.id = rollup.payee_id
-            AND payee.deleted = 0
+             AND payee.id = rollup.payee_id
+             AND payee.deleted = 0
            ORDER BY rollup.amount_milliunits DESC, name ASC
            LIMIT ?`,
         )
-        .bind(
-          ...search.params,
-          ...(isLineScopedSummary ? categoryLineWhere.params : []),
-          topN,
-        )
+        .bind(...search.params, ...categoryLineWhere.params, topN)
         .all<TransactionRollupRow>();
       const [totalsResult, categoryResult, payeeResult] = await Promise.all([
         totalsResultPromise,

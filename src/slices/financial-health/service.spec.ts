@@ -153,6 +153,123 @@ describe("financial health service", () => {
     });
   });
 
+  it("rolls monthly review spending categories up from split subtransactions", async () => {
+    // DEFECT: monthly review can report split parent spending as Uncategorized instead of the real split categories.
+    const ynabClient = {
+      getPlanMonth: async () => ({
+        month: "2026-05-01",
+        income: 300000,
+        budgeted: 120000,
+        activity: -100000,
+        toBeBudgeted: 0,
+        categories: [],
+      }),
+      listTransactions: async () => [
+        {
+          id: "split-target",
+          date: "2026-05-12",
+          amount: -100000,
+          payeeName: "Target",
+          deleted: false,
+          subtransactions: [
+            {
+              id: "split-groceries",
+              amount: -30000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+            },
+            {
+              id: "split-household",
+              amount: -70000,
+              categoryId: "household",
+              categoryName: "Household",
+              deleted: false,
+            },
+          ],
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getMonthlyReview(ynabClient, {
+        month: "2026-05-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      spent: "100.00",
+      top_spending_categories: [
+        {
+          id: "household",
+          name: "Household",
+          amount: "70.00",
+          transaction_count: 1,
+        },
+        {
+          id: "groceries",
+          name: "Groceries",
+          amount: "30.00",
+          transaction_count: 1,
+        },
+      ],
+    });
+  });
+
+  it("counts one monthly review transaction when multiple split lines share a category", async () => {
+    // DEFECT: same-category split lines can inflate monthly review transaction counts.
+    const ynabClient = {
+      getPlanMonth: async () => ({
+        month: "2026-05-01",
+        income: 300000,
+        budgeted: 120000,
+        activity: -100000,
+        toBeBudgeted: 0,
+        categories: [],
+      }),
+      listTransactions: async () => [
+        {
+          id: "split-market",
+          date: "2026-05-12",
+          amount: -100000,
+          payeeName: "Market",
+          deleted: false,
+          subtransactions: [
+            {
+              id: "split-groceries-a",
+              amount: -30000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+            },
+            {
+              id: "split-groceries-b",
+              amount: -70000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+            },
+          ],
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getMonthlyReview(ynabClient, {
+        month: "2026-05-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      top_spending_categories: [
+        {
+          id: "groceries",
+          name: "Groceries",
+          amount: "100.00",
+          transaction_count: 1,
+        },
+      ],
+    });
+  });
+
   it("rolls spending summary categories up from split subtransactions", async () => {
     // DEFECT: split parent transactions with no category can hide large spending in top category summaries.
     const ynabClient = {

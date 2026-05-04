@@ -602,6 +602,35 @@ describe("transactions repository", () => {
     expect(categorySql).toContain("subtransaction.category_id");
   });
 
+  it("excludes transfer subtransaction lines from default summaries", async () => {
+    // DEFECT: split transfer lines can inflate DB-backed totals and rollups even when includeTransfers is false.
+    const db = new FakeD1Database();
+    db.allResults = [[{ inflow_milliunits: 0, outflow_milliunits: 0 }], [], []];
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.summarizeTransactions({
+      includeTransfers: false,
+      planId: "plan-1",
+      topN: 5,
+    });
+
+    const totalsSql = db.allCalls[0]!.sql;
+    const categorySql = db.allCalls[1]!.sql;
+    const payeeSql = db.allCalls[2]!.sql;
+    expect(categorySql).toContain("subtransaction.transfer_account_id");
+    expect(categorySql).toContain("matching_transactions.transfer_account_id");
+    expect(totalsSql).toContain("FROM transaction_lines");
+    expect(totalsSql).toContain(
+      "transaction_lines.transfer_account_id IS NULL",
+    );
+    expect(categorySql).toContain(
+      "transaction_lines.transfer_account_id IS NULL",
+    );
+    expect(payeeSql).toContain("transaction_lines.transfer_account_id IS NULL");
+  });
+
   it("keeps category-filtered summary totals and payees scoped to matching split lines", async () => {
     // DEFECT: category drilldowns can admit a split parent, then summarize the full parent amount.
     const db = new FakeD1Database();
