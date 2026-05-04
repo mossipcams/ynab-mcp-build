@@ -30,7 +30,23 @@ type CountRow = {
   count: number;
 };
 
+const SUBTRANSACTION_QUERY_BATCH_SIZE = 99;
+
 const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
+
+function sqlPlaceholders(count: number) {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function chunkValues<T>(values: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+
+  return chunks;
+}
 
 type UserRow = {
   id: string;
@@ -466,6 +482,81 @@ export function createYnabReadModelClient(
     );
   }
 
+  async function listSubtransactionRowsByTransactionIds(
+    planId: string,
+    transactionIds: string[],
+  ) {
+    const rows: SubtransactionRow[] = [];
+
+    for (const batch of chunkValues(
+      transactionIds,
+      SUBTRANSACTION_QUERY_BATCH_SIZE,
+    )) {
+      rows.push(
+        ...(await all<SubtransactionRow>(
+          `SELECT id,
+                  transaction_id,
+                  amount_milliunits,
+                  memo,
+                  payee_id,
+                  payee_name,
+                  category_id,
+                  category_name,
+                  transfer_account_id,
+                  transfer_transaction_id,
+                  deleted
+           FROM ynab_subtransactions
+           WHERE plan_id = ? AND transaction_id IN (${sqlPlaceholders(
+             batch.length,
+           )})
+           ORDER BY transaction_id, id`,
+          planId,
+          ...batch,
+        )),
+      );
+    }
+
+    return rows;
+  }
+
+  async function hydrateTransactionRows(
+    planId: string,
+    rows: TransactionRow[],
+  ) {
+    const subtransactionRows = await listSubtransactionRowsByTransactionIds(
+      planId,
+      rows.map((row) => row.id),
+    );
+    const subtransactionsByTransactionId = new Map<
+      string,
+      NonNullable<YnabTransaction["subtransactions"]>
+    >();
+
+    for (const row of subtransactionRows) {
+      if (!row.transaction_id) {
+        continue;
+      }
+
+      const subtransactions =
+        subtransactionsByTransactionId.get(row.transaction_id) ?? [];
+
+      subtransactions.push(toSubtransaction(row));
+      subtransactionsByTransactionId.set(row.transaction_id, subtransactions);
+    }
+
+    return rows.map((row) => {
+      const transaction = toTransaction(row);
+      const subtransactions = subtransactionsByTransactionId.get(
+        transaction.id,
+      );
+
+      return compact({
+        ...transaction,
+        subtransactions: subtransactions?.length ? subtransactions : undefined,
+      });
+    });
+  }
+
   return {
     async getUser(): Promise<YnabUser> {
       const row = first(
@@ -813,27 +904,45 @@ export function createYnabReadModelClient(
         ...(toDate ? [toDate] : []),
       ];
 
-      return (await listTransactionRows(planId, where, params)).map(
-        toTransaction,
+      return hydrateTransactionRows(
+        planId,
+        await listTransactionRows(planId, where, params),
       );
     },
 
     async listTransactionsByAccount(planId: string, accountId: string) {
-      return (
-        await listTransactionRows(planId, ["account_id = ?"], [accountId])
-      ).map(toTransaction);
+      return hydrateTransactionRows(
+        planId,
+        await listTransactionRows(planId, ["account_id = ?"], [accountId]),
+      );
     },
 
     async listTransactionsByCategory(planId: string, categoryId: string) {
-      return (
-        await listTransactionRows(planId, ["category_id = ?"], [categoryId])
-      ).map(toTransaction);
+      return hydrateTransactionRows(
+        planId,
+        await listTransactionRows(
+          planId,
+          [
+            `(category_id = ? OR EXISTS (
+              SELECT 1
+              FROM ynab_subtransactions subtransaction_filter
+              WHERE subtransaction_filter.plan_id = ynab_transactions.plan_id
+                AND subtransaction_filter.transaction_id = ynab_transactions.id
+                AND subtransaction_filter.deleted = 0
+                AND subtransaction_filter.category_id = ?
+              LIMIT 1
+            ))`,
+          ],
+          [categoryId, categoryId],
+        ),
+      );
     },
 
     async listTransactionsByPayee(planId: string, payeeId: string) {
-      return (
-        await listTransactionRows(planId, ["payee_id = ?"], [payeeId])
-      ).map(toTransaction);
+      return hydrateTransactionRows(
+        planId,
+        await listTransactionRows(planId, ["payee_id = ?"], [payeeId]),
+      );
     },
 
     async getTransaction(planId: string, transactionId: string) {
