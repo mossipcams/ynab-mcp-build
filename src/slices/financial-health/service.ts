@@ -1496,7 +1496,8 @@ export async function getSpendingSummary(
     .filter((entry) => entry.spendMilliunits > 0);
 
   for (const { lines, spendMilliunits, transaction } of spendingEntries) {
-    const payeeId = transaction.payeeId ?? "unknown-payee";
+    const payeeId =
+      transaction.payeeId ?? transaction.payeeName ?? "unknown-payee";
     const payeeName = transaction.payeeName ?? "Unknown Payee";
 
     for (const line of lines) {
@@ -1996,9 +1997,9 @@ export async function getIncomeSummary(
     months.map((month) => [month.month, month.income] as const),
   );
   const incomeByMonth = new Map(
-    listMonthsInRange(fromMonth, toMonth).map((month) => [
-      month,
-      hasSyncedMonthIncome ? (syncedIncomeByMonth.get(month) ?? 0) : 0,
+    months.map((month) => [
+      month.month,
+      hasSyncedMonthIncome ? (syncedIncomeByMonth.get(month.month) ?? 0) : 0,
     ]),
   );
   const incomeByPayee = new Map<

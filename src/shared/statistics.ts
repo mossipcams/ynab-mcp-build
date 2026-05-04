@@ -16,6 +16,18 @@ export function calculateLinearRegressionSlope(values: readonly number[]) {
   return Number.isFinite(result.m) ? result.m : undefined;
 }
 
+export function calculateLinearRegressionSlopeForPairs(
+  points: readonly (readonly [number, number])[],
+) {
+  if (points.length < 2) {
+    return undefined;
+  }
+
+  const result = linearRegression(points.map(([x, y]) => [x, y]));
+
+  return Number.isFinite(result.m) ? result.m : undefined;
+}
+
 export function calculateZScore(
   observedValue: number,
   baselineValues: readonly number[],
