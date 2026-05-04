@@ -853,29 +853,32 @@ function toMonthSpendingRollups(transactions: YnabTransaction[], topN: number) {
       id?: string;
       name: string;
       amountMilliunits: number;
-      transactionCount: number;
+      transactionIds: Set<string>;
     }
   >();
 
   for (const transaction of transactions.filter((entry) => entry.amount < 0)) {
-    const key = transaction.categoryId ?? "uncategorized";
-    const current = rollups.get(key);
+    for (const line of toSpendingCategoryLines(transaction)) {
+      const key = line.categoryId ?? "uncategorized";
+      const current = rollups.get(key);
 
-    if (current) {
-      current.amountMilliunits += Math.abs(transaction.amount);
-      current.transactionCount += 1;
-      continue;
+      if (current) {
+        current.amountMilliunits += line.amountMilliunits;
+        current.transactionIds.add(line.transactionId);
+        continue;
+      }
+
+      rollups.set(key, {
+        ...(line.categoryId ? { id: line.categoryId } : {}),
+        name: line.categoryName ?? "Uncategorized",
+        amountMilliunits: line.amountMilliunits,
+        transactionIds: new Set([line.transactionId]),
+      });
     }
-
-    rollups.set(key, {
-      ...(transaction.categoryId ? { id: transaction.categoryId } : {}),
-      name: transaction.categoryName ?? "Uncategorized",
-      amountMilliunits: Math.abs(transaction.amount),
-      transactionCount: 1,
-    });
   }
 
   return Array.from(rollups.values())
+    .filter((entry) => entry.amountMilliunits > 0)
     .sort(
       (left, right) =>
         right.amountMilliunits - left.amountMilliunits ||
@@ -887,7 +890,7 @@ function toMonthSpendingRollups(transactions: YnabTransaction[], topN: number) {
         id: entry.id,
         name: entry.name,
         amount: formatMilliunits(entry.amountMilliunits),
-        transaction_count: entry.transactionCount,
+        transaction_count: entry.transactionIds.size,
       }),
     );
 }
