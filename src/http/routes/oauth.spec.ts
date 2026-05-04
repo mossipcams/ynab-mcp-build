@@ -2,39 +2,31 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  createMemoryOAuthStateStorage,
+  handleOAuthStateRequest,
+} from "../../durable-objects/oauth-state-handler.js";
 import worker from "../../index.js";
 import { DISCOVERY_TOOL_NAMES } from "../../mcp/discovery.js";
 
-function createMemoryKvNamespace(): KVNamespace {
-  const records = new Map<string, string>();
+function createMemoryOAuthStateNamespace(): DurableObjectNamespace {
+  const storage = createMemoryOAuthStateStorage();
 
   return {
-    async get(key: string, options?: { type?: string }) {
-      const value = records.get(key);
-
-      if (!value) {
-        return null;
-      }
-
-      return options?.type === "json" ? JSON.parse(value) : value;
+    idFromName() {
+      return {} as DurableObjectId;
     },
-    async put(key: string, value: string) {
-      records.set(key, value);
-    },
-    async delete(key: string) {
-      records.delete(key);
-    },
-    async list(options?: { prefix?: string }) {
-      const keys = [...records.keys()].filter((name) =>
-        options?.prefix ? name.startsWith(options.prefix) : true,
-      );
-
+    get() {
       return {
-        keys: keys.map((name) => ({ name })),
-        list_complete: true,
+        fetch(input, init) {
+          const request =
+            input instanceof Request ? input : new Request(input, init);
+
+          return handleOAuthStateRequest(storage, request);
+        },
       };
     },
-  } as unknown as KVNamespace;
+  } as unknown as DurableObjectNamespace;
 }
 
 function createOAuthEnv(): Env {
@@ -43,7 +35,7 @@ function createOAuthEnv(): Env {
     MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
     MCP_SERVER_NAME: "ynab-mcp-build",
     MCP_SERVER_VERSION: "0.1.0",
-    OAUTH_KV: createMemoryKvNamespace(),
+    OAUTH_STATE: createMemoryOAuthStateNamespace(),
     YNAB_API_BASE_URL: "https://api.ynab.com/v1",
     YNAB_DB: {} as D1Database,
     YNAB_READ_SOURCE: "d1",

@@ -408,7 +408,8 @@ export function createTransactionsRepository(database: D1Database) {
                debt_transaction_type = excluded.debt_transaction_type,
                deleted = excluded.deleted,
                synced_at = excluded.synced_at,
-               updated_at = excluded.updated_at`,
+               updated_at = excluded.updated_at
+               WHERE updated_at <= excluded.updated_at`,
           )
           .bind(
             input.planId,
@@ -438,9 +439,37 @@ export function createTransactionsRepository(database: D1Database) {
             input.syncedAt,
           );
 
-        const subtransactionStatements = (
-          transaction.subtransactions ?? []
-        ).map((subtransaction) =>
+        const hasSubtransactionSnapshot = Array.isArray(
+          transaction.subtransactions,
+        );
+        const subtransactions = transaction.subtransactions ?? [];
+        const omittedSubtransactionCleanupStatement = hasSubtransactionSnapshot
+          ? database
+              .prepare(
+                `UPDATE ynab_subtransactions
+                 SET deleted = 1,
+                     synced_at = ?,
+                     updated_at = ?
+                 WHERE plan_id = ?
+                   AND transaction_id = ?
+                   AND deleted = 0
+                   ${
+                     subtransactions.length
+                       ? `AND id NOT IN (${placeholders(subtransactions.length)})`
+                       : ""
+                   }
+                   AND updated_at <= ?`,
+              )
+              .bind(
+                input.syncedAt,
+                input.syncedAt,
+                input.planId,
+                transaction.id,
+                ...subtransactions.map((subtransaction) => subtransaction.id),
+                input.syncedAt,
+              )
+          : undefined;
+        const subtransactionStatements = subtransactions.map((subtransaction) =>
           database
             .prepare(
               `INSERT INTO ynab_subtransactions (
@@ -471,7 +500,8 @@ export function createTransactionsRepository(database: D1Database) {
                  transfer_transaction_id = excluded.transfer_transaction_id,
                  deleted = excluded.deleted,
                  synced_at = excluded.synced_at,
-                 updated_at = excluded.updated_at`,
+                 updated_at = excluded.updated_at
+               WHERE updated_at <= excluded.updated_at`,
             )
             .bind(
               input.planId,
@@ -491,7 +521,13 @@ export function createTransactionsRepository(database: D1Database) {
             ),
         );
 
-        return [transactionStatement, ...subtransactionStatements];
+        return [
+          transactionStatement,
+          ...(omittedSubtransactionCleanupStatement
+            ? [omittedSubtransactionCleanupStatement]
+            : []),
+          ...subtransactionStatements,
+        ];
       });
 
       await runD1Batches(database, statements);

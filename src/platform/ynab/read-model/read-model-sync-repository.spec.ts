@@ -109,9 +109,9 @@ describe("read model sync repository", () => {
       ]),
     );
     expect(
-      db.batchStatements.every((statement) =>
-        statement.sql.includes("ON CONFLICT"),
-      ),
+      db.batchStatements
+        .filter((statement) => statement.sql.includes("INSERT INTO"))
+        .every((statement) => statement.sql.includes("ON CONFLICT")),
     ).toBe(true);
     expect(
       db.batchStatements.find((statement) =>
@@ -320,9 +320,23 @@ describe("read model sync repository", () => {
       ]),
     );
     expect(
-      db.batchStatements.every((statement) =>
-        statement.sql.includes("ON CONFLICT"),
-      ),
+      db.batchStatements
+        .filter((statement) => statement.sql.includes("INSERT INTO"))
+        .every((statement) => statement.sql.includes("ON CONFLICT")),
+    ).toBe(true);
+    expect(
+      db.batchStatements
+        .find((statement) =>
+          statement.sql.includes("INSERT INTO ynab_scheduled_transactions"),
+        )
+        ?.sql.includes("WHERE updated_at <= excluded.updated_at"),
+    ).toBe(true);
+    expect(
+      db.batchStatements
+        .find((statement) =>
+          statement.sql.includes("INSERT INTO ynab_scheduled_subtransactions"),
+        )
+        ?.sql.includes("WHERE updated_at <= excluded.updated_at"),
     ).toBe(true);
     expect(
       db.batchStatements.find((statement) =>
@@ -348,6 +362,48 @@ describe("read model sync repository", () => {
         statement.sql.includes("ynab_payee_locations"),
       )?.params,
     ).toContain(1);
+  });
+
+  it("marks omitted scheduled subtransactions deleted when a parent split is replaced", async () => {
+    const db = new FakeD1Database();
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.upsertScheduledTransactions({
+      planId: "plan-1",
+      scheduledTransactions: [
+        {
+          amount: -45000,
+          deleted: false,
+          id: "scheduled-1",
+          subtransactions: [
+            {
+              amount: -45000,
+              deleted: false,
+              id: "scheduled-sub-kept",
+              scheduledTransactionId: "scheduled-1",
+            },
+          ],
+        },
+      ],
+      syncedAt: "2026-04-28T12:00:00.000Z",
+    });
+
+    const cleanupStatement = db.batchStatements.find((statement) =>
+      statement.sql.includes("UPDATE ynab_scheduled_subtransactions"),
+    );
+
+    expect(cleanupStatement?.sql).toContain("id NOT IN (?)");
+    expect(cleanupStatement?.sql).toContain("updated_at <= ?");
+    expect(cleanupStatement?.params).toEqual([
+      "2026-04-28T12:00:00.000Z",
+      "2026-04-28T12:00:00.000Z",
+      "plan-1",
+      "scheduled-1",
+      "scheduled-sub-kept",
+      "2026-04-28T12:00:00.000Z",
+    ]);
   });
 
   it("skips D1 batches for empty record sets", async () => {

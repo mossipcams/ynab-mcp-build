@@ -124,12 +124,17 @@ describe("transactions repository", () => {
       rowsDeleted: 1,
       rowsUpserted: 2,
     });
-    expect(db.batchStatements).toHaveLength(3);
+    expect(db.batchStatements).toHaveLength(4);
     const transactionStatement = db.batchStatements[0]!;
-    const subtransactionStatement = db.batchStatements[1]!;
-    const deletedTransactionStatement = db.batchStatements[2]!;
+    const subtransactionStatement = db.batchStatements.find((statement) =>
+      statement.sql.includes("INSERT INTO ynab_subtransactions"),
+    )!;
+    const deletedTransactionStatement = db.batchStatements.at(-1)!;
     expect(transactionStatement.sql).toContain(
       "ON CONFLICT(plan_id, id) DO UPDATE",
+    );
+    expect(transactionStatement.sql).toContain(
+      "WHERE updated_at <= excluded.updated_at",
     );
     expect(transactionStatement.params).toContain("plan-1");
     expect(transactionStatement.params).toContain("txn-1");
@@ -141,6 +146,9 @@ describe("transactions repository", () => {
     expect(transactionStatement.params).toContain("payment");
     expect(subtransactionStatement.sql).toContain(
       "INSERT INTO ynab_subtransactions",
+    );
+    expect(subtransactionStatement.sql).toContain(
+      "WHERE updated_at <= excluded.updated_at",
     );
     expect(subtransactionStatement.params).toContain("subtxn-1");
     expect(subtransactionStatement.params).toContain("transfer-subtxn-1");
@@ -172,6 +180,49 @@ describe("transactions repository", () => {
     expect(db.batchCalls).toHaveLength(88);
     expect(db.batchCalls.at(-1)).toHaveLength(29);
     expect(db.batchStatements).toHaveLength(4_379);
+  });
+
+  it("marks omitted subtransactions deleted when a parent split is replaced", async () => {
+    const db = new FakeD1Database();
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.upsertTransactions({
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z",
+      transactions: [
+        {
+          amount: -12000,
+          date: "2026-04-12",
+          deleted: false,
+          id: "txn-1",
+          subtransactions: [
+            {
+              amount: -12000,
+              deleted: false,
+              id: "subtxn-kept",
+              transaction_id: "txn-1",
+            },
+          ],
+        },
+      ],
+    });
+
+    const cleanupStatement = db.batchStatements.find((statement) =>
+      statement.sql.includes("UPDATE ynab_subtransactions"),
+    );
+
+    expect(cleanupStatement?.sql).toContain("id NOT IN (?)");
+    expect(cleanupStatement?.sql).toContain("updated_at <= ?");
+    expect(cleanupStatement?.params).toEqual([
+      "2026-04-28T12:00:00.000Z",
+      "2026-04-28T12:00:00.000Z",
+      "plan-1",
+      "txn-1",
+      "subtxn-kept",
+      "2026-04-28T12:00:00.000Z",
+    ]);
   });
 
   it("searches with parameterized filters and excludes deleted transactions by default", async () => {

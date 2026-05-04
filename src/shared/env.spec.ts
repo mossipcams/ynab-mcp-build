@@ -38,6 +38,20 @@ describe("resolveAppEnv", () => {
     expect(env.publicUrl).toBe("https://mcp.example.com/mcp");
   });
 
+  it("allows explicitly injected KV OAuth state backing for tests", () => {
+    const oauthKv = {} as KVNamespace;
+    const env = resolveAppEnv({
+      MCP_OAUTH_ENABLED: "true",
+      MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
+      OAUTH_KV: oauthKv,
+    } as Partial<Env> & {
+      MCP_OAUTH_ENABLED: string;
+      MCP_PUBLIC_URL: string;
+    });
+
+    expect(env.oauthKvNamespace).toBe(oauthKv);
+  });
+
   it("uses YNAB_API_TOKEN as a fallback alias for YNAB access token", () => {
     const env = resolveAppEnv({
       YNAB_API_BASE_URL: "https://api.ynab.com/v1",

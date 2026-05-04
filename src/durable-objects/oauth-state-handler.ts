@@ -71,6 +71,15 @@ const BodyWithTokenSchema = z
   })
   .passthrough();
 
+const RotateRefreshTokenBodySchema = z
+  .object({
+    clientId: z.string().min(1).optional(),
+    now: z.number().optional(),
+    resource: z.string().min(1).optional(),
+    token: z.string().min(1),
+  })
+  .passthrough();
+
 type JsonParseResult<T> =
   | {
       kind: "invalid";
@@ -405,7 +414,7 @@ async function handleOAuthStateRequestUnsafe(
 
   if (request.method === "POST" && url.pathname === "/refresh-tokens/rotate") {
     return runStorageCriticalSection(storage, async () => {
-      const body = await readJson(request, BodyWithTokenSchema);
+      const body = await readJson(request, RotateRefreshTokenBodySchema);
 
       if (body.kind === "invalid") {
         return body.response;
@@ -413,7 +422,13 @@ async function handleOAuthStateRequestUnsafe(
 
       const token = body.value.token;
       const record = await storage.get<
-        Record<string, unknown> & { familyId?: string; used?: boolean }
+        Record<string, unknown> & {
+          clientId?: string;
+          expiresAt?: number;
+          familyId?: string;
+          resource?: string;
+          used?: boolean;
+        }
       >(refreshTokenKey(token));
 
       if (!record) {
@@ -443,6 +458,37 @@ async function handleOAuthStateRequestUnsafe(
         return jsonResponse({
           record,
           status: "replay_detected",
+        });
+      }
+
+      if (
+        body.value.now !== undefined &&
+        typeof record.expiresAt === "number" &&
+        record.expiresAt <= body.value.now
+      ) {
+        return jsonResponse({
+          record,
+          status: "expired",
+        });
+      }
+
+      if (
+        body.value.clientId !== undefined &&
+        record.clientId !== body.value.clientId
+      ) {
+        return jsonResponse({
+          record,
+          status: "invalid_client",
+        });
+      }
+
+      if (
+        body.value.resource !== undefined &&
+        record.resource !== body.value.resource
+      ) {
+        return jsonResponse({
+          record,
+          status: "invalid_resource",
         });
       }
 

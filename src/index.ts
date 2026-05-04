@@ -14,7 +14,7 @@ const appHandler = {
 const oauthProvider = createOAuthProvider(appHandler);
 
 function createOAuthProviderEnv(env: Env, appEnv: AppEnv) {
-  if (appEnv.oauthKvNamespace) {
+  if (!appEnv.oauthStateNamespace && appEnv.oauthKvNamespace) {
     return env;
   }
 

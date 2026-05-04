@@ -41,6 +41,13 @@ export type OAuthRefreshToken = {
   used: boolean;
 };
 
+export type OAuthRefreshTokenRotationInput = {
+  clientId: string;
+  now: number;
+  resource: string;
+  token: string;
+};
+
 export type OAuthRefreshTokenRotationResult =
   | {
       record: OAuthRefreshToken;
@@ -48,7 +55,12 @@ export type OAuthRefreshTokenRotationResult =
     }
   | {
       record?: OAuthRefreshToken;
-      status: "not_found" | "replay_detected";
+      status:
+        | "expired"
+        | "invalid_client"
+        | "invalid_resource"
+        | "not_found"
+        | "replay_detected";
     };
 
 export type OAuthStore = {
@@ -63,7 +75,9 @@ export type OAuthStore = {
   issueAuthorizationCode(record: OAuthAuthorizationCode): Promise<void>;
   issueRefreshToken(record: OAuthRefreshToken): Promise<void>;
   registerClient(record: OAuthRegisteredClient): Promise<void>;
-  rotateRefreshToken(token: string): Promise<OAuthRefreshTokenRotationResult>;
+  rotateRefreshToken(
+    input: OAuthRefreshTokenRotationInput | string,
+  ): Promise<OAuthRefreshTokenRotationResult>;
   useAuthorizationCode(
     code: string,
   ): Promise<OAuthAuthorizationCode | undefined>;
@@ -106,7 +120,8 @@ export function createInMemoryOAuthStore(): OAuthStore {
 
       return Promise.resolve();
     },
-    rotateRefreshToken(token) {
+    rotateRefreshToken(input) {
+      const token = typeof input === "string" ? input : input.token;
       const record = refreshTokens.get(token);
 
       if (!record) {
@@ -128,6 +143,27 @@ export function createInMemoryOAuthStore(): OAuthStore {
         return Promise.resolve({
           record,
           status: "replay_detected",
+        } satisfies OAuthRefreshTokenRotationResult);
+      }
+
+      if (typeof input !== "string" && record.expiresAt <= input.now) {
+        return Promise.resolve({
+          record,
+          status: "expired",
+        } satisfies OAuthRefreshTokenRotationResult);
+      }
+
+      if (typeof input !== "string" && record.clientId !== input.clientId) {
+        return Promise.resolve({
+          record,
+          status: "invalid_client",
+        } satisfies OAuthRefreshTokenRotationResult);
+      }
+
+      if (typeof input !== "string" && record.resource !== input.resource) {
+        return Promise.resolve({
+          record,
+          status: "invalid_resource",
         } satisfies OAuthRefreshTokenRotationResult);
       }
 

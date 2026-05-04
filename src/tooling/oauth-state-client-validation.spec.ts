@@ -38,9 +38,14 @@ describe("Durable Object OAuth state client validation", () => {
       ),
     );
 
-    await expect(store.rotateRefreshToken("refresh-1")).rejects.toThrow(
-      "OAuth state response body is invalid.",
-    );
+    await expect(
+      store.rotateRefreshToken({
+        clientId: "client-1",
+        now: 1_700_000_000_000,
+        resource: "https://mcp.example.com/mcp",
+        token: "refresh-1",
+      }),
+    ).rejects.toThrow("OAuth state response body is invalid.");
   });
 
   it("rejects malformed KV list responses", async () => {

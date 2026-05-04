@@ -197,6 +197,94 @@ describe("OAuth core", () => {
     ).rejects.toThrow("Refresh token replay detected; token family revoked.");
   });
 
+  it("does not consume refresh tokens rejected for another client", async () => {
+    const store = createInMemoryOAuthStore();
+    const codeVerifier = "verifier-1";
+    const codeChallenge = await createCodeChallenge(codeVerifier);
+    const core = createCore({ store });
+    const client = await registerClient(core);
+    const authorization = await core.startAuthorization({
+      clientId: client.client_id,
+      codeChallenge,
+      codeChallengeMethod: "S256",
+      redirectUri: client.redirect_uris[0]!,
+      resource: protectedResource,
+      responseType: "code",
+    });
+    const initial = await core.exchangeAuthorizationCode({
+      clientId: client.client_id,
+      code: authorization.code,
+      codeVerifier,
+      redirectUri: client.redirect_uris[0]!,
+      resource: protectedResource,
+    });
+
+    await expect(
+      core.refreshAccessToken({
+        clientId: "client-2",
+        refreshToken: initial.refresh_token,
+        resource: protectedResource,
+      }),
+    ).rejects.toThrow("Refresh token does not belong to this client.");
+
+    await expect(
+      core.refreshAccessToken({
+        clientId: client.client_id,
+        refreshToken: initial.refresh_token,
+        resource: protectedResource,
+      }),
+    ).resolves.toMatchObject({
+      refresh_token: "refresh-token-2",
+      token_type: "Bearer",
+    });
+  });
+
+  it("does not consume refresh tokens rejected for expiration", async () => {
+    const store = createInMemoryOAuthStore();
+    const codeVerifier = "verifier-1";
+    const codeChallenge = await createCodeChallenge(codeVerifier);
+    const core = createCore({ store });
+    const client = await registerClient(core);
+    const authorization = await core.startAuthorization({
+      clientId: client.client_id,
+      codeChallenge,
+      codeChallengeMethod: "S256",
+      redirectUri: client.redirect_uris[0]!,
+      resource: protectedResource,
+      responseType: "code",
+    });
+    const initial = await core.exchangeAuthorizationCode({
+      clientId: client.client_id,
+      code: authorization.code,
+      codeVerifier,
+      redirectUri: client.redirect_uris[0]!,
+      resource: protectedResource,
+    });
+    const expiredCore = createCore({
+      now: 1_700_000_000_000 + 31 * 24 * 60 * 60 * 1000,
+      store,
+    });
+
+    await expect(
+      expiredCore.refreshAccessToken({
+        clientId: client.client_id,
+        refreshToken: initial.refresh_token,
+        resource: protectedResource,
+      }),
+    ).rejects.toThrow("Refresh token has expired.");
+
+    await expect(
+      core.refreshAccessToken({
+        clientId: client.client_id,
+        refreshToken: initial.refresh_token,
+        resource: protectedResource,
+      }),
+    ).resolves.toMatchObject({
+      refresh_token: "refresh-token-2",
+      token_type: "Bearer",
+    });
+  });
+
   it("publishes OAuth metadata from the configured issuer and resource", () => {
     const core = createCore();
 
