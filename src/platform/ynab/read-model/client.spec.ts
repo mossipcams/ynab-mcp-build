@@ -56,9 +56,7 @@ class FakeD1Database {
   }
 
   select(sql: string, params: unknown[]) {
-    const tableName = Object.keys(this.rows)
-      .sort((left, right) => right.length - left.length)
-      .find((name) => sql.includes(`FROM ${name}`));
+    const tableName = /FROM\s+(ynab_[a-z_]+)/u.exec(sql)?.[1];
     const rows = tableName ? (this.rows[tableName] ?? []) : [];
 
     if (sql.includes("COUNT(*)")) {
@@ -103,7 +101,27 @@ class FakeD1Database {
       return false;
     }
 
-    if (sql.includes("category_id = ?") && row.category_id !== params.at(-1)) {
+    if (
+      sql.includes("FROM ynab_transactions") &&
+      sql.includes("subtransaction_filter.category_id = ?")
+    ) {
+      const categoryId = params.at(-1);
+      const hasParentMatch = row.category_id === categoryId;
+      const hasSubtransactionMatch = this.rows.ynab_subtransactions.some(
+        (subtransaction) =>
+          subtransaction.plan_id === row.plan_id &&
+          subtransaction.transaction_id === row.id &&
+          subtransaction.category_id === categoryId &&
+          (subtransaction.deleted === 0 || subtransaction.deleted === false),
+      );
+
+      if (!hasParentMatch && !hasSubtransactionMatch) {
+        return false;
+      }
+    } else if (
+      sql.includes("category_id = ?") &&
+      row.category_id !== params.at(-1)
+    ) {
       return false;
     }
 
@@ -114,6 +132,13 @@ class FakeD1Database {
     if (
       sql.includes("transaction_id = ?") &&
       row.transaction_id !== params.at(-1)
+    ) {
+      return false;
+    }
+
+    if (
+      sql.includes("transaction_id IN") &&
+      !params.slice(1).includes(row.transaction_id)
     ) {
       return false;
     }
@@ -255,6 +280,142 @@ describe("YNAB read-model client", () => {
     });
     expect(db.calls[0]?.sql).toContain("date >= ?");
     expect(db.calls[0]?.sql).toContain("date <= ?");
+  });
+
+  it("hydrates split subtransactions when listing transaction ranges", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "split-parent",
+        date: "2026-04-12",
+        amount_milliunits: -30000,
+        payee_name: "Big Box",
+        category_id: null,
+        category_name: "Split",
+        deleted: 0,
+      },
+    ];
+    db.rows.ynab_subtransactions = [
+      {
+        plan_id: "plan-1",
+        transaction_id: "split-parent",
+        id: "split-groceries",
+        amount_milliunits: -12000,
+        memo: "Pantry",
+        category_id: "groceries",
+        category_name: "Groceries",
+        deleted: 0,
+      },
+      {
+        plan_id: "plan-1",
+        transaction_id: "split-parent",
+        id: "split-household",
+        amount_milliunits: -18000,
+        memo: "Supplies",
+        category_id: "household",
+        category_name: "Household",
+        deleted: 0,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(
+      client.listTransactions("plan-1", "2026-04-01", "2026-04-30"),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: "split-parent",
+        amount: -30000,
+        subtransactions: [
+          expect.objectContaining({
+            id: "split-groceries",
+            amount: -12000,
+            categoryId: "groceries",
+            categoryName: "Groceries",
+          }),
+          expect.objectContaining({
+            id: "split-household",
+            amount: -18000,
+            categoryId: "household",
+            categoryName: "Household",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it("keeps split hydration queries within D1 parameter limits", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_transactions = Array.from({ length: 100 }, (_, index) => ({
+      plan_id: "plan-1",
+      id: `txn-${index}`,
+      date: "2026-04-12",
+      amount_milliunits: -1000,
+      deleted: 0,
+    }));
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await client.listTransactions("plan-1");
+
+    expect(
+      db.calls
+        .filter((call) => call.sql.includes("FROM ynab_subtransactions"))
+        .map((call) => call.params.length),
+    ).toEqual([100, 2]);
+  });
+
+  it("finds transactions by categories assigned only on split subtransactions", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "split-parent",
+        date: "2026-04-12",
+        amount_milliunits: -30000,
+        payee_name: "Big Box",
+        category_id: null,
+        category_name: "Split",
+        deleted: 0,
+      },
+    ];
+    db.rows.ynab_subtransactions = [
+      {
+        plan_id: "plan-1",
+        transaction_id: "split-parent",
+        id: "split-groceries",
+        amount_milliunits: -12000,
+        category_id: "groceries",
+        category_name: "Groceries",
+        deleted: 0,
+      },
+      {
+        plan_id: "plan-1",
+        transaction_id: "split-parent",
+        id: "split-deleted",
+        amount_milliunits: -18000,
+        category_id: "deleted-category",
+        category_name: "Deleted",
+        deleted: 1,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(
+      client.listTransactionsByCategory("plan-1", "groceries"),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: "split-parent",
+        subtransactions: expect.arrayContaining([
+          expect.objectContaining({
+            id: "split-groceries",
+            categoryId: "groceries",
+          }),
+        ]),
+      }),
+    ]);
+    await expect(
+      client.listTransactionsByCategory("plan-1", "deleted-category"),
+    ).resolves.toEqual([]);
   });
 
   it("serves core YNAB client reads from D1 rows without HTTP access", async () => {
