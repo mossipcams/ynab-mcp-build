@@ -18,7 +18,10 @@ function createMemoryOAuthStateNamespace(): DurableObjectNamespace {
     },
     get() {
       return {
-        fetch(input, init) {
+        fetch(
+          input: Parameters<typeof fetch>[0],
+          init?: Parameters<typeof fetch>[1],
+        ) {
           const request =
             input instanceof Request ? input : new Request(input, init);
 

@@ -40,6 +40,18 @@ function placeholders(count: number) {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 
+function assertMonthCategoriesPresent(months: YnabPlanMonthDetail[]) {
+  const incompleteMonth = months.find(
+    (month) => !month.deleted && month.categories === undefined,
+  );
+
+  if (incompleteMonth) {
+    throw new Error(
+      `YNAB month ${incompleteMonth.month} is missing category detail and cannot be synced.`,
+    );
+  }
+}
+
 export function createReadModelSyncRepository(database: D1Database) {
   return {
     async upsertUser(input: {
@@ -420,6 +432,8 @@ export function createReadModelSyncRepository(database: D1Database) {
       months: YnabPlanMonthDetail[];
       syncedAt: string;
     }): Promise<UpsertMonthsResult> {
+      assertMonthCategoriesPresent(input.months);
+
       const monthStatements = input.months.map((month) =>
         database
           .prepare(

@@ -375,6 +375,7 @@ describe("read model sync repository", () => {
       scheduledTransactions: [
         {
           amount: -45000,
+          dateFirst: "2026-04-01",
           deleted: false,
           id: "scheduled-1",
           subtransactions: [
@@ -404,6 +405,31 @@ describe("read model sync repository", () => {
       "scheduled-sub-kept",
       "2026-04-28T12:00:00.000Z",
     ]);
+  });
+
+  it("rejects active month sync records that omit categories before advancing the read model", async () => {
+    const db = new FakeD1Database();
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
+
+    await expect(
+      repository.upsertMonths({
+        months: [
+          {
+            activity: -6090860,
+            budgeted: 4092500,
+            deleted: false,
+            month: "2026-04-01",
+          },
+        ],
+        planId: "plan-1",
+        syncedAt: "2026-04-28T12:00:00.000Z",
+      }),
+    ).rejects.toThrow(
+      "YNAB month 2026-04-01 is missing category detail and cannot be synced.",
+    );
+    expect(db.batchStatements).toEqual([]);
   });
 
   it("skips D1 batches for empty record sets", async () => {

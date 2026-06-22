@@ -1044,14 +1044,17 @@ export function groupCategoriesByGroupId(categories: YnabCategorySummary[]) {
 }
 
 export function toYnabMonth(month: YnabPlanMonthRecord): YnabPlanMonthDetail {
+  const categories = month.categories?.map((category) => ({
+    ...toYnabCategory(category),
+    balance: category.balance ?? 0,
+  }));
+
   return compact({
     activity: month.activity,
     ageOfMoney: month.age_of_money ?? undefined,
     budgeted: month.budgeted,
-    categories: month.categories?.map((category) => ({
-      ...toYnabCategory(category),
-      balance: category.balance ?? 0,
-    })),
+    categoryCount: categories?.length,
+    categories,
     deleted: month.deleted,
     income: month.income,
     month: month.month,
