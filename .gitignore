@@ -8,3 +8,4 @@ reports/mutation/
 .stryker-tmp/
 .dev.vars
 worker-configuration.d.ts
+.serena/
