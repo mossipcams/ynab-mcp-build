@@ -1,4 +1,5 @@
 import type {
+  ScheduledSubtransactionRow,
   ScheduledTransactionRow,
   ScheduledTransactionSearchResult,
   SearchScheduledTransactionsInput,
@@ -82,6 +83,19 @@ function toCompactScheduledTransaction(row: ScheduledTransactionRow) {
   });
 }
 
+function toDisplayScheduledSubtransaction(row: ScheduledSubtransactionRow) {
+  return compactObject({
+    id: row.id,
+    amount: formatAmountMilliunits(row.amount_milliunits),
+    memo: row.memo,
+    payee_id: row.payee_id,
+    payee_name: row.payee_name,
+    category_id: row.category_id,
+    category_name: row.category_name,
+    transfer_account_id: row.transfer_account_id,
+  });
+}
+
 function toDisplayScheduledTransaction(row: ScheduledTransactionRow) {
   return compactObject({
     id: row.id,
@@ -99,6 +113,9 @@ function toDisplayScheduledTransaction(row: ScheduledTransactionRow) {
     category_id: row.category_id,
     category_name: row.category_name,
     transfer_account_id: row.transfer_account_id,
+    subtransactions: row.subtransactions?.length
+      ? row.subtransactions.map(toDisplayScheduledSubtransaction)
+      : undefined,
   });
 }
 

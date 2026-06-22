@@ -45,6 +45,7 @@ class FakeD1Database {
     ynab_payees: [],
     ynab_plan_settings: [],
     ynab_plans: [],
+    ynab_scheduled_subtransactions: [],
     ynab_scheduled_transactions: [],
     ynab_subtransactions: [],
     ynab_transactions: [],
@@ -138,7 +139,15 @@ class FakeD1Database {
     }
 
     if (
+      sql.includes("scheduled_transaction_id IN") &&
+      !params.slice(1).includes(row.scheduled_transaction_id)
+    ) {
+      return false;
+    }
+
+    if (
       sql.includes("transaction_id IN") &&
+      !sql.includes("scheduled_transaction_id IN") &&
       !params.slice(1).includes(row.transaction_id)
     ) {
       return false;
@@ -246,6 +255,220 @@ describe("YNAB read-model client", () => {
     await expect(
       client.getScheduledTransaction("plan-1", "scheduled-deleted"),
     ).rejects.toThrow("scheduled-deleted was not found");
+  });
+
+  it("hydrates split subtransactions when listing scheduled transactions", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_scheduled_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "scheduled-split",
+        date_first: "2026-05-01",
+        date_next: "2026-06-01",
+        frequency: "monthly",
+        amount_milliunits: -30000,
+        memo: "Monthly bills",
+        category_name: "Split",
+        deleted: 0,
+      },
+    ];
+    db.rows.ynab_scheduled_subtransactions = [
+      {
+        plan_id: "plan-1",
+        scheduled_transaction_id: "scheduled-split",
+        id: "scheduled-split-rent",
+        amount_milliunits: -18000,
+        category_id: "rent",
+        category_name: "Rent",
+        deleted: 0,
+      },
+      {
+        plan_id: "plan-1",
+        scheduled_transaction_id: "scheduled-split",
+        id: "scheduled-split-utilities",
+        amount_milliunits: -12000,
+        category_id: "utilities",
+        category_name: "Utilities",
+        deleted: 0,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(client.listScheduledTransactions("plan-1")).resolves.toEqual([
+      expect.objectContaining({
+        id: "scheduled-split",
+        frequency: "monthly",
+        memo: "Monthly bills",
+        subtransactions: [
+          expect.objectContaining({
+            id: "scheduled-split-rent",
+            amount: -18000,
+            categoryId: "rent",
+            categoryName: "Rent",
+          }),
+          expect.objectContaining({
+            id: "scheduled-split-utilities",
+            amount: -12000,
+            categoryId: "utilities",
+            categoryName: "Utilities",
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it("hydrates split subtransactions and scalar fields when getting a scheduled transaction", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_scheduled_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "scheduled-split",
+        date_first: "2026-05-01",
+        date_next: "2026-06-01",
+        frequency: "monthly",
+        amount_milliunits: -30000,
+        memo: "Monthly bills",
+        flag_color: "blue",
+        account_id: "account-1",
+        payee_id: "payee-1",
+        category_id: null,
+        category_name: "Split",
+        deleted: 0,
+      },
+    ];
+    db.rows.ynab_scheduled_subtransactions = [
+      {
+        plan_id: "plan-1",
+        scheduled_transaction_id: "scheduled-split",
+        id: "scheduled-split-rent",
+        amount_milliunits: -18000,
+        category_id: "rent",
+        category_name: "Rent",
+        deleted: 0,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(
+      client.getScheduledTransaction("plan-1", "scheduled-split"),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "scheduled-split",
+        frequency: "monthly",
+        memo: "Monthly bills",
+        flagColor: "blue",
+        accountId: "account-1",
+        payeeId: "payee-1",
+        subtransactions: [
+          expect.objectContaining({
+            id: "scheduled-split-rent",
+            scheduledTransactionId: "scheduled-split",
+            amount: -18000,
+            categoryId: "rent",
+            categoryName: "Rent",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("keeps scheduled split hydration queries within D1 parameter limits", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_scheduled_transactions = Array.from(
+      { length: 100 },
+      (_, index) => ({
+        plan_id: "plan-1",
+        id: `scheduled-${index}`,
+        date_first: "2026-05-01",
+        amount_milliunits: -1000,
+        deleted: 0,
+      }),
+    );
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await client.listScheduledTransactions("plan-1");
+
+    expect(
+      db.calls
+        .filter((call) =>
+          call.sql.includes("FROM ynab_scheduled_subtransactions"),
+        )
+        .map((call) => call.params.length),
+    ).toEqual([100, 2]);
+  });
+
+  it("surfaces the full scheduled transaction shape so the read model mirrors the live client", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_scheduled_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "scheduled-full",
+        date_first: "2026-05-01",
+        date_next: "2026-06-01",
+        frequency: "monthly",
+        amount_milliunits: -30000,
+        memo: "Rent and utilities",
+        flag_color: "red",
+        flag_name: "Bills",
+        account_id: "account-1",
+        account_name: "Checking",
+        payee_id: "payee-1",
+        payee_name: "Landlord",
+        category_id: "cat-1",
+        category_name: "Split",
+        transfer_account_id: "transfer-1",
+        deleted: 0,
+      },
+    ];
+    db.rows.ynab_scheduled_subtransactions = [
+      {
+        plan_id: "plan-1",
+        scheduled_transaction_id: "scheduled-full",
+        id: "scheduled-full-rent",
+        amount_milliunits: -30000,
+        memo: "Rent",
+        payee_id: "payee-1",
+        payee_name: "Landlord",
+        category_id: "cat-rent",
+        category_name: "Rent",
+        deleted: 0,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(
+      client.getScheduledTransaction("plan-1", "scheduled-full"),
+    ).resolves.toEqual({
+      id: "scheduled-full",
+      dateFirst: "2026-05-01",
+      dateNext: "2026-06-01",
+      frequency: "monthly",
+      amount: -30000,
+      memo: "Rent and utilities",
+      flagColor: "red",
+      flagName: "Bills",
+      accountId: "account-1",
+      accountName: "Checking",
+      payeeId: "payee-1",
+      payeeName: "Landlord",
+      categoryId: "cat-1",
+      categoryName: "Split",
+      transferAccountId: "transfer-1",
+      deleted: false,
+      subtransactions: [
+        {
+          id: "scheduled-full-rent",
+          scheduledTransactionId: "scheduled-full",
+          amount: -30000,
+          memo: "Rent",
+          payeeId: "payee-1",
+          payeeName: "Landlord",
+          categoryId: "cat-rent",
+          categoryName: "Rent",
+          deleted: false,
+        },
+      ],
+    });
   });
 
   it("applies both start and end date predicates when listing transactions", async () => {

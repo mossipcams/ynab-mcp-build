@@ -1,3 +1,16 @@
+export type ScheduledSubtransactionRow = {
+  id: string;
+  scheduled_transaction_id?: string | null;
+  amount_milliunits: number;
+  memo?: string | null;
+  payee_id?: string | null;
+  payee_name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  transfer_account_id?: string | null;
+  deleted: number;
+};
+
 export type ScheduledTransactionRow = {
   id: string;
   date_first: string;
@@ -15,6 +28,7 @@ export type ScheduledTransactionRow = {
   category_name?: string | null;
   transfer_account_id?: string | null;
   deleted: number;
+  subtransactions?: ScheduledSubtransactionRow[];
 };
 
 export type SearchScheduledTransactionsInput = {
@@ -111,6 +125,33 @@ function buildLimitSql(input: { limit?: number; offset?: number }) {
   };
 }
 
+async function listScheduledSubtransactionRows(
+  database: D1Database,
+  planId: string,
+  scheduledTransactionId: string,
+) {
+  const result = await database
+    .prepare(
+      `SELECT id,
+              scheduled_transaction_id,
+              amount_milliunits,
+              memo,
+              payee_id,
+              payee_name,
+              category_id,
+              category_name,
+              transfer_account_id,
+              deleted
+       FROM ynab_scheduled_subtransactions
+       WHERE plan_id = ? AND scheduled_transaction_id = ? AND deleted = 0
+       ORDER BY id`,
+    )
+    .bind(planId, scheduledTransactionId)
+    .all<ScheduledSubtransactionRow>();
+
+  return rowsOrEmpty(result);
+}
+
 export function createScheduledTransactionsRepository(database: D1Database) {
   return {
     usesServerPagination: true,
@@ -157,8 +198,19 @@ export function createScheduledTransactionsRepository(database: D1Database) {
         )
         .bind(input.planId, input.scheduledTransactionId)
         .all<ScheduledTransactionRow>();
+      const row = rowsOrEmpty(result)[0] ?? null;
 
-      return rowsOrEmpty(result)[0] ?? null;
+      if (!row) {
+        return null;
+      }
+
+      const subtransactions = await listScheduledSubtransactionRows(
+        database,
+        input.planId,
+        row.id,
+      );
+
+      return subtransactions.length ? { ...row, subtransactions } : row;
     },
   };
 }

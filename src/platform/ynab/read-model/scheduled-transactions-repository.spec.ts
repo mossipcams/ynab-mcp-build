@@ -148,6 +148,65 @@ describe("scheduled transactions read-model repository", () => {
     expect(db.calls[0]?.sql).toContain("deleted = 0");
   });
 
+  it("attaches active split subtransactions to exact scheduled transaction lookup", async () => {
+    const db = new FakeD1Database();
+    db.nextResults.push(
+      [
+        {
+          id: "scheduled-split",
+          date_first: "2026-04-01",
+          date_next: "2026-05-01",
+          amount_milliunits: -30000,
+          category_name: "Split",
+          deleted: 0,
+        },
+      ],
+      [
+        {
+          id: "scheduled-split-rent",
+          scheduled_transaction_id: "scheduled-split",
+          amount_milliunits: -18000,
+          category_id: "rent",
+          category_name: "Rent",
+          deleted: 0,
+        },
+      ],
+    );
+    const repository = createScheduledTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await expect(
+      repository.getScheduledTransaction({
+        planId: "plan-1",
+        scheduledTransactionId: "scheduled-split",
+      }),
+    ).resolves.toEqual({
+      id: "scheduled-split",
+      date_first: "2026-04-01",
+      date_next: "2026-05-01",
+      amount_milliunits: -30000,
+      category_name: "Split",
+      deleted: 0,
+      subtransactions: [
+        {
+          id: "scheduled-split-rent",
+          scheduled_transaction_id: "scheduled-split",
+          amount_milliunits: -18000,
+          category_id: "rent",
+          category_name: "Rent",
+          deleted: 0,
+        },
+      ],
+    });
+
+    expect(db.calls[1]?.sql).toContain("FROM ynab_scheduled_subtransactions");
+    expect(db.calls[1]?.sql).toContain("deleted = 0");
+    expect(db.calls[1]).toMatchObject({
+      params: ["plan-1", "scheduled-split"],
+    });
+  });
+
   it("starts scheduled transaction page and count reads without waiting for the page result", async () => {
     // DEFECT: scheduled transaction search serialized count reads behind page latency.
     const db = new FakeD1Database();

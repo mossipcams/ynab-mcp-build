@@ -112,6 +112,69 @@ describe("DB-backed scheduled transaction service", () => {
     });
   });
 
+  it("includes split subtransactions in scheduled transaction detail", async () => {
+    repository.getScheduledTransaction.mockResolvedValueOnce({
+      id: "scheduled-split",
+      date_first: "2026-04-01",
+      date_next: "2026-05-01",
+      amount_milliunits: -30000,
+      category_name: "Split",
+      deleted: 0,
+      subtransactions: [
+        {
+          id: "scheduled-split-rent",
+          scheduled_transaction_id: "scheduled-split",
+          amount_milliunits: -18000,
+          category_id: "rent",
+          category_name: "Rent",
+          deleted: 0,
+        },
+        {
+          id: "scheduled-split-utilities",
+          scheduled_transaction_id: "scheduled-split",
+          amount_milliunits: -12000,
+          category_id: "utilities",
+          category_name: "Utilities",
+          deleted: 0,
+        },
+      ],
+    });
+
+    await expect(
+      getDbScheduledTransaction(
+        {
+          defaultPlanId: "plan-1",
+          scheduledTransactionsRepository: repository,
+        },
+        {
+          scheduledTransactionId: "scheduled-split",
+        },
+      ),
+    ).resolves.toEqual({
+      scheduled_transaction: {
+        id: "scheduled-split",
+        date_first: "2026-04-01",
+        date_next: "2026-05-01",
+        amount: "-30.00",
+        category_name: "Split",
+        subtransactions: [
+          {
+            id: "scheduled-split-rent",
+            amount: "-18.00",
+            category_id: "rent",
+            category_name: "Rent",
+          },
+          {
+            id: "scheduled-split-utilities",
+            amount: "-12.00",
+            category_id: "utilities",
+            category_name: "Utilities",
+          },
+        ],
+      },
+    });
+  });
+
   it("applies the default page size in the repository for broad scheduled searches", async () => {
     repository.listScheduledTransactions.mockResolvedValueOnce({
       rows: [

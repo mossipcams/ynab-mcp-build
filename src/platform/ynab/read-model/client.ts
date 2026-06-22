@@ -17,6 +17,7 @@ import type {
   YnabPlanMonthSummary,
   YnabPlanSettings,
   YnabPlanSummary,
+  YnabScheduledSubtransaction,
   YnabScheduledTransaction,
   YnabTransaction,
   YnabUser,
@@ -163,10 +164,30 @@ type ScheduledTransactionRow = {
   id: string;
   date_first: string;
   date_next?: string | null;
+  frequency?: string | null;
   amount_milliunits: number;
-  payee_name?: string | null;
-  category_name?: string | null;
+  memo?: string | null;
+  flag_color?: string | null;
+  flag_name?: string | null;
+  account_id?: string | null;
   account_name?: string | null;
+  payee_id?: string | null;
+  payee_name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  transfer_account_id?: string | null;
+  deleted?: number | null;
+};
+
+type ScheduledSubtransactionRow = {
+  id: string;
+  scheduled_transaction_id?: string | null;
+  amount_milliunits: number;
+  memo?: string | null;
+  payee_id?: string | null;
+  payee_name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
   transfer_account_id?: string | null;
   deleted?: number | null;
 };
@@ -347,10 +368,34 @@ function toScheduledTransaction(
     id: row.id,
     dateFirst: row.date_first,
     dateNext: row.date_next,
+    frequency: row.frequency,
     amount: row.amount_milliunits,
-    payeeName: row.payee_name,
-    categoryName: row.category_name,
+    memo: row.memo,
+    flagColor: row.flag_color,
+    flagName: row.flag_name,
+    accountId: row.account_id,
     accountName: row.account_name,
+    payeeId: row.payee_id,
+    payeeName: row.payee_name,
+    categoryId: row.category_id,
+    categoryName: row.category_name,
+    transferAccountId: row.transfer_account_id,
+    deleted: toBoolean(row.deleted),
+  });
+}
+
+function toScheduledSubtransaction(
+  row: ScheduledSubtransactionRow,
+): YnabScheduledSubtransaction {
+  return compact({
+    id: row.id,
+    scheduledTransactionId: row.scheduled_transaction_id,
+    amount: row.amount_milliunits,
+    memo: row.memo,
+    payeeId: row.payee_id,
+    payeeName: row.payee_name,
+    categoryId: row.category_id,
+    categoryName: row.category_name,
     transferAccountId: row.transfer_account_id,
     deleted: toBoolean(row.deleted),
   });
@@ -552,6 +597,86 @@ export function createYnabReadModelClient(
 
       return compact({
         ...transaction,
+        subtransactions: subtransactions?.length ? subtransactions : undefined,
+      });
+    });
+  }
+
+  async function listScheduledSubtransactionRowsByScheduledTransactionIds(
+    planId: string,
+    scheduledTransactionIds: string[],
+  ) {
+    const rows: ScheduledSubtransactionRow[] = [];
+
+    for (const batch of chunkValues(
+      scheduledTransactionIds,
+      SUBTRANSACTION_QUERY_BATCH_SIZE,
+    )) {
+      rows.push(
+        ...(await all<ScheduledSubtransactionRow>(
+          `SELECT id,
+                  scheduled_transaction_id,
+                  amount_milliunits,
+                  memo,
+                  payee_id,
+                  payee_name,
+                  category_id,
+                  category_name,
+                  transfer_account_id,
+                  deleted
+           FROM ynab_scheduled_subtransactions
+           WHERE plan_id = ? AND scheduled_transaction_id IN (${sqlPlaceholders(
+             batch.length,
+           )})
+           ORDER BY scheduled_transaction_id, id`,
+          planId,
+          ...batch,
+        )),
+      );
+    }
+
+    return rows;
+  }
+
+  async function hydrateScheduledTransactionRows(
+    planId: string,
+    rows: ScheduledTransactionRow[],
+  ) {
+    const subtransactionRows =
+      await listScheduledSubtransactionRowsByScheduledTransactionIds(
+        planId,
+        rows.map((row) => row.id),
+      );
+    const subtransactionsByScheduledTransactionId = new Map<
+      string,
+      NonNullable<YnabScheduledTransaction["subtransactions"]>
+    >();
+
+    for (const row of subtransactionRows) {
+      if (!row.scheduled_transaction_id) {
+        continue;
+      }
+
+      const subtransactions =
+        subtransactionsByScheduledTransactionId.get(
+          row.scheduled_transaction_id,
+        ) ?? [];
+
+      subtransactions.push(toScheduledSubtransaction(row));
+      subtransactionsByScheduledTransactionId.set(
+        row.scheduled_transaction_id,
+        subtransactions,
+      );
+    }
+
+    return rows.map((row) => {
+      const scheduledTransaction = toScheduledTransaction(row);
+      const subtransactions = subtransactionsByScheduledTransactionId.get(
+        scheduledTransaction.id,
+      );
+
+      return compact({
+        ...scheduledTransaction,
         subtransactions: subtransactions?.length ? subtransactions : undefined,
       });
     });
@@ -963,39 +1088,54 @@ export function createYnabReadModelClient(
     },
 
     async listScheduledTransactions(planId: string) {
-      return (
+      return hydrateScheduledTransactionRows(
+        planId,
         await all<ScheduledTransactionRow>(
           `SELECT id,
                 date_first,
                 date_next,
+                frequency,
                 amount_milliunits,
-                payee_name,
-                category_name,
+                memo,
+                flag_color,
+                flag_name,
+                account_id,
                 account_name,
+                payee_id,
+                payee_name,
+                category_id,
+                category_name,
                 transfer_account_id,
                 deleted
          FROM ynab_scheduled_transactions
          WHERE plan_id = ?
          ORDER BY date_next, id`,
           planId,
-        )
-      ).map(toScheduledTransaction);
+        ),
+      );
     },
 
     async getScheduledTransaction(
       planId: string,
       scheduledTransactionId: string,
     ) {
-      return toScheduledTransaction(
+      const scheduledTransaction = toScheduledTransaction(
         first(
           await all<ScheduledTransactionRow>(
             `SELECT id,
                   date_first,
                   date_next,
+                  frequency,
                   amount_milliunits,
-                  payee_name,
-                  category_name,
+                  memo,
+                  flag_color,
+                  flag_name,
+                  account_id,
                   account_name,
+                  payee_id,
+                  payee_name,
+                  category_id,
+                  category_name,
                   transfer_account_id,
                   deleted
            FROM ynab_scheduled_transactions
@@ -1007,6 +1147,16 @@ export function createYnabReadModelClient(
           `YNAB scheduled transaction ${scheduledTransactionId} was not found in the read model.`,
         ),
       );
+      const subtransactions = (
+        await listScheduledSubtransactionRowsByScheduledTransactionIds(planId, [
+          scheduledTransaction.id,
+        ])
+      ).map(toScheduledSubtransaction);
+
+      return compact({
+        ...scheduledTransaction,
+        subtransactions: subtransactions.length ? subtransactions : undefined,
+      });
     },
 
     async listPayees(planId: string) {
