@@ -122,6 +122,7 @@ type FreshnessDependencies = {
     getFreshness(
       planId: string,
       requiredEndpoints: readonly string[],
+      context?: { month?: string },
     ): Promise<{
       health_status: string;
       last_synced_at: string | null;
@@ -287,6 +288,12 @@ function hasMonthInput(input: unknown) {
   return getOwnNonBlankString(input, "month") !== undefined;
 }
 
+function freshnessContextForExecution(input: unknown) {
+  const month = getOwnNonBlankString(input, "month");
+
+  return month ? { month } : undefined;
+}
+
 function requiredEndpointsForExecution(
   definition: SliceToolDefinition,
   input: unknown,
@@ -368,6 +375,7 @@ function withReadModelFreshness(
       const freshness = await dependencies.freshness.getFreshness(
         planId,
         requiredEndpoints,
+        freshnessContextForExecution(input),
       );
       const dataFreshness = {
         ...freshness,

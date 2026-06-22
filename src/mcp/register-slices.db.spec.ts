@@ -54,6 +54,30 @@ class FakeStatement {
     }
 
     if (this.sql.includes("COUNT(*) AS count")) {
+      if (this.sql.includes("FROM ynab_month_categories")) {
+        return Promise.resolve({
+          results: [{ count: this.db.monthCategoryCount }],
+        } as D1Result<T>);
+      }
+
+      if (this.sql.includes("FROM ynab_months")) {
+        return Promise.resolve({
+          results: [{ count: this.db.monthCount }],
+        } as D1Result<T>);
+      }
+
+      if (this.sql.includes("FROM ynab_categories")) {
+        return Promise.resolve({
+          results: [{ count: this.db.categoryCount }],
+        } as D1Result<T>);
+      }
+
+      if (this.sql.includes("FROM ynab_transactions")) {
+        return Promise.resolve({
+          results: [{ count: this.db.transactionCount }],
+        } as D1Result<T>);
+      }
+
       return Promise.resolve({
         results: [{ count: 1 }],
       } as D1Result<T>);
@@ -142,9 +166,13 @@ class FakeD1Database {
   allCalls: Array<{ sql: string; params: unknown[] }> = [];
   endpointHealthStatuses = new Map<string, string>();
   healthStatus = "ok";
+  categoryCount = 1;
+  monthCategoryCount = 1;
+  monthCount = 1;
   plans: Array<{ id: string; name: string; deleted: number }> = [
     { id: "plan-1", name: "Household", deleted: 0 },
   ];
+  transactionCount = 1;
   transactionSearchParams: unknown[] = [];
 
   prepare(sql: string) {
@@ -560,6 +588,40 @@ describe("DB-backed tool registration", () => {
     expect(
       database.allCalls.some((call) => call.sql.includes("FROM ynab_months")),
     ).toBe(false);
+  });
+
+  it("marks month-dependent tools unhealthy when month category rows are missing", async () => {
+    const database = new FakeD1Database();
+    database.monthCategoryCount = 0;
+    const definitions = getRegisteredToolDefinitions(
+      createD1Env(database as unknown as D1Database),
+      {},
+    );
+    const budgetHealth = definitions.find(
+      (definition) => definition.name === "ynab_get_budget_health_summary",
+    );
+
+    await expect(
+      executeToolDefinition(budgetHealth, { month: "2026-06-01" }),
+    ).resolves.toMatchObject({
+      status: "unhealthy",
+      data_freshness: {
+        health_status: "unhealthy",
+        required_endpoints: ["categories", "months"],
+        warning:
+          "Month 2026-06-01 has synced month/category/transaction data but no month-category rows.",
+      },
+      data: null,
+    });
+
+    expect(
+      database.allCalls.some((call) => call.sql.includes("FROM ynab_months")),
+    ).toBe(true);
+    expect(
+      database.allCalls.some((call) =>
+        call.sql.includes("FROM ynab_month_categories"),
+      ),
+    ).toBe(true);
   });
 
   it("does not require month sync for category detail tools", async () => {

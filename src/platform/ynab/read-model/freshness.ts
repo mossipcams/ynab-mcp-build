@@ -1,3 +1,5 @@
+import { createReadModelIntegrity } from "./integrity.js";
+
 export type EndpointFreshness = {
   last_synced_at: string | null;
   stale: boolean;
@@ -13,6 +15,10 @@ type SyncStateRow = {
   last_error?: string | null;
 };
 
+type FreshnessContext = {
+  month?: string;
+};
+
 const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
 
 function subtractMinutes(isoDate: string, minutes: number) {
@@ -26,10 +32,13 @@ export function createReadModelFreshness(
     staleAfterMinutes: number;
   },
 ) {
+  const integrity = createReadModelIntegrity(database);
+
   return {
     async getFreshness(
       planId: string,
       requiredEndpoints: readonly string[],
+      context?: FreshnessContext,
     ): Promise<EndpointFreshness> {
       if (requiredEndpoints.length === 0) {
         return {
@@ -90,6 +99,22 @@ export function createReadModelFreshness(
         options.staleAfterMinutes,
       );
       const stale = !oldestLastSyncedAt || oldestLastSyncedAt < staleBefore;
+      const monthIntegrity =
+        context?.month && requiredEndpoints.includes("months")
+          ? await integrity.getMonthCategoryIntegrity({
+              month: context.month,
+              planId,
+            })
+          : null;
+
+      if (monthIntegrity?.health_status === "unhealthy") {
+        return {
+          health_status: "unhealthy",
+          last_synced_at: oldestLastSyncedAt,
+          stale: true,
+          warning: monthIntegrity.warning,
+        };
+      }
 
       return {
         health_status: "ok",

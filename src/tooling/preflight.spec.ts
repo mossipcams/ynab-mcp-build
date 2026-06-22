@@ -111,6 +111,19 @@ describe("repository preflight tooling", () => {
     });
   });
 
+  it("wires sync repair and semantic production smoke commands", () => {
+    // DEFECT: production sync repair tooling can exist in scripts/ but be omitted from reproducible package commands.
+    const packageJson = JSON.parse(readRootFile("package.json")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts).toMatchObject({
+      "backfill:month": "tsx scripts/backfill-month.ts",
+      "sync:diagnostics": "tsx scripts/sync-diagnostics.ts",
+      "test:smoke:prod": "tsx scripts/smoke-prod.ts",
+    });
+  });
+
   it("wires a package script for copy-paste detection", () => {
     // DEFECT: duplication checks can be omitted from preflight if package scripts do not expose a stable command.
     const packageJson = JSON.parse(readRootFile("package.json")) as {

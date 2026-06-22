@@ -34,6 +34,8 @@
     "typecheck:spec": "tsc --noEmit -p tsconfig.spec.json",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
     "bundle:check": "wrangler deploy --dry-run --outdir dist",
+    "backfill:month": "tsx scripts/backfill-month.ts",
+    "sync:diagnostics": "tsx scripts/sync-diagnostics.ts",
     "deps:check": "knip",
     "gitleaks:install": "sh scripts/install-gitleaks.sh",
     "secrets:scan": "pnpm gitleaks:install && PATH=\"$PWD/.bin:$PATH\" gitleaks detect --no-banner --redact",
