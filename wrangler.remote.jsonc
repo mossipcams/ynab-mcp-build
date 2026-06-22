@@ -3,7 +3,7 @@
   // (backfill-month, sync-diagnostics) run with `--remote`.
   //
   // It mirrors the YNAB_DB binding from wrangler.jsonc but flags it
-  // `experimental_remote` so `getPlatformProxy` connects to the deployed
+  // `remote` so `getPlatformProxy` connects to the deployed
   // read-model D1 instead of local `.wrangler/state`. This is kept separate
   // from wrangler.jsonc on purpose: `wrangler dev`/`deploy` must stay
   // local-by-default and never silently target the production database.
@@ -20,7 +20,7 @@
       "binding": "YNAB_DB",
       "database_name": "ynab-mcp-read-model",
       "database_id": "6bc7b73e-009d-483f-a493-0409ba310c88",
-      "experimental_remote": true,
+      "remote": true,
     },
   ],
 }
