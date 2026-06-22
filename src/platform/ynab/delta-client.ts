@@ -168,6 +168,12 @@ const YnabCategoriesDeltaEnvelopeSchema = z
   })
   .passthrough() as z.ZodType<YnabCategoriesDeltaEnvelope>;
 
+const YnabMonthDetailEnvelopeSchema = z
+  .object({
+    data: z.object({ month: YnabPlanMonthRecordSchema }).passthrough(),
+  })
+  .passthrough();
+
 async function getJson<TSchema extends z.ZodType>(
   response: Response,
   schema: TSchema,
@@ -415,6 +421,40 @@ export function createYnabDeltaClient(
     };
   }
 
+  async function getMonthDetail(planId: string, month: string) {
+    const response = await authorizedFetch(
+      `${baseUrl}/plans/${encodeURIComponent(planId)}/months/${encodeURIComponent(month)}`,
+    );
+    const payload = await getJson(response, YnabMonthDetailEnvelopeSchema);
+
+    return toYnabMonth(payload.data.month);
+  }
+
+  async function listMonthsDelta(
+    planId: string,
+    serverKnowledge: number | undefined,
+  ) {
+    const delta = await getDelta<"months", YnabPlanMonthRecord>(
+      planId,
+      "months",
+      "months",
+      serverKnowledge,
+      YnabPlanMonthRecordSchema,
+    );
+    const records = await Promise.all(
+      delta.records.map((month) =>
+        month.categories || month.deleted
+          ? Promise.resolve(toYnabMonth(month))
+          : getMonthDetail(planId, month.month),
+      ),
+    );
+
+    return {
+      records,
+      serverKnowledge: delta.serverKnowledge,
+    };
+  }
+
   return {
     listAccountsDelta(planId, serverKnowledge) {
       return getMappedDelta<"accounts", YnabAccountRecord, YnabAccountSummary>(
@@ -428,14 +468,7 @@ export function createYnabDeltaClient(
     },
     listCategoriesDelta,
     listMonthsDelta(planId, serverKnowledge) {
-      return getMappedDelta<"months", YnabPlanMonthRecord, YnabPlanMonthDetail>(
-        planId,
-        "months",
-        "months",
-        serverKnowledge,
-        YnabPlanMonthRecordSchema,
-        toYnabMonth,
-      );
+      return listMonthsDelta(planId, serverKnowledge);
     },
     listPayeesDelta(planId, serverKnowledge) {
       return getMappedDelta<"payees", YnabPayeeRecord, YnabPayee>(

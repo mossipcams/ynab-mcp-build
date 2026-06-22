@@ -270,6 +270,101 @@ describe("financial health service", () => {
     });
   });
 
+  it("reports overspending from hydrated month categories alongside assigned versus spent", async () => {
+    const ynabClient = {
+      getPlanMonth: async () => ({
+        activity: -6090860,
+        budgeted: 4092500,
+        categories: [
+          {
+            activity: -725000,
+            balance: -225000,
+            budgeted: 500000,
+            deleted: false,
+            hidden: false,
+            id: "groceries",
+            name: "Groceries",
+          },
+        ],
+        income: 0,
+        month: "2026-05-01",
+        toBeBudgeted: 0,
+      }),
+      listTransactions: async () => [
+        {
+          amount: -6090860,
+          categoryId: "groceries",
+          categoryName: "Groceries",
+          date: "2026-05-12",
+          deleted: false,
+          id: "txn-1",
+          payeeName: "Market",
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getMonthlyReview(ynabClient, {
+        month: "2026-05-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      assigned: "4092.50",
+      assigned_vs_spent: "-1998.36",
+      overspent_total: "225.00",
+      spent: "6090.86",
+    });
+  });
+
+  it("excludes transfer payments from monthly review outflow when YNAB marks the transfer account", async () => {
+    const ynabClient = {
+      getPlanMonth: async () => ({
+        activity: -100000,
+        budgeted: 120000,
+        categories: [],
+        income: 0,
+        month: "2026-05-01",
+        toBeBudgeted: 0,
+      }),
+      listTransactions: async () => [
+        {
+          amount: -1174860,
+          date: "2026-05-03",
+          deleted: false,
+          id: "cc-payment",
+          payeeName: "BANK OF AMERICA PAYMENT 260616",
+          transferAccountId: "credit-card-account",
+        },
+        {
+          amount: -100000,
+          categoryId: "rent",
+          categoryName: "Rent",
+          date: "2026-05-04",
+          deleted: false,
+          id: "rent",
+          payeeName: "Landlord",
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getMonthlyReview(ynabClient, {
+        month: "2026-05-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      outflow: "100.00",
+      spent: "100.00",
+      top_spending_categories: [
+        {
+          amount: "100.00",
+          id: "rent",
+          name: "Rent",
+        },
+      ],
+    });
+  });
+
   it("rolls spending summary categories up from split subtransactions", async () => {
     // DEFECT: split parent transactions with no category can hide large spending in top category summaries.
     const ynabClient = {

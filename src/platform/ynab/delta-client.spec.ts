@@ -285,6 +285,78 @@ describe("YNAB delta client", () => {
     ]);
   });
 
+  it("hydrates changed month summaries from month detail so sync receives month categories", async () => {
+    const requests: Array<string | URL | Request> = [];
+    const client = createYnabDeltaClient({
+      accessToken: "pat-secret",
+      baseUrl: "https://api.ynab.com/v1",
+      fetchFn: async (input) => {
+        requests.push(input);
+        const url = new URL(String(input));
+
+        if (url.pathname.endsWith("/months/2026-04-01")) {
+          return Response.json({
+            data: {
+              month: {
+                month: "2026-04-01",
+                income: 0,
+                budgeted: 4092500,
+                activity: -6090860,
+                to_be_budgeted: 0,
+                categories: [
+                  {
+                    id: "category-1",
+                    name: "Groceries",
+                    hidden: false,
+                    deleted: false,
+                    budgeted: 500000,
+                    activity: -725000,
+                    balance: -225000,
+                  },
+                ],
+              },
+            },
+          });
+        }
+
+        return Response.json({
+          data: {
+            months: [
+              {
+                month: "2026-04-01",
+                income: 0,
+                budgeted: 4092500,
+                activity: -6090860,
+                to_be_budgeted: 0,
+              },
+            ],
+            server_knowledge: 203,
+          },
+        });
+      },
+    });
+
+    await expect(client.listMonthsDelta("plan-1", 103)).resolves.toMatchObject({
+      records: [
+        {
+          month: "2026-04-01",
+          categoryCount: 1,
+          categories: [
+            {
+              id: "category-1",
+              balance: -225000,
+            },
+          ],
+        },
+      ],
+      serverKnowledge: 203,
+    });
+    expect(requests.map(String)).toEqual([
+      "https://api.ynab.com/v1/plans/plan-1/months?last_knowledge_of_server=103",
+      "https://api.ynab.com/v1/plans/plan-1/months/2026-04-01",
+    ]);
+  });
+
   it("accepts payee location responses without server knowledge", async () => {
     const requests: Array<string | URL | Request> = [];
     const client = createYnabDeltaClient({

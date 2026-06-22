@@ -107,7 +107,8 @@ class FakeD1Database {
     ) {
       const categoryId = params.at(-1);
       const hasParentMatch = row.category_id === categoryId;
-      const hasSubtransactionMatch = this.rows.ynab_subtransactions.some(
+      const subtransactions = this.rows.ynab_subtransactions ?? [];
+      const hasSubtransactionMatch = subtransactions.some(
         (subtransaction) =>
           subtransaction.plan_id === row.plan_id &&
           subtransaction.transaction_id === row.id &&
