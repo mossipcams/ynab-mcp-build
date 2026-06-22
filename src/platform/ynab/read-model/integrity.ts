@@ -117,19 +117,19 @@ export function createReadModelIntegrity(database: D1Database) {
         database,
         `SELECT COUNT(*) AS count
          FROM (
-           SELECT transaction.category_id
+           SELECT txn.category_id
            FROM
-             ynab_transactions transaction
+             ynab_transactions txn
            LEFT JOIN ynab_month_categories month_category
-             ON month_category.plan_id = transaction.plan_id
+             ON month_category.plan_id = txn.plan_id
             AND month_category.month = ?
-            AND month_category.category_id = transaction.category_id
+            AND month_category.category_id = txn.category_id
             AND month_category.deleted = 0
-           WHERE transaction.plan_id = ?
-             AND transaction.date >= ?
-             AND transaction.date < ?
-             AND transaction.category_id IS NOT NULL
-             AND transaction.deleted = 0
+           WHERE txn.plan_id = ?
+             AND txn.date >= ?
+             AND txn.date < ?
+             AND txn.category_id IS NOT NULL
+             AND txn.deleted = 0
              AND month_category.category_id IS NULL
          ) missing_transaction_category_refs`,
         input.month,
@@ -181,13 +181,13 @@ export function createReadModelIntegrity(database: D1Database) {
            SELECT subtransaction.id
            FROM
              ynab_subtransactions subtransaction
-           LEFT JOIN ynab_transactions transaction
-             ON transaction.plan_id = subtransaction.plan_id
-            AND transaction.id = subtransaction.transaction_id
-            AND transaction.deleted = 0
+           LEFT JOIN ynab_transactions txn
+             ON txn.plan_id = subtransaction.plan_id
+            AND txn.id = subtransaction.transaction_id
+            AND txn.deleted = 0
            WHERE subtransaction.plan_id = ?
              AND subtransaction.deleted = 0
-             AND transaction.id IS NULL
+             AND txn.id IS NULL
          ) missing_subtransaction_parent_refs`,
         planId,
       ),
