@@ -90,10 +90,14 @@ describe("plans service", () => {
       months: [
         {
           month: "2026-04-01",
-          income: 1000,
-          budgeted: 800,
-          activity: -500,
-          to_be_budgeted: 200,
+          income: "1.00",
+          income_milliunits: 1000,
+          budgeted: "0.80",
+          budgeted_milliunits: 800,
+          activity: "-0.50",
+          activity_milliunits: -500,
+          to_be_budgeted: "0.20",
+          to_be_budgeted_milliunits: 200,
         },
       ],
       month_count: 1,

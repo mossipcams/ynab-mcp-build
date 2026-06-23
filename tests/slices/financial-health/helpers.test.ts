@@ -16,6 +16,7 @@ describe("financial health helpers", () => {
       {
         id: "account-1",
         name: "Checking",
+        type: "checking",
         balance: 100_000,
         deleted: false,
         closed: false,

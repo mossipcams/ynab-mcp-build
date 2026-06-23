@@ -41,6 +41,7 @@ describe("financial health service", () => {
         {
           id: "account-1",
           name: "Checking",
+          type: "checking",
           balance: 200000,
           deleted: false,
           closed: false,
@@ -137,6 +138,7 @@ describe("financial health service", () => {
         {
           id: "account-1",
           name: "Checking",
+          type: "checking",
           balance: 300000,
           deleted: false,
           closed: false,
@@ -145,6 +147,7 @@ describe("financial health service", () => {
         {
           id: "account-2",
           name: "Savings",
+          type: "savings",
           balance: 200000,
           deleted: false,
           closed: false,
@@ -167,7 +170,7 @@ describe("financial health service", () => {
     ).resolves.toEqual({
       month: "2026-04-01",
       net_worth: "560.00",
-      liquid_cash: "650.00",
+      liquid_cash: "500.00",
       total_debt: "90.00",
       ready_to_assign: "10.00",
       income: "120.00",
@@ -328,6 +331,8 @@ describe("financial health service", () => {
       age_of_money: 9,
       ready_to_assign: "2.00",
       available_total: "0.00",
+      positive_available_total: "0.00",
+      net_available_total: "-30.00",
       goal_count: 2,
       underfunded_goal_total: "30.00",
       off_track_goal_count: 2,
@@ -393,6 +398,7 @@ describe("financial health service", () => {
         {
           id: "account-1",
           name: "Checking",
+          type: "checking",
           balance: 100000,
           deleted: false,
           closed: false,
@@ -615,6 +621,8 @@ describe("financial health service", () => {
       net_flow: "68.00",
       ready_to_assign: "5.00",
       available_total: "10.00",
+      positive_available_total: "10.00",
+      net_available_total: "10.00",
       overspent_total: "0.00",
       underfunded_total: "0.00",
       assigned: "60.00",
@@ -988,6 +996,7 @@ describe("financial health service", () => {
           transferAccountId: null,
           payeeId: "payee-1",
           payeeName: "Employer",
+          categoryName: "Inflow: Ready to Assign",
         },
         {
           id: "txn-2",
@@ -997,6 +1006,7 @@ describe("financial health service", () => {
           transferAccountId: null,
           payeeId: "payee-2",
           payeeName: "Gift",
+          categoryName: "Inflow: Ready to Assign",
         },
         {
           id: "txn-3",
@@ -1006,6 +1016,7 @@ describe("financial health service", () => {
           transferAccountId: null,
           payeeId: "payee-1",
           payeeName: "Employer",
+          categoryName: "Inflow: Ready to Assign",
         },
         {
           id: "txn-4",
@@ -1264,6 +1275,7 @@ describe("financial health service", () => {
         {
           id: "account-1",
           name: "Checking",
+          type: "checking",
           balance: 300000,
           deleted: false,
           closed: false,
@@ -1341,6 +1353,7 @@ describe("financial health service", () => {
         {
           id: "account-1",
           name: "Checking",
+          type: "checking",
           balance: 120000,
           deleted: false,
           closed: false,
