@@ -155,6 +155,7 @@ export function getFinancialHealthToolDefinitions(
       inputSchema: {
         ...planIdSchema,
         month: normalizedMonthFieldSchema.optional(),
+        asOfDate: dateFieldSchema.optional(),
         monthsBack: z.number().int().min(1).max(12).optional(),
         detailLevel: detailLevelSchema,
       },

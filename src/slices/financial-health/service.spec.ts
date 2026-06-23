@@ -316,6 +316,45 @@ describe("financial health service", () => {
     });
   });
 
+  it("exposes positive and net available totals distinctly in budget health", async () => {
+    const ynabClient = {
+      getPlanMonth: async () => ({
+        activity: -30_000,
+        budgeted: 100_000,
+        categories: [
+          {
+            balance: 100_000,
+            deleted: false,
+            hidden: false,
+            id: "positive",
+            name: "Positive",
+          },
+          {
+            balance: -30_000,
+            deleted: false,
+            hidden: false,
+            id: "overspent",
+            name: "Overspent",
+          },
+        ],
+        month: "2026-05-01",
+        toBeBudgeted: 0,
+      }),
+    } as unknown as YnabClient;
+
+    await expect(
+      getBudgetHealthSummary(ynabClient, {
+        month: "2026-05-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      available_total: "100.00",
+      positive_available_total: "100.00",
+      net_available_total: "70.00",
+      overspent_total: "30.00",
+    });
+  });
+
   it("excludes transfer payments from monthly review outflow when YNAB marks the transfer account", async () => {
     const ynabClient = {
       getPlanMonth: async () => ({
@@ -627,6 +666,96 @@ describe("financial health service", () => {
     });
   });
 
+  it("returns no-match status and suggestions for mistyped category group names", async () => {
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories: [
+          {
+            id: "groceries",
+            name: "Groceries",
+            categoryGroupName: "Food",
+            budgeted: 100000,
+            activity: -100000,
+            balance: 0,
+            deleted: false,
+            hidden: false,
+          },
+        ],
+      }),
+      listCategories: async () => [
+        {
+          id: "food-group",
+          name: "Food",
+          deleted: false,
+          hidden: false,
+          categories: [
+            {
+              id: "groceries",
+              name: "Groceries",
+              deleted: false,
+              hidden: false,
+            },
+          ],
+        },
+      ],
+      listPlanMonths: async () => [{ month: "2026-04-01", deleted: false }],
+    } as unknown as YnabClient;
+
+    await expect(
+      getCategoryTrendSummary(ynabClient, {
+        categoryGroupName: "Foood",
+        fromMonth: "2026-04-01",
+        planId: "plan-1",
+        toMonth: "2026-04-01",
+      }),
+    ).resolves.toMatchObject({
+      status: "no_match",
+      periods: [],
+      suggestions: {
+        category_groups: ["Food"],
+        categories: [{ id: "groceries", name: "Groceries" }],
+      },
+    });
+  });
+
+  it("returns no-match status and suggestions for unknown category ids", async () => {
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories: [
+          {
+            id: "groceries",
+            name: "Groceries",
+            categoryGroupName: "Food",
+            budgeted: 100000,
+            activity: -100000,
+            balance: 0,
+            deleted: false,
+            hidden: false,
+          },
+        ],
+      }),
+      listPlanMonths: async () => [{ month: "2026-04-01", deleted: false }],
+    } as unknown as YnabClient;
+
+    await expect(
+      getCategoryTrendSummary(ynabClient, {
+        categoryId: "groceriez",
+        fromMonth: "2026-04-01",
+        planId: "plan-1",
+        toMonth: "2026-04-01",
+      }),
+    ).resolves.toMatchObject({
+      status: "no_match",
+      periods: [],
+      suggestions: {
+        category_groups: ["Food"],
+        categories: [{ id: "groceries", name: "Groceries" }],
+      },
+    });
+  });
+
   it("bounds net worth transaction reads to the current balance month", async () => {
     // DEFECT: net worth trajectory should avoid unbounded reads while still preserving rollback from current balances.
     vi.useFakeTimers();
@@ -723,6 +852,46 @@ describe("financial health service", () => {
           net_worth: "1000.00",
         }),
       ],
+    });
+  });
+
+  it("computes net worth change from raw milliunits before formatting", async () => {
+    const ynabClient = {
+      listAccounts: async () => [
+        {
+          id: "checking",
+          name: "Checking",
+          type: "checking",
+          closed: false,
+          deleted: false,
+          balance: 2006,
+        },
+      ],
+      listPlanMonths: async () => [
+        { month: "2026-03-01", deleted: false },
+        { month: "2026-04-01", deleted: false },
+      ],
+      listTransactions: async () => [
+        {
+          id: "income",
+          date: "2026-04-15",
+          amount: 1002,
+          accountId: "checking",
+          deleted: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getNetWorthTrajectory(ynabClient, {
+        fromMonth: "2026-03-01",
+        planId: "plan-1",
+        toMonth: "2026-04-01",
+      }),
+    ).resolves.toMatchObject({
+      start_net_worth: "1.00",
+      end_net_worth: "2.01",
+      change_net_worth: "1.00",
     });
   });
 
@@ -1932,6 +2101,55 @@ describe("financial health service", () => {
     ).resolves.toMatchObject({ coverage_months: "6.00", status: "strong" });
   });
 
+  it("excludes credit-like and tracking accounts from cash resilience liquid cash", async () => {
+    const ynabClient = {
+      listPlans: async () => ({
+        defaultPlan: { id: "plan-1", name: "Plan" },
+        plans: [{ id: "plan-1", name: "Plan" }],
+      }),
+      listAccounts: async () => [
+        {
+          id: "checking",
+          name: "Checking",
+          type: "checking",
+          onBudget: true,
+          closed: false,
+          balance: 30_000,
+        },
+        {
+          id: "credit",
+          name: "Credit Card",
+          type: "creditCard",
+          onBudget: true,
+          closed: false,
+          balance: 50_000,
+        },
+        {
+          id: "asset",
+          name: "Brokerage",
+          type: "otherAsset",
+          onBudget: false,
+          closed: false,
+          balance: 100_000,
+        },
+      ],
+      listPlanMonths: async () => [
+        { month: "2026-04-01", activity: -30_000, deleted: false },
+      ],
+      listScheduledTransactions: async () => [],
+    } as unknown as YnabClient;
+
+    await expect(
+      getCashResilienceSummary(ynabClient, {
+        month: "2026-04-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      liquid_cash: "30.00",
+      coverage_months: "1.00",
+    });
+  });
+
   it("uses the same current 30-day scheduled net as upcoming obligations", async () => {
     // DEFECT: cash resilience labeled the current-month 7-day scheduled net as the next 30-day net.
     vi.useFakeTimers();
@@ -2000,6 +2218,98 @@ describe("financial health service", () => {
     });
   });
 
+  it("keeps upcoming obligations anchored to explicit as-of date across UTC rollover", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-01T00:30:00.000Z"));
+
+    const ynabClient = {
+      listPlans: async () => ({
+        defaultPlan: { id: "plan-1", name: "Plan" },
+        plans: [{ id: "plan-1", name: "Plan" }],
+      }),
+      listScheduledTransactions: async () => [
+        {
+          id: "rent",
+          dateNext: "2026-04-30",
+          amount: -20000,
+          deleted: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getUpcomingObligations(ynabClient, {
+        asOfDate: "2026-04-30",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      as_of_date: "2026-04-30",
+      obligation_count: 1,
+      windows: {
+        "7d": {
+          total_outflows: "20.00",
+        },
+      },
+      top_due: [
+        expect.objectContaining({
+          date_next: "2026-04-30",
+        }),
+      ],
+    });
+  });
+
+  it("uses explicit as-of date for current-month cash resilience windows", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-01T00:30:00.000Z"));
+
+    const ynabClient = {
+      listPlans: async () => ({
+        defaultPlan: { id: "plan-1", name: "Plan" },
+        plans: [{ id: "plan-1", name: "Plan" }],
+      }),
+      listAccounts: async () => [
+        {
+          id: "account-1",
+          name: "Checking",
+          type: "checking",
+          onBudget: true,
+          closed: false,
+          balance: 90000,
+        },
+      ],
+      listPlanMonths: async () => [
+        {
+          month: "2026-04-01",
+          activity: -30000,
+          deleted: false,
+        },
+        {
+          month: "2026-05-01",
+          activity: 0,
+          deleted: false,
+        },
+      ],
+      listScheduledTransactions: async () => [
+        {
+          id: "rent",
+          dateNext: "2026-04-30",
+          amount: -20000,
+          deleted: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getCashResilienceSummary(ynabClient, {
+        asOfDate: "2026-04-30",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      month: "2026-04-01",
+      scheduled_net_next_30d: "-20.00",
+    });
+  });
+
   it("rounds income averages and medians from integer milliunits to cents", async () => {
     // DEFECT: formatting through floating-point toFixed drifted exact half-cent income statistics down.
     const ynabClient = {
@@ -2015,6 +2325,7 @@ describe("financial health service", () => {
           date: "2026-01-15",
           amount: 7000550,
           payeeName: "Payroll",
+          categoryName: "Inflow: Ready to Assign",
           cleared: "cleared",
           approved: true,
           deleted: false,
@@ -2024,6 +2335,7 @@ describe("financial health service", () => {
           date: "2026-02-15",
           amount: 5181310,
           payeeName: "Payroll",
+          categoryName: "Inflow: Ready to Assign",
           cleared: "cleared",
           approved: true,
           deleted: false,
@@ -2033,6 +2345,7 @@ describe("financial health service", () => {
           date: "2026-03-15",
           amount: 5181320,
           payeeName: "Payroll",
+          categoryName: "Inflow: Ready to Assign",
           cleared: "cleared",
           approved: true,
           deleted: false,
@@ -2042,6 +2355,7 @@ describe("financial health service", () => {
           date: "2026-04-15",
           amount: 3881800,
           payeeName: "Payroll",
+          categoryName: "Inflow: Ready to Assign",
           cleared: "cleared",
           approved: true,
           deleted: false,
@@ -2058,6 +2372,61 @@ describe("financial health service", () => {
     ).resolves.toMatchObject({
       average_monthly_income: "5311.25",
       median_monthly_income: "5181.32",
+    });
+  });
+
+  it("does not classify missing or blank category fallback transactions as income", async () => {
+    const ynabClient = {
+      listPlanMonths: async () => [
+        { month: "2026-05-01", deleted: false, activity: 0 },
+      ],
+      listTransactions: async () => [
+        {
+          id: "missing-category",
+          date: "2026-05-01",
+          amount: 100000,
+          payeeName: "Mystery Deposit",
+          deleted: false,
+        },
+        {
+          id: "blank-category",
+          date: "2026-05-02",
+          amount: 200000,
+          payeeName: "Blank Deposit",
+          categoryName: "   ",
+          deleted: false,
+        },
+        {
+          id: "ready-to-assign",
+          date: "2026-05-03",
+          amount: 300000,
+          payeeName: "Payroll",
+          categoryName: "Ready to Assign",
+          deleted: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getIncomeSummary(ynabClient, {
+        fromMonth: "2026-05-01",
+        planId: "plan-1",
+        toMonth: "2026-05-01",
+      }),
+    ).resolves.toMatchObject({
+      income_total: "300.00",
+      top_income_sources: [
+        {
+          name: "Payroll",
+          amount: "300.00",
+        },
+      ],
+      months: [
+        {
+          month: "2026-05-01",
+          income: "300.00",
+        },
+      ],
     });
   });
 

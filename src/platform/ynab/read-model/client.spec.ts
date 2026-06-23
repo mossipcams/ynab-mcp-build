@@ -1026,10 +1026,8 @@ describe("YNAB read-model client", () => {
       name: "Groceries",
       hidden: true,
       deleted: false,
-      categoryGroupName: undefined,
-      balance: undefined,
+      categoryGroupId: "group-1",
       goalType: "TB",
-      goalTarget: undefined,
     });
     await expect(
       client.getMonthCategory("plan-1", "2026-04-01", "category-1"),
@@ -1037,7 +1035,9 @@ describe("YNAB read-model client", () => {
       id: "category-1",
       name: "Groceries",
       hidden: true,
+      deleted: true,
       activity: -12000,
+      balance: 0,
       goalType: "TB",
       goalUnderFunded: 3000,
     });
@@ -1199,6 +1199,150 @@ describe("YNAB read-model client", () => {
     expect(db.calls.map((call) => call.params[0]).filter(Boolean)).toEqual(
       expect.arrayContaining(["plan-1"]),
     );
+  });
+
+  it("hydrates complete category and month category details from D1", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_categories = [
+      {
+        plan_id: "plan-1",
+        id: "category-1",
+        category_group_id: "group-1",
+        category_group_name: "Everyday",
+        original_category_group_id: "original-group-1",
+        name: "Groceries",
+        note: "Buy the good coffee",
+        hidden: 0,
+        deleted: 0,
+        balance_milliunits: 123450,
+        goal_type: "NEED",
+        goal_target_milliunits: 250000,
+        goal_target_date: "2026-12-31",
+        goal_target_month: "2026-12-01",
+        goal_needs_whole_amount: 1,
+        goal_day: 15,
+        goal_cadence: 2,
+        goal_cadence_frequency: 3,
+        goal_creation_month: "2026-01-01",
+        goal_percentage_complete: 40,
+        goal_months_to_budget: 5,
+        goal_under_funded_milliunits: 75000,
+        goal_overall_funded_milliunits: 100000,
+        goal_overall_left_milliunits: 150000,
+        goal_snoozed_at: "2026-04-20",
+      },
+    ];
+    db.rows.ynab_months = [
+      {
+        plan_id: "plan-1",
+        month: "2026-04-01",
+        income_milliunits: 500000,
+        budgeted_milliunits: 250000,
+        activity_milliunits: -100000,
+        to_be_budgeted_milliunits: 0,
+        age_of_money: 12,
+        deleted: 0,
+      },
+    ];
+    db.rows.ynab_month_categories = [
+      {
+        plan_id: "plan-1",
+        month: "2026-04-01",
+        category_id: "category-1",
+        category_group_id: "group-1",
+        category_group_name: "Everyday",
+        original_category_group_id: "original-group-1",
+        name: "Groceries",
+        note: "Month-specific note",
+        budgeted_milliunits: 250000,
+        activity_milliunits: -100000,
+        balance_milliunits: 150000,
+        goal_under_funded_milliunits: 50000,
+        goal_type: "NEED",
+        goal_target_milliunits: 250000,
+        goal_target_date: "2026-12-31",
+        goal_target_month: "2026-12-01",
+        goal_needs_whole_amount: 1,
+        goal_day: 15,
+        goal_cadence: 2,
+        goal_cadence_frequency: 3,
+        goal_creation_month: "2026-01-01",
+        goal_percentage_complete: 40,
+        goal_months_to_budget: 5,
+        goal_overall_funded_milliunits: 100000,
+        goal_overall_left_milliunits: 150000,
+        goal_snoozed_at: "2026-04-20",
+        hidden: 0,
+        deleted: 0,
+      },
+    ];
+
+    const client = createYnabReadModelClient(db as unknown as D1Database, {});
+    const expectedDetail = {
+      categoryGroupId: "group-1",
+      originalCategoryGroupId: "original-group-1",
+      goalCadence: 2,
+      goalCadenceFrequency: 3,
+      goalCreationMonth: "2026-01-01",
+      goalDay: 15,
+      goalMonthsToBudget: 5,
+      goalNeedsWholeAmount: true,
+      goalOverallFunded: 100000,
+      goalOverallLeft: 150000,
+      goalPercentageComplete: 40,
+      goalSnoozedAt: "2026-04-20",
+      goalTargetDate: "2026-12-31",
+      goalTargetMonth: "2026-12-01",
+      note: expect.any(String),
+    };
+
+    await expect(
+      client.getCategory("plan-1", "category-1"),
+    ).resolves.toMatchObject({
+      ...expectedDetail,
+      note: "Buy the good coffee",
+    });
+    await expect(
+      client.getMonthCategory("plan-1", "2026-04-01", "category-1"),
+    ).resolves.toMatchObject({
+      ...expectedDetail,
+      note: "Month-specific note",
+    });
+    await expect(
+      client.getPlanMonth("plan-1", "2026-04-01"),
+    ).resolves.toMatchObject({
+      categories: [
+        {
+          ...expectedDetail,
+          note: "Month-specific note",
+        },
+      ],
+    });
+
+    const selectedColumns = [
+      "category_group_id",
+      "original_category_group_id",
+      "goal_cadence",
+      "goal_cadence_frequency",
+      "goal_target_month",
+      "goal_target_date",
+      "goal_overall_funded_milliunits",
+      "goal_overall_left_milliunits",
+      "goal_snoozed_at",
+      "note",
+    ];
+
+    const categorySql = db.calls.find((call) =>
+      call.sql.includes("FROM ynab_categories"),
+    )?.sql;
+    const monthCategorySql = db.calls
+      .filter((call) => call.sql.includes("FROM ynab_month_categories"))
+      .map((call) => call.sql);
+
+    for (const column of selectedColumns) {
+      expect(categorySql).toContain(column);
+      expect(monthCategorySql.every((sql) => sql.includes(column))).toBe(true);
+    }
   });
 
   it("rejects missing detail rows with read-model specific errors", async () => {

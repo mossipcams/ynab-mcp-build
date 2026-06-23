@@ -18,13 +18,7 @@ type CategoryLike = {
   categoryGroupName?: string;
 };
 
-const trackingAccountTypes = new Set([
-  "autoLoan",
-  "mortgage",
-  "otherAsset",
-  "otherLiability",
-  "studentLoan",
-]);
+const spendableCashAccountTypes = new Set(["cash", "checking", "savings"]);
 
 function isInternalCategory(category: CategoryLike) {
   return (
@@ -36,9 +30,9 @@ function isInternalCategory(category: CategoryLike) {
 
 function isSpendableCashAccount(account: AccountLike) {
   return (
-    account.onBudget !== false ||
-    account.type === undefined ||
-    !trackingAccountTypes.has(account.type)
+    account.onBudget !== false &&
+    account.type !== undefined &&
+    spendableCashAccountTypes.has(account.type)
   );
 }
 
@@ -107,11 +101,18 @@ export function buildVisibleCategoryHealthSummary<
     (category) =>
       !category.deleted && !category.hidden && !isInternalCategory(category),
   );
+  const positiveAvailableTotalMilliunits = visibleCategories
+    .filter((category) => category.balance > 0)
+    .reduce((sum, category) => sum + category.balance, 0);
+  const netAvailableTotalMilliunits = visibleCategories.reduce(
+    (sum, category) => sum + category.balance,
+    0,
+  );
 
   return {
-    availableTotalMilliunits: visibleCategories
-      .filter((category) => category.balance > 0)
-      .reduce((sum, category) => sum + category.balance, 0),
+    availableTotalMilliunits: positiveAvailableTotalMilliunits,
+    positiveAvailableTotalMilliunits,
+    netAvailableTotalMilliunits,
     overspentCategories: visibleCategories.filter(
       (category) => category.balance < 0,
     ),

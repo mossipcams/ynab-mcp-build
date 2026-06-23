@@ -1,4 +1,5 @@
 import { getKnownDefaultPlan, resolvePlanId } from "../../shared/plans.js";
+import { formatAmountMilliunits } from "../../shared/collections.js";
 import type { YnabClient } from "../../platform/ynab/client.js";
 
 export async function listPlans(ynabClient: YnabClient) {
@@ -45,6 +46,10 @@ export async function listCategories(
   };
 }
 
+function formatMoney(value: number | null | undefined) {
+  return value == null ? value : formatAmountMilliunits(value);
+}
+
 export async function getCategory(
   ynabClient: YnabClient,
   planId: string | undefined,
@@ -64,9 +69,11 @@ export async function getCategory(
       name: category.name,
       hidden: category.hidden,
       category_group_name: category.categoryGroupName,
-      balance: category.balance,
+      balance: formatMoney(category.balance),
+      balance_milliunits: category.balance,
       goal_type: category.goalType,
-      goal_target: category.goalTarget,
+      goal_target: formatMoney(category.goalTarget),
+      goal_target_milliunits: category.goalTarget,
     },
   };
 }
@@ -90,12 +97,17 @@ export async function getMonthCategory(
       name: category.name,
       hidden: category.hidden,
       category_group_name: category.categoryGroupName,
-      budgeted: category.budgeted,
-      activity: category.activity,
-      balance: category.balance,
+      budgeted: formatMoney(category.budgeted),
+      budgeted_milliunits: category.budgeted,
+      activity: formatMoney(category.activity),
+      activity_milliunits: category.activity,
+      balance: formatMoney(category.balance),
+      balance_milliunits: category.balance,
       goal_type: category.goalType,
-      goal_target: category.goalTarget,
-      goal_under_funded: category.goalUnderFunded,
+      goal_target: formatMoney(category.goalTarget),
+      goal_target_milliunits: category.goalTarget,
+      goal_under_funded: formatMoney(category.goalUnderFunded),
+      goal_under_funded_milliunits: category.goalUnderFunded,
     },
   };
 }
@@ -110,10 +122,14 @@ export async function listPlanMonths(
     .filter((month) => !month.deleted)
     .map((month) => ({
       month: month.month,
-      income: month.income,
-      budgeted: month.budgeted,
-      activity: month.activity,
-      to_be_budgeted: month.toBeBudgeted,
+      income: formatMoney(month.income),
+      income_milliunits: month.income,
+      budgeted: formatMoney(month.budgeted),
+      budgeted_milliunits: month.budgeted,
+      activity: formatMoney(month.activity),
+      activity_milliunits: month.activity,
+      to_be_budgeted: formatMoney(month.toBeBudgeted),
+      to_be_budgeted_milliunits: month.toBeBudgeted,
     }));
 
   return {
@@ -133,10 +149,14 @@ export async function getPlanMonth(
   return {
     month: {
       month: monthDetail.month,
-      income: monthDetail.income,
-      budgeted: monthDetail.budgeted,
-      activity: monthDetail.activity,
-      to_be_budgeted: monthDetail.toBeBudgeted,
+      income: formatMoney(monthDetail.income),
+      income_milliunits: monthDetail.income,
+      budgeted: formatMoney(monthDetail.budgeted),
+      budgeted_milliunits: monthDetail.budgeted,
+      activity: formatMoney(monthDetail.activity),
+      activity_milliunits: monthDetail.activity,
+      to_be_budgeted: formatMoney(monthDetail.toBeBudgeted),
+      to_be_budgeted_milliunits: monthDetail.toBeBudgeted,
       age_of_money: monthDetail.ageOfMoney,
       category_count: monthDetail.categoryCount,
     },

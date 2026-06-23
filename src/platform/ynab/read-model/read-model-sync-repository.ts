@@ -450,7 +450,7 @@ export function createReadModelSyncRepository(database: D1Database) {
                synced_at,
                updated_at
              )
-             VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(plan_id, month) DO UPDATE SET
                note = excluded.note,
                income_milliunits = excluded.income_milliunits,
@@ -465,6 +465,7 @@ export function createReadModelSyncRepository(database: D1Database) {
           .bind(
             input.planId,
             month.month,
+            month.note ?? null,
             month.income ?? null,
             month.budgeted ?? null,
             month.activity ?? null,

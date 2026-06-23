@@ -432,6 +432,48 @@ describe("read model sync repository", () => {
     expect(db.batchStatements).toEqual([]);
   });
 
+  it("persists month notes when upserting plan months", async () => {
+    const db = new FakeD1Database();
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.upsertMonths({
+      months: [
+        {
+          activity: -6090860,
+          budgeted: 4092500,
+          categories: [],
+          deleted: false,
+          income: 7012345,
+          month: "2026-04-01",
+          note: "April plan notes",
+          toBeBudgeted: 0,
+        },
+      ],
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z",
+    });
+
+    expect(
+      db.batchStatements.find((statement) =>
+        statement.sql.includes("INSERT INTO ynab_months"),
+      )?.params,
+    ).toEqual([
+      "plan-1",
+      "2026-04-01",
+      "April plan notes",
+      7012345,
+      4092500,
+      -6090860,
+      0,
+      null,
+      0,
+      "2026-04-28T12:00:00.000Z",
+      "2026-04-28T12:00:00.000Z",
+    ]);
+  });
+
   it("skips D1 batches for empty record sets", async () => {
     const db = new FakeD1Database();
     const repository = createReadModelSyncRepository(

@@ -254,13 +254,17 @@ function endOfMonth(month: string) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
-function currentCalendarMonth() {
-  const today = currentCalendarDate();
+function currentCalendarMonth(asOfDate?: string) {
+  const today = currentCalendarDate(asOfDate);
 
   return `${today.slice(0, 7)}-01`;
 }
 
-function currentCalendarDate() {
+function currentCalendarDate(asOfDate?: string) {
+  if (asOfDate) {
+    return asOfDate;
+  }
+
   const now = new Date();
 
   return now.toISOString().slice(0, 10);
@@ -319,9 +323,11 @@ function toNextDateFromMonth(asOfMonth: string) {
 function toCashResilienceScheduledAsOfDate(
   month: string,
   inputMonth: string | undefined,
+  asOfDate: string | undefined,
 ) {
-  return !isExplicitMonth(inputMonth) && month === currentCalendarMonth()
-    ? currentCalendarDate()
+  return !isExplicitMonth(inputMonth) &&
+    month === currentCalendarMonth(asOfDate)
+    ? currentCalendarDate(asOfDate)
     : toNextDateFromMonth(month);
 }
 
@@ -348,6 +354,7 @@ async function resolveMonth(
   ynabClient: YnabClient,
   planId: string,
   month?: string,
+  asOfDate?: string,
 ) {
   if (isExplicitMonth(month)) {
     return month;
@@ -355,7 +362,7 @@ async function resolveMonth(
 
   const months = await ynabClient.listPlanMonths(planId);
   const visibleMonths = months.filter((entry) => !entry.deleted);
-  const calendarMonth = currentCalendarMonth();
+  const calendarMonth = currentCalendarMonth(asOfDate);
   const resolvedMonth =
     visibleMonths
       .filter((entry) => entry.month <= calendarMonth)
@@ -550,6 +557,10 @@ function summarizeBudgetHealthMonth(
     age_of_money: monthDetail.ageOfMoney,
     ready_to_assign: formatMilliunits(monthDetail.toBeBudgeted ?? 0),
     available_total: formatMilliunits(summary.availableTotalMilliunits),
+    positive_available_total: formatMilliunits(
+      summary.positiveAvailableTotalMilliunits,
+    ),
+    net_available_total: formatMilliunits(summary.netAvailableTotalMilliunits),
     overspent_total: formatMilliunits(
       overspentCategories.reduce(
         (sum, category) => sum + category.amountMilliunits,
@@ -693,8 +704,6 @@ function isReadyToAssignIncome(transaction: YnabTransaction) {
   const categoryName = transaction.categoryName?.trim().toLowerCase();
 
   return (
-    categoryName === undefined ||
-    categoryName === "" ||
     categoryName === "ready to assign" ||
     categoryName === "inflow: ready to assign"
   );
@@ -1352,6 +1361,8 @@ export async function getMonthlyReview(
     net_flow: formatMilliunits(inflowMilliunits - outflowMilliunits),
     ready_to_assign: budgetHealth.ready_to_assign,
     available_total: budgetHealth.available_total,
+    positive_available_total: budgetHealth.positive_available_total,
+    net_available_total: budgetHealth.net_available_total,
     overspent_total: budgetHealth.overspent_total,
     underfunded_total: budgetHealth.underfunded_total,
     assigned: assignedSpentSummary.assigned,
@@ -1702,6 +1713,18 @@ export async function getCategoryTrendSummary(
       ? listCategories.call(ynabClient, planId)
       : Promise.resolve([]),
   ]);
+  const scope = input.categoryId
+    ? { type: "category", id: input.categoryId }
+    : {
+        type: "category_group",
+        name: input.categoryGroupName,
+        match_basis: "category_group_name",
+      };
+  const visibleMonthCategories = monthDetails.flatMap((monthDetail) =>
+    (monthDetail.categories ?? []).filter(
+      (category) => !category.deleted && !category.hidden,
+    ),
+  );
   const categoryGroupIds = new Set(
     categoryGroups
       .filter(
@@ -1716,6 +1739,45 @@ export async function getCategoryTrendSummary(
           .map((category) => category.id),
       ),
   );
+  const suggestedCategoryGroups = Array.from(
+    new Set([
+      ...categoryGroups
+        .filter((group) => !group.deleted && !group.hidden)
+        .map((group) => group.name),
+      ...visibleMonthCategories.flatMap((category) =>
+        category.categoryGroupName ? [category.categoryGroupName] : [],
+      ),
+    ]),
+  ).sort((left, right) => left.localeCompare(right));
+  const suggestedCategoriesById = new Map<
+    string,
+    { id: string; name: string }
+  >();
+
+  for (const category of visibleMonthCategories) {
+    suggestedCategoriesById.set(category.id, {
+      id: category.id,
+      name: category.name,
+    });
+  }
+
+  for (const group of categoryGroups) {
+    if (group.deleted || group.hidden) {
+      continue;
+    }
+
+    for (const category of group.categories) {
+      if (category.deleted || category.hidden) {
+        continue;
+      }
+
+      suggestedCategoriesById.set(category.id, {
+        id: category.id,
+        name: category.name,
+      });
+    }
+  }
+
   const periods = monthDetails.map((monthDetail) => {
     const matchingCategories = (monthDetail.categories ?? []).filter(
       (category) => {
@@ -1751,8 +1813,29 @@ export async function getCategoryTrendSummary(
       assignedMilliunits,
       spentMilliunits,
       availableMilliunits,
+      matchingCategoryCount: matchingCategories.length,
     };
   });
+
+  if (periods.every((period) => period.matchingCategoryCount === 0)) {
+    return {
+      status: "no_match",
+      from_month: fromMonth,
+      to_month: toMonth,
+      scope,
+      message: input.categoryId
+        ? `No visible category matched id ${input.categoryId}.`
+        : `No visible category group matched ${input.categoryGroupName}.`,
+      suggestions: {
+        category_groups: suggestedCategoryGroups.slice(0, 10),
+        categories: Array.from(suggestedCategoriesById.values())
+          .sort((left, right) => left.name.localeCompare(right.name))
+          .slice(0, 10),
+      },
+      periods: [],
+    };
+  }
+
   const totalSpentMilliunits = periods.reduce(
     (sum, period) => sum + period.spentMilliunits,
     0,
@@ -1773,13 +1856,7 @@ export async function getCategoryTrendSummary(
   return {
     from_month: fromMonth,
     to_month: toMonth,
-    scope: input.categoryId
-      ? { type: "category", id: input.categoryId }
-      : {
-          type: "category_group",
-          name: input.categoryGroupName,
-          match_basis: "category_group_name",
-        },
+    scope,
     average_spent: formatMilliunits(
       Math.round(totalSpentMilliunits / Math.max(periods.length, 1)),
     ),
@@ -1817,12 +1894,18 @@ export async function getCashResilienceSummary(
   input: {
     planId?: string;
     month?: string;
+    asOfDate?: string;
     monthsBack?: number;
     detailLevel?: DetailLevel;
   },
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const month = await resolveMonth(ynabClient, planId, input.month);
+  const month = await resolveMonth(
+    ynabClient,
+    planId,
+    input.month,
+    input.asOfDate,
+  );
   const monthsBack = input.monthsBack ?? 3;
   const [accounts, months, scheduledTransactions] = await Promise.all([
     ynabClient.listAccounts(planId),
@@ -1841,7 +1924,11 @@ export async function getCashResilienceSummary(
       ) / consideredMonths.length
     : 0;
   const averageDailyOutflow = averageMonthlySpending / 30;
-  const asOfDate = toCashResilienceScheduledAsOfDate(month, input.month);
+  const asOfDate = toCashResilienceScheduledAsOfDate(
+    month,
+    input.month,
+    input.asOfDate,
+  );
   const scheduledNetNext30d = scheduledTransactions
     .filter(isNonTransferScheduledTransaction)
     .filter((transaction) => {
@@ -1899,7 +1986,7 @@ export async function getUpcomingObligations(
   },
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const asOfDate = input.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const asOfDate = currentCalendarDate(input.asOfDate);
   const topN = resolveTopN(input);
   const scheduledTransactions = (
     await ynabClient.listScheduledTransactions(planId)
@@ -2337,7 +2424,7 @@ function summarizeBalances(
     balance: balances.get(account.id) ?? account.balance,
   }));
   const snapshot = buildAccountSnapshotSummary(monthAccounts);
-  const debt = monthAccounts
+  const debtMilliunits = monthAccounts
     .filter(
       (account) => !account.deleted && !account.closed && account.balance < 0,
     )
@@ -2345,9 +2432,9 @@ function summarizeBalances(
 
   return {
     month,
-    net_worth: formatMilliunits(snapshot.netWorthMilliunits),
-    liquid_cash: formatMilliunits(snapshot.liquidCashMilliunits),
-    debt: formatMilliunits(debt),
+    netWorthMilliunits: snapshot.netWorthMilliunits,
+    liquidCashMilliunits: snapshot.liquidCashMilliunits,
+    debtMilliunits,
   };
 }
 
@@ -2383,16 +2470,22 @@ export async function getNetWorthTrajectory(
   );
   const startSummary = monthSummaries[0];
   const endSummary = monthSummaries[monthSummaries.length - 1];
+  const startNetWorthMilliunits = startSummary?.netWorthMilliunits ?? 0;
+  const endNetWorthMilliunits = endSummary?.netWorthMilliunits ?? 0;
 
   return {
     from_month: fromMonth,
     to_month: toMonth,
-    start_net_worth: startSummary?.net_worth ?? formatMilliunits(0),
-    end_net_worth: endSummary?.net_worth ?? formatMilliunits(0),
+    start_net_worth: formatMilliunits(startNetWorthMilliunits),
+    end_net_worth: formatMilliunits(endNetWorthMilliunits),
     change_net_worth: formatMilliunits(
-      Number.parseFloat(endSummary?.net_worth ?? "0") * 1000 -
-        Number.parseFloat(startSummary?.net_worth ?? "0") * 1000,
+      endNetWorthMilliunits - startNetWorthMilliunits,
     ),
-    months: monthSummaries,
+    months: monthSummaries.map((summary) => ({
+      month: summary.month,
+      net_worth: formatMilliunits(summary.netWorthMilliunits),
+      liquid_cash: formatMilliunits(summary.liquidCashMilliunits),
+      debt: formatMilliunits(summary.debtMilliunits),
+    })),
   };
 }

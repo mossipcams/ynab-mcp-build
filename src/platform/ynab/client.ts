@@ -94,21 +94,9 @@ export type YnabCategoryGroupSummary = {
   categories: YnabCategorySummary[];
 };
 
-export type YnabCategoryDetail = {
-  id: string;
-  name: string;
-  hidden: boolean;
-  categoryGroupName?: string;
-  balance?: number;
-  goalType?: string;
-  goalTarget?: number;
-};
+export type YnabCategoryDetail = YnabCategorySummary;
 
-export type YnabMonthCategoryDetail = YnabCategoryDetail & {
-  budgeted?: number;
-  activity?: number;
-  goalUnderFunded?: number;
-};
+export type YnabMonthCategoryDetail = YnabCategorySummary;
 
 export type YnabPlanSettings = {
   dateFormat?: {
@@ -128,6 +116,7 @@ export type YnabPlanSettings = {
 
 export type YnabPlanMonthSummary = {
   month: string;
+  note?: string | null;
   income?: number;
   budgeted?: number;
   activity?: number;
@@ -146,7 +135,7 @@ export type YnabPlanMonthDetail = YnabPlanMonthSummary & {
     activity?: number;
     balance: number;
     deleted?: boolean;
-    hidden?: boolean;
+    hidden: boolean;
     goalUnderFunded?: number | null;
     categoryGroupName?: string;
     originalCategoryGroupId?: string | null;

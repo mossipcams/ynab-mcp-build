@@ -84,7 +84,9 @@ type CategoryRow = {
   id: string;
   category_group_id?: string | null;
   category_group_name?: string | null;
+  original_category_group_id?: string | null;
   name: string;
+  note?: string | null;
   hidden?: number | null;
   deleted?: number | null;
   budgeted_milliunits?: number | null;
@@ -92,7 +94,19 @@ type CategoryRow = {
   balance_milliunits?: number | null;
   goal_type?: string | null;
   goal_target_milliunits?: number | null;
+  goal_target_date?: string | null;
+  goal_target_month?: string | null;
+  goal_needs_whole_amount?: number | null;
+  goal_day?: number | null;
+  goal_cadence?: number | null;
+  goal_cadence_frequency?: number | null;
+  goal_creation_month?: string | null;
+  goal_percentage_complete?: number | null;
+  goal_months_to_budget?: number | null;
   goal_under_funded_milliunits?: number | null;
+  goal_overall_funded_milliunits?: number | null;
+  goal_overall_left_milliunits?: number | null;
+  goal_snoozed_at?: string | null;
 };
 
 type PlanSettingsRow = {
@@ -295,9 +309,25 @@ function toCategorySummary(row: CategoryRow) {
 function toCategoryDetail(row: CategoryRow): YnabCategoryDetail {
   return compact({
     ...toCategorySummary(row),
+    categoryGroupId: row.category_group_id ?? undefined,
+    originalCategoryGroupId: row.original_category_group_id ?? undefined,
+    note: row.note ?? undefined,
     balance: row.balance_milliunits ?? undefined,
     goalType: row.goal_type ?? undefined,
     goalTarget: row.goal_target_milliunits ?? undefined,
+    goalTargetDate: row.goal_target_date ?? undefined,
+    goalTargetMonth: row.goal_target_month ?? undefined,
+    goalNeedsWholeAmount: toBoolean(row.goal_needs_whole_amount),
+    goalDay: row.goal_day ?? undefined,
+    goalCadence: row.goal_cadence ?? undefined,
+    goalCadenceFrequency: row.goal_cadence_frequency ?? undefined,
+    goalCreationMonth: row.goal_creation_month ?? undefined,
+    goalPercentageComplete: row.goal_percentage_complete ?? undefined,
+    goalMonthsToBudget: row.goal_months_to_budget ?? undefined,
+    goalUnderFunded: row.goal_under_funded_milliunits ?? undefined,
+    goalOverallFunded: row.goal_overall_funded_milliunits ?? undefined,
+    goalOverallLeft: row.goal_overall_left_milliunits ?? undefined,
+    goalSnoozedAt: row.goal_snoozed_at ?? undefined,
   });
 }
 
@@ -307,13 +337,30 @@ function toMonthCategory(
   return compact({
     id: row.category_id,
     name: row.name,
+    categoryGroupId: row.category_group_id ?? undefined,
+    categoryGroupName: row.category_group_name ?? undefined,
+    originalCategoryGroupId: row.original_category_group_id ?? undefined,
+    note: row.note ?? undefined,
     budgeted: row.budgeted_milliunits ?? undefined,
     activity: row.activity_milliunits ?? undefined,
     balance: row.balance_milliunits ?? 0,
     deleted: toBoolean(row.deleted),
-    hidden: toBoolean(row.hidden),
+    hidden: toRequiredBoolean(row.hidden),
+    goalType: row.goal_type ?? undefined,
+    goalTarget: row.goal_target_milliunits ?? undefined,
+    goalTargetDate: row.goal_target_date ?? undefined,
+    goalTargetMonth: row.goal_target_month ?? undefined,
+    goalNeedsWholeAmount: toBoolean(row.goal_needs_whole_amount),
+    goalDay: row.goal_day ?? undefined,
+    goalCadence: row.goal_cadence ?? undefined,
+    goalCadenceFrequency: row.goal_cadence_frequency ?? undefined,
+    goalCreationMonth: row.goal_creation_month ?? undefined,
+    goalPercentageComplete: row.goal_percentage_complete ?? undefined,
+    goalMonthsToBudget: row.goal_months_to_budget ?? undefined,
     goalUnderFunded: row.goal_under_funded_milliunits ?? undefined,
-    categoryGroupName: row.category_group_name ?? undefined,
+    goalOverallFunded: row.goal_overall_funded_milliunits ?? undefined,
+    goalOverallLeft: row.goal_overall_left_milliunits ?? undefined,
+    goalSnoozedAt: row.goal_snoozed_at ?? undefined,
   });
 }
 
@@ -802,13 +849,29 @@ export function createYnabReadModelClient(
         first(
           await all<CategoryRow>(
             `SELECT id,
+                  category_group_id,
                   category_group_name,
+                  original_category_group_id,
                   name,
+                  note,
                   hidden,
                   deleted,
                   balance_milliunits,
                   goal_type,
-                  goal_target_milliunits
+                  goal_target_milliunits,
+                  goal_target_date,
+                  goal_target_month,
+                  goal_needs_whole_amount,
+                  goal_day,
+                  goal_cadence,
+                  goal_cadence_frequency,
+                  goal_creation_month,
+                  goal_percentage_complete,
+                  goal_months_to_budget,
+                  goal_under_funded_milliunits,
+                  goal_overall_funded_milliunits,
+                  goal_overall_left_milliunits,
+                  goal_snoozed_at
            FROM ynab_categories
            WHERE plan_id = ? AND id = ?
            LIMIT 1`,
@@ -828,8 +891,11 @@ export function createYnabReadModelClient(
       const row = first(
         await all<MonthCategoryRow>(
           `SELECT category_id,
+                  category_group_id,
                   category_group_name,
+                  original_category_group_id,
                   name,
+                  note,
                   hidden,
                   deleted,
                   budgeted_milliunits,
@@ -837,6 +903,18 @@ export function createYnabReadModelClient(
                   balance_milliunits,
                   goal_type,
                   goal_target_milliunits,
+                  goal_target_date,
+                  goal_target_month,
+                  goal_needs_whole_amount,
+                  goal_day,
+                  goal_cadence,
+                  goal_cadence_frequency,
+                  goal_creation_month,
+                  goal_percentage_complete,
+                  goal_months_to_budget,
+                  goal_overall_funded_milliunits,
+                  goal_overall_left_milliunits,
+                  goal_snoozed_at,
                   goal_under_funded_milliunits
            FROM ynab_month_categories
            WHERE plan_id = ? AND month = ? AND category_id = ?
@@ -848,18 +926,7 @@ export function createYnabReadModelClient(
         `YNAB month category ${categoryId} was not found in the read model.`,
       );
 
-      return compact({
-        id: row.category_id,
-        name: row.name,
-        hidden: toRequiredBoolean(row.hidden),
-        categoryGroupName: row.category_group_name ?? undefined,
-        budgeted: row.budgeted_milliunits ?? undefined,
-        activity: row.activity_milliunits ?? undefined,
-        balance: row.balance_milliunits ?? undefined,
-        goalType: row.goal_type ?? undefined,
-        goalTarget: row.goal_target_milliunits ?? undefined,
-        goalUnderFunded: row.goal_under_funded_milliunits ?? undefined,
-      });
+      return toMonthCategory(row);
     },
 
     async getPlanSettings(planId: string): Promise<YnabPlanSettings> {
@@ -948,12 +1015,29 @@ export function createYnabReadModelClient(
         ),
         all<MonthCategoryRow>(
           `SELECT category_id,
+                  category_group_id,
                   category_group_name,
+                  original_category_group_id,
                   name,
+                  note,
                   budgeted_milliunits,
                   activity_milliunits,
                   balance_milliunits,
+                  goal_type,
+                  goal_target_milliunits,
+                  goal_target_date,
+                  goal_target_month,
+                  goal_needs_whole_amount,
+                  goal_day,
+                  goal_cadence,
+                  goal_cadence_frequency,
+                  goal_creation_month,
+                  goal_percentage_complete,
+                  goal_months_to_budget,
                   goal_under_funded_milliunits,
+                  goal_overall_funded_milliunits,
+                  goal_overall_left_milliunits,
+                  goal_snoozed_at,
                   hidden,
                   deleted
            FROM ynab_month_categories
