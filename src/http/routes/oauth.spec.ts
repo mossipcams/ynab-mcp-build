@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createApp } from "../../app/create-app.js";
 import {
   createMemoryOAuthStateStorage,
   handleOAuthStateRequest,
@@ -43,6 +44,32 @@ function createOAuthEnv(): Env {
     YNAB_DB: {} as D1Database,
     YNAB_READ_SOURCE: "d1",
   } as unknown as Env;
+}
+
+function createMemoryKvNamespace(): KVNamespace {
+  const values = new Map<string, string>();
+
+  return {
+    async get(key: string) {
+      return values.get(key) ?? null;
+    },
+    async put(key: string, value: string) {
+      values.set(key, value);
+    },
+    async list() {
+      return {
+        keys: [...values.keys()].map((name) => ({ name })),
+        list_complete: true,
+      };
+    },
+  } as unknown as KVNamespace;
+}
+
+function createOAuthRouteEnv(): Env {
+  return {
+    ...createOAuthEnv(),
+    OAUTH_KV: createMemoryKvNamespace(),
+  } as Env;
 }
 
 describe("oauth routes", () => {
@@ -189,6 +216,104 @@ describe("oauth routes", () => {
       response_types: ["code"],
       token_endpoint_auth_method: "none",
     });
+  });
+
+  it("rejects untrusted dynamic client registration metadata in the local route", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://mcp.example.com/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          client_name: "Unexpected client",
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: ["https://evil.example.com/callback"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        }),
+      }),
+      createOAuthRouteEnv(),
+      {} as ExecutionContext,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_client_metadata",
+      error_description: "redirect_uris contains an untrusted redirect URI.",
+    });
+  });
+
+  it("registers trusted dynamic client metadata in the local route", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://mcp.example.com/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          client_name: "Claude",
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        }),
+      }),
+      createOAuthRouteEnv(),
+      {} as ExecutionContext,
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      client_name: "Claude",
+      grant_types: ["authorization_code", "refresh_token"],
+      redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    });
+  });
+
+  it("rejects invalid JSON dynamic client registration payloads in the local route", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("https://mcp.example.com/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: "{",
+      }),
+      createOAuthRouteEnv(),
+      {} as ExecutionContext,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "invalid_client_metadata",
+    });
+  });
+
+  it("keeps local registration method handling client-compatible", async () => {
+    const app = createApp();
+    const env = createOAuthRouteEnv();
+    const optionsResponse = await app.fetch(
+      new Request("https://mcp.example.com/register", {
+        method: "OPTIONS",
+      }),
+      env,
+      {} as ExecutionContext,
+    );
+    const getResponse = await app.fetch(
+      new Request("https://mcp.example.com/register"),
+      env,
+      {} as ExecutionContext,
+    );
+
+    expect(optionsResponse.status).toBe(204);
+    expect(optionsResponse.headers.get("allow")).toBe("POST, OPTIONS");
+    expect(getResponse.status).toBe(404);
   });
 
   it("requires authorization-code requests to use S256 PKCE", async () => {
@@ -388,9 +513,10 @@ describe("oauth routes", () => {
     );
     const tokenPayload = (await tokenResponse.json()) as {
       access_token: string;
+      resource?: string;
     };
     const transport = new StreamableHTTPClientTransport(
-      new URL("http://localhost/mcp"),
+      new URL("https://mcp.example.com/mcp"),
       {
         fetch: async (input, init) => {
           const request =
@@ -426,6 +552,7 @@ describe("oauth routes", () => {
     const result = await client.listTools();
 
     expect(tokenResponse.status).toBe(200);
+    expect(tokenPayload.resource).toBe("https://mcp.example.com/mcp");
     expect(result.tools.map((tool) => tool.name).sort()).toEqual(
       [...DISCOVERY_TOOL_NAMES].sort(),
     );
@@ -438,5 +565,89 @@ describe("oauth routes", () => {
         readOnlyHint: true,
       });
     }
+  });
+
+  it("rejects provider tokens bound to a different resource for MCP", async () => {
+    const env = createOAuthEnv();
+    const executionContext = {} as ExecutionContext;
+    const registrationResponse = await worker.fetch(
+      new Request("https://mcp.example.com/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          client_name: "Claude",
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        }),
+      }),
+      env,
+      executionContext,
+    );
+    const registration = (await registrationResponse.json()) as {
+      client_id: string;
+    };
+    const authorizeResponse = await worker.fetch(
+      new Request(
+        `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1&resource=${encodeURIComponent("https://other.example.com/mcp")}`,
+      ),
+      env,
+      executionContext,
+    );
+    const redirectLocation = authorizeResponse.headers.get("location");
+    const code = redirectLocation
+      ? new URL(redirectLocation).searchParams.get("code")
+      : null;
+    const tokenResponse = await worker.fetch(
+      new Request("https://mcp.example.com/token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          client_id: registration.client_id,
+          code: code ?? "",
+          code_verifier: "test-code-verifier",
+          grant_type: "authorization_code",
+          redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+        }).toString(),
+      }),
+      env,
+      executionContext,
+    );
+    const tokenPayload = (await tokenResponse.json()) as {
+      access_token: string;
+      resource?: string;
+    };
+    const mcpResponse = await worker.fetch(
+      new Request("https://mcp.example.com/mcp", {
+        method: "POST",
+        headers: {
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${tokenPayload.access_token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: "2.0",
+          method: "tools/list",
+          params: {},
+        }),
+      }),
+      env,
+      executionContext,
+    );
+
+    expect(authorizeResponse.status).toBe(302);
+    expect(tokenResponse.status).toBe(200);
+    expect(tokenPayload.resource).toBe("https://other.example.com/mcp");
+    expect(mcpResponse.status).toBe(401);
+    await expect(mcpResponse.json()).resolves.toMatchObject({
+      error: "invalid_token",
+      error_description: "Token audience does not match resource server",
+    });
   });
 });

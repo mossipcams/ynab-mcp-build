@@ -4,6 +4,7 @@ import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 import type { AppDependencies } from "../../app/dependencies.js";
 import {
   ACCESS_OIDC_CALLBACK_PATH,
+  bindAuthorizationRequestResource,
   consumePendingAccessAuthorization,
   getAccessOidcAuthorizationRedirect,
   getAccessOidcCallbackUrl,
@@ -12,6 +13,7 @@ import {
   storePendingAccessAuthorization,
   validateAuthorizationCodePkce,
 } from "../core/access-oidc-authorization.js";
+import { validateClientRegistrationMetadata } from "../core/client-registration-policy.js";
 import { resolveAppEnv } from "../../shared/env.js";
 import {
   createAccessOidcClient,
@@ -45,10 +47,78 @@ function writeOAuthError(
 
 const accessOidcFetch: typeof fetch = (input, init) => fetch(input, init);
 
+async function readJsonPayload(request: Request): Promise<unknown> {
+  return request.json();
+}
+
 export function registerOAuthHttpRoutes(
   app: Hono<{ Bindings: Env }>,
   _dependencies: AppDependencies = {},
 ) {
+  app.options("/register", (context) => {
+    const env = resolveAppEnv(context.env, context.req.raw);
+
+    if (!env.oauthEnabled) {
+      return context.notFound();
+    }
+
+    return new Response(null, {
+      headers: {
+        allow: "POST, OPTIONS",
+      },
+      status: 204,
+    });
+  });
+
+  app.post("/register", async (context) => {
+    const env = resolveAppEnv(context.env, context.req.raw);
+
+    if (!env.oauthEnabled) {
+      return context.notFound();
+    }
+
+    try {
+      const policy = validateClientRegistrationMetadata(
+        await readJsonPayload(context.req.raw),
+      );
+
+      if (!policy.accepted) {
+        return writeOAuthError(
+          policy.error,
+          policy.errorDescription,
+          400,
+        );
+      }
+
+      const client = await createOAuthProviderApi(context.env).createClient({
+        ...(policy.metadata.client_name
+          ? { clientName: policy.metadata.client_name }
+          : {}),
+        grantTypes: policy.metadata.grant_types,
+        redirectUris: policy.metadata.redirect_uris,
+        responseTypes: policy.metadata.response_types,
+        tokenEndpointAuthMethod: policy.metadata.token_endpoint_auth_method,
+      });
+
+      return context.json(
+        {
+          client_id: client.clientId,
+          ...(client.clientName ? { client_name: client.clientName } : {}),
+          grant_types: client.grantTypes,
+          redirect_uris: client.redirectUris,
+          response_types: client.responseTypes,
+          token_endpoint_auth_method: client.tokenEndpointAuthMethod,
+        },
+        201,
+      );
+    } catch (error) {
+      return writeOAuthError(
+        "invalid_client_metadata",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  });
+
   app.get("/.well-known/openid-configuration", (context) => {
     const env = resolveAppEnv(context.env, context.req.raw);
 
@@ -71,6 +141,10 @@ export function registerOAuthHttpRoutes(
 
       const oauth = createOAuthProviderApi(context.env);
       const request = await oauth.parseAuthRequest(context.req.raw);
+      const resourceBoundRequest = bindAuthorizationRequestResource(
+        request,
+        env.publicUrl!,
+      );
       const scope = getGrantedScopes(request.scope);
 
       if (env.accessOidc) {
@@ -88,7 +162,7 @@ export function registerOAuthHttpRoutes(
         }
 
         await storePendingAccessAuthorization(kv, state, {
-          request,
+          request: resourceBoundRequest,
           scope,
         });
 
@@ -110,7 +184,7 @@ export function registerOAuthHttpRoutes(
         props: {
           userId: "ynab-mcp-user",
         },
-        request,
+        request: resourceBoundRequest,
         scope,
         userId: "ynab-mcp-user",
       });

@@ -13,6 +13,10 @@ const appHandler = {
 } satisfies ExportedHandler<Env>;
 const oauthProvider = createOAuthProvider(appHandler);
 
+function isClientRegistrationRequest(request: Request) {
+  return new URL(request.url).pathname === "/register";
+}
+
 function createOAuthProviderEnv(env: Env, appEnv: AppEnv) {
   if (!appEnv.oauthStateNamespace && appEnv.oauthKvNamespace) {
     return env;
@@ -34,6 +38,14 @@ export default {
     const appEnv = resolveAppEnv(env, request);
 
     if (appEnv.oauthEnabled) {
+      if (isClientRegistrationRequest(request)) {
+        return appHandler.fetch(
+          request,
+          createOAuthProviderEnv(env, appEnv),
+          executionContext,
+        );
+      }
+
       return oauthProvider.fetch(
         request,
         createOAuthProviderEnv(env, appEnv),

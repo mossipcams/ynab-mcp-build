@@ -9,3 +9,4 @@ reports/mutation/
 .dev.vars
 worker-configuration.d.ts
 .serena/
+OWASP_AUTH_REMEDIATION_PLAN.md

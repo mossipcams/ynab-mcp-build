@@ -18,6 +18,8 @@ const noopHandler = {
   },
 } satisfies HandlerWithFetch;
 
+export const OAUTH_REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+
 function writeInsufficientScope() {
   return Response.json(
     {
@@ -65,6 +67,7 @@ function createOAuthProviderOptions(
     clientRegistrationEndpoint: "/register",
     defaultHandler: apiHandler,
     allowPlainPKCE: false,
+    refreshTokenTTL: OAUTH_REFRESH_TOKEN_TTL_SECONDS,
     scopesSupported: ["mcp"],
     tokenExchangeCallback(options) {
       const props = readTokenExchangeProps(options.props);

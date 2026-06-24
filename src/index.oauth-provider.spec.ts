@@ -139,6 +139,32 @@ describe("Worker OAuth provider", () => {
     });
   });
 
+  it("routes dynamic client registration through the local policy before the provider", async () => {
+    const response = await worker.fetch(
+      new Request("https://mcp.example.com/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          client_name: "Unexpected client",
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: ["https://evil.example.com/callback"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        }),
+      }),
+      createOAuthProviderEnv(),
+      {} as ExecutionContext,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_client_metadata",
+      error_description: "redirect_uris contains an untrusted redirect URI.",
+    });
+  });
+
   it("completes the authorization-code flow through the Cloudflare OAuth provider", async () => {
     const env = createOAuthProviderEnv();
     const registrationResponse = await worker.fetch(
@@ -205,6 +231,116 @@ describe("Worker OAuth provider", () => {
       scope: "mcp",
       token_type: "bearer",
     });
+  });
+
+  it("expires refresh tokens after the configured provider TTL", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+    try {
+      const env = createOAuthProviderEnv();
+      const executionContext = {} as ExecutionContext;
+      const registrationResponse = await worker.fetch(
+        new Request("https://mcp.example.com/register", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            client_name: "Claude",
+            grant_types: ["authorization_code", "refresh_token"],
+            redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+            response_types: ["code"],
+            token_endpoint_auth_method: "none",
+          }),
+        }),
+        env,
+        executionContext,
+      );
+      const registration = (await registrationResponse.json()) as {
+        client_id: string;
+      };
+      const authorizeResponse = await worker.fetch(
+        new Request(
+          `https://mcp.example.com/authorize?client_id=${encodeURIComponent(registration.client_id)}&redirect_uri=${encodeURIComponent("https://claude.ai/api/mcp/auth_callback")}&response_type=code&code_challenge=${encodeURIComponent("0FLIKahrX7kqxncwhV5WD82lu_wi5GA8FsRSLubaOpU")}&code_challenge_method=S256&scope=mcp&state=client-state-1`,
+        ),
+        env,
+        executionContext,
+      );
+      const redirectLocation = authorizeResponse.headers.get("location");
+      const code = redirectLocation
+        ? new URL(redirectLocation).searchParams.get("code")
+        : null;
+      const tokenResponse = await worker.fetch(
+        new Request("https://mcp.example.com/token", {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            client_id: registration.client_id,
+            code: code ?? "",
+            code_verifier: "test-code-verifier",
+            grant_type: "authorization_code",
+            redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+          }).toString(),
+        }),
+        env,
+        executionContext,
+      );
+      const tokenPayload = (await tokenResponse.json()) as {
+        refresh_token: string;
+      };
+
+      vi.setSystemTime(new Date("2026-01-30T23:59:59.000Z"));
+
+      const beforeTtlResponse = await worker.fetch(
+        new Request("https://mcp.example.com/token", {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            client_id: registration.client_id,
+            grant_type: "refresh_token",
+            refresh_token: tokenPayload.refresh_token,
+          }).toString(),
+        }),
+        env,
+        executionContext,
+      );
+      const beforeTtlPayload = (await beforeTtlResponse.json()) as {
+        refresh_token: string;
+      };
+
+      vi.setSystemTime(new Date("2026-01-31T00:00:00.000Z"));
+
+      const afterTtlResponse = await worker.fetch(
+        new Request("https://mcp.example.com/token", {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            client_id: registration.client_id,
+            grant_type: "refresh_token",
+            refresh_token: beforeTtlPayload.refresh_token,
+          }).toString(),
+        }),
+        env,
+        executionContext,
+      );
+
+      expect(tokenResponse.status).toBe(200);
+      expect(beforeTtlResponse.status).toBe(200);
+      expect(afterTtlResponse.status).toBe(400);
+      await expect(afterTtlResponse.json()).resolves.toMatchObject({
+        error: "invalid_grant",
+        error_description: "Refresh token has expired",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects provider-issued access tokens that do not grant the MCP scope", async () => {

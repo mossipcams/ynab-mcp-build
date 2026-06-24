@@ -4,6 +4,7 @@ export type AppEnv = {
     clientId: string;
     clientSecret: string;
     discoveryUrl: string;
+    issuerUrl?: string;
     jwksUrl?: string;
     teamDomain: string;
     tokenUrl?: string;
@@ -85,6 +86,7 @@ export function resolveAppEnv(
         ACCESS_AUTHORIZATION_URL?: string;
         ACCESS_CLIENT_ID?: string;
         ACCESS_CLIENT_SECRET?: string;
+        ACCESS_ISSUER_URL?: string;
         ACCESS_JWKS_URL?: string;
         ACCESS_TEAM_DOMAIN?: string;
         ACCESS_TOKEN_URL?: string;
@@ -107,6 +109,7 @@ export function resolveAppEnv(
     authorizationUrl: getOptionalString(runtimeEnv?.ACCESS_AUTHORIZATION_URL),
     clientId: getOptionalString(runtimeEnv?.ACCESS_CLIENT_ID),
     clientSecret: getOptionalString(runtimeEnv?.ACCESS_CLIENT_SECRET),
+    issuerUrl: getOptionalString(runtimeEnv?.ACCESS_ISSUER_URL),
     jwksUrl: getOptionalString(runtimeEnv?.ACCESS_JWKS_URL),
     teamDomain: getOptionalString(runtimeEnv?.ACCESS_TEAM_DOMAIN),
     tokenUrl: getOptionalString(runtimeEnv?.ACCESS_TOKEN_URL),
@@ -143,6 +146,9 @@ export function resolveAppEnv(
             teamDomain: accessTeamDomain!,
             ...(accessOidcValues.authorizationUrl
               ? { authorizationUrl: accessOidcValues.authorizationUrl }
+              : {}),
+            ...(accessOidcValues.issuerUrl
+              ? { issuerUrl: accessOidcValues.issuerUrl }
               : {}),
             ...(accessOidcValues.jwksUrl
               ? { jwksUrl: accessOidcValues.jwksUrl }
@@ -194,6 +200,16 @@ export function resolveAppEnv(
   if (hasAccessOidcValues && accessOidcRequiredValueCount < 3) {
     throw new Error(
       "Access OIDC requires ACCESS_TEAM_DOMAIN, ACCESS_CLIENT_ID, and ACCESS_CLIENT_SECRET.",
+    );
+  }
+
+  if (
+    accessOidcOverrideValueCount > 0 &&
+    accessOidcOverrideValueCount === 3 &&
+    !accessOidcValues.issuerUrl
+  ) {
+    throw new Error(
+      "Access OIDC endpoint overrides require ACCESS_ISSUER_URL.",
     );
   }
 

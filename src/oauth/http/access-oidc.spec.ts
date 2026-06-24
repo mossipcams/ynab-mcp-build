@@ -179,6 +179,7 @@ describe("Access OIDC HTTP caching", () => {
       .mockImplementation(async () =>
         Response.json({
           authorization_endpoint: "https://access.example.com/authorize",
+          issuer: "https://access-team.example.com",
           jwks_uri: "https://access.example.com/certs",
           token_endpoint: "https://access.example.com/token",
         }),
@@ -193,12 +194,53 @@ describe("Access OIDC HTTP caching", () => {
       resolveAccessOidcEndpoints({ config, fetch }),
     ).resolves.toMatchObject({
       authorizationUrl: "https://access.example.com/authorize",
+      issuer: "https://access-team.example.com",
       jwksUrl: "https://access.example.com/certs",
       tokenUrl: "https://access.example.com/token",
     });
     await resolveAccessOidcEndpoints({ config, fetch });
 
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires an issuer when manual Access endpoint overrides are configured", async () => {
+    await expect(
+      resolveAccessOidcEndpoints({
+        config: {
+          authorizationUrl: "https://access.example.com/authorize",
+          clientId: "client-1",
+          clientSecret: "secret",
+          discoveryUrl: "https://team.example.com/.well-known/openid-configuration",
+          jwksUrl: "https://access.example.com/certs",
+          tokenUrl: "https://access.example.com/token",
+        },
+        fetch,
+      }),
+    ).rejects.toThrow(
+      "Access OIDC endpoint overrides require an issuer URL.",
+    );
+  });
+
+  it("returns the configured issuer with manual Access endpoint overrides", async () => {
+    await expect(
+      resolveAccessOidcEndpoints({
+        config: {
+          authorizationUrl: "https://access.example.com/authorize",
+          clientId: "client-1",
+          clientSecret: "secret",
+          discoveryUrl: "https://team.example.com/.well-known/openid-configuration",
+          issuerUrl: "https://access-team.example.com",
+          jwksUrl: "https://access.example.com/certs",
+          tokenUrl: "https://access.example.com/token",
+        },
+        fetch,
+      }),
+    ).resolves.toEqual({
+      authorizationUrl: "https://access.example.com/authorize",
+      issuer: "https://access-team.example.com",
+      jwksUrl: "https://access.example.com/certs",
+      tokenUrl: "https://access.example.com/token",
+    });
   });
 
   it("caches JWKS responses for the same JWKS URL", async () => {

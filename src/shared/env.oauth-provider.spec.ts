@@ -66,6 +66,7 @@ describe("OAuth provider environment", () => {
       ACCESS_AUTHORIZATION_URL: "https://access.example.com/authorize",
       ACCESS_CLIENT_ID: "access-client-id",
       ACCESS_CLIENT_SECRET: "access-client-secret",
+      ACCESS_ISSUER_URL: "https://access-team.example.com",
       ACCESS_JWKS_URL: "https://access.example.com/certs",
       ACCESS_TEAM_DOMAIN: "access-team.example.com",
       ACCESS_TOKEN_URL: "https://access.example.com/token",
@@ -77,8 +78,28 @@ describe("OAuth provider environment", () => {
 
     expect(env.accessOidc).toMatchObject({
       authorizationUrl: "https://access.example.com/authorize",
+      issuerUrl: "https://access-team.example.com",
       jwksUrl: "https://access.example.com/certs",
       tokenUrl: "https://access.example.com/token",
     });
+  });
+
+  it("requires an Access issuer URL when endpoint overrides are configured", () => {
+    expect(() =>
+      resolveAppEnv({
+        ACCESS_AUTHORIZATION_URL: "https://access.example.com/authorize",
+        ACCESS_CLIENT_ID: "access-client-id",
+        ACCESS_CLIENT_SECRET: "access-client-secret",
+        ACCESS_JWKS_URL: "https://access.example.com/certs",
+        ACCESS_TEAM_DOMAIN: "access-team.example.com",
+        ACCESS_TOKEN_URL: "https://access.example.com/token",
+        MCP_OAUTH_ENABLED: "true",
+        MCP_PUBLIC_URL: "https://mcp.example.com/mcp",
+        OAUTH_KV: {} as KVNamespace,
+        YNAB_API_BASE_URL: "https://api.ynab.com/v1",
+      } as unknown as Env),
+    ).toThrowError(
+      "Access OIDC endpoint overrides require ACCESS_ISSUER_URL.",
+    );
   });
 });

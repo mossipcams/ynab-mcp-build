@@ -14,7 +14,24 @@ export type PendingAccessAuthorizationStore = KVNamespace & {
     key: string,
     options?: { type?: string },
   ): Promise<T | null>;
+  };
+
+type OAuthAuthorizationRequestWithResource = {
+  resource?: string | string[];
 };
+
+export function bindAuthorizationRequestResource<
+  TRequest extends OAuthAuthorizationRequestWithResource,
+>(request: TRequest, resource: string) {
+  if (request.resource) {
+    return request;
+  }
+
+  return {
+    ...request,
+    resource,
+  };
+}
 
 export function getGrantedScopes(requestedScopes: string[]) {
   if (requestedScopes.length === 0) {

@@ -7,6 +7,7 @@ export type AccessOidcConfig = {
   clientId: string;
   clientSecret: string;
   discoveryUrl: string;
+  issuerUrl?: string;
   jwksUrl?: string;
   tokenUrl?: string;
 };
@@ -112,8 +113,13 @@ function getEndpointOverrides(
   config: AccessOidcConfig,
 ): AccessOidcEndpoints | undefined {
   if (config.authorizationUrl && config.jwksUrl && config.tokenUrl) {
+    if (!config.issuerUrl) {
+      throw new Error("Access OIDC endpoint overrides require an issuer URL.");
+    }
+
     return {
       authorizationUrl: config.authorizationUrl,
+      issuer: config.issuerUrl,
       jwksUrl: config.jwksUrl,
       tokenUrl: config.tokenUrl,
     };
