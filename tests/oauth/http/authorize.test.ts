@@ -29,6 +29,7 @@ describe("oauth http authorize", () => {
       ACCESS_AUTHORIZATION_URL: "https://access.example.com/authorize",
       ACCESS_CLIENT_ID: "access-client-id",
       ACCESS_CLIENT_SECRET: "access-client-secret",
+      ACCESS_ISSUER_URL: "https://access-team.example.com",
       ACCESS_JWKS_URL: "https://access.example.com/certs",
       ACCESS_TEAM_DOMAIN: "access-team.example.com",
       ACCESS_TOKEN_URL: "https://access.example.com/token",

@@ -6,6 +6,7 @@ import {
   createOAuthEnv,
   fetchWorker,
   issueToken,
+  MCP_RESOURCE,
 } from "../helpers/oauth-provider.js";
 
 function createPlanD1Database(): D1Database {
@@ -50,25 +51,22 @@ describe("authenticated tool call integration", () => {
       YNAB_DB: createPlanD1Database(),
     });
     const { accessToken, tokenResponse } = await issueToken(env);
-    const transport = new StreamableHTTPClientTransport(
-      new URL("http://localhost/mcp"),
-      {
-        fetch: async (input, init) => {
-          const request =
-            input instanceof Request ? input : new Request(input, init);
-          const headers = new Headers(request.headers);
+    const transport = new StreamableHTTPClientTransport(new URL(MCP_RESOURCE), {
+      fetch: async (input, init) => {
+        const request =
+          input instanceof Request ? input : new Request(input, init);
+        const headers = new Headers(request.headers);
 
-          headers.set("authorization", `Bearer ${accessToken}`);
+        headers.set("authorization", `Bearer ${accessToken}`);
 
-          return fetchWorker(
-            new Request(request, {
-              headers,
-            }),
-            env,
-          );
-        },
+        return fetchWorker(
+          new Request(request, {
+            headers,
+          }),
+          env,
+        );
       },
-    );
+    });
     const client = new Client({
       name: "ynab-mcp-build-test-client",
       version: "1.0.0",
