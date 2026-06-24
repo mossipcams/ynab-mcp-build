@@ -83,11 +83,7 @@ export function registerOAuthHttpRoutes(
       );
 
       if (!policy.accepted) {
-        return writeOAuthError(
-          policy.error,
-          policy.errorDescription,
-          400,
-        );
+        return writeOAuthError(policy.error, policy.errorDescription, 400);
       }
 
       const client = await createOAuthProviderApi(context.env).createClient({

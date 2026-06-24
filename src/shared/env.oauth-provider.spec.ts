@@ -98,8 +98,6 @@ describe("OAuth provider environment", () => {
         OAUTH_KV: {} as KVNamespace,
         YNAB_API_BASE_URL: "https://api.ynab.com/v1",
       } as unknown as Env),
-    ).toThrowError(
-      "Access OIDC endpoint overrides require ACCESS_ISSUER_URL.",
-    );
+    ).toThrowError("Access OIDC endpoint overrides require ACCESS_ISSUER_URL.");
   });
 });

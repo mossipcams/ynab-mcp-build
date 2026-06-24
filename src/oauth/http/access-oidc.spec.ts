@@ -210,15 +210,14 @@ describe("Access OIDC HTTP caching", () => {
           authorizationUrl: "https://access.example.com/authorize",
           clientId: "client-1",
           clientSecret: "secret",
-          discoveryUrl: "https://team.example.com/.well-known/openid-configuration",
+          discoveryUrl:
+            "https://team.example.com/.well-known/openid-configuration",
           jwksUrl: "https://access.example.com/certs",
           tokenUrl: "https://access.example.com/token",
         },
         fetch,
       }),
-    ).rejects.toThrow(
-      "Access OIDC endpoint overrides require an issuer URL.",
-    );
+    ).rejects.toThrow("Access OIDC endpoint overrides require an issuer URL.");
   });
 
   it("returns the configured issuer with manual Access endpoint overrides", async () => {
@@ -228,7 +227,8 @@ describe("Access OIDC HTTP caching", () => {
           authorizationUrl: "https://access.example.com/authorize",
           clientId: "client-1",
           clientSecret: "secret",
-          discoveryUrl: "https://team.example.com/.well-known/openid-configuration",
+          discoveryUrl:
+            "https://team.example.com/.well-known/openid-configuration",
           issuerUrl: "https://access-team.example.com",
           jwksUrl: "https://access.example.com/certs",
           tokenUrl: "https://access.example.com/token",

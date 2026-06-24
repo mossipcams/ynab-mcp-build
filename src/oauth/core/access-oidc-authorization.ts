@@ -14,7 +14,7 @@ export type PendingAccessAuthorizationStore = KVNamespace & {
     key: string,
     options?: { type?: string },
   ): Promise<T | null>;
-  };
+};
 
 type OAuthAuthorizationRequestWithResource = {
   resource?: string | string[];

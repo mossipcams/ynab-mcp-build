@@ -50,7 +50,9 @@ describe("OAuth client registration policy", () => {
       "http://127.0.0.1:3000/callback",
       "http://[::1]:3000/callback",
     ]) {
-      expect(validateClientRegistrationMetadata(baseMetadata(redirectUri))).toEqual({
+      expect(
+        validateClientRegistrationMetadata(baseMetadata(redirectUri)),
+      ).toEqual({
         accepted: true,
         metadata: baseMetadata(redirectUri),
       });
@@ -91,7 +93,9 @@ describe("OAuth client registration policy", () => {
       "ftp://localhost/callback",
       "javascript:alert(1)",
     ]) {
-      expect(validateClientRegistrationMetadata(baseMetadata(redirectUri))).toEqual({
+      expect(
+        validateClientRegistrationMetadata(baseMetadata(redirectUri)),
+      ).toEqual({
         accepted: false,
         error: "invalid_client_metadata",
         errorDescription: "redirect_uris contains an untrusted redirect URI.",
