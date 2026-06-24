@@ -377,6 +377,12 @@ type CreateYnabClientOptions = {
 
 const YNAB_REQUEST_ATTEMPTS = 2;
 
+// As of YNAB API v1.85.0, transaction listing endpoints default `since_date`
+// to one year ago when it is unspecified. Callers that want the full account
+// history must send an explicit floor date, so use a date earlier than any
+// real YNAB transaction could exist.
+export const YNAB_EARLIEST_SINCE_DATE = "1900-01-01";
+
 type Compact<T extends Record<string, unknown>> = {
   [K in keyof T as undefined extends T[K] ? never : K]: T[K];
 } & {
@@ -1409,25 +1415,34 @@ export function createYnabClient(options: CreateYnabClientOptions): YnabClient {
         .filter((transaction) => !toDate || transaction.date <= toDate);
     },
     async listTransactionsByAccount(planId: string, accountId: string) {
-      const response = await authorizedFetch(
+      const url = new URL(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/accounts/${encodeURIComponent(accountId)}/transactions`,
       );
+      url.searchParams.set("since_date", YNAB_EARLIEST_SINCE_DATE);
+
+      const response = await authorizedFetch(url.toString());
       const payload = await getJson(response, YnabTransactionsResponseSchema);
 
       return payload.data.transactions.map(toYnabTransaction);
     },
     async listTransactionsByCategory(planId: string, categoryId: string) {
-      const response = await authorizedFetch(
+      const url = new URL(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/categories/${encodeURIComponent(categoryId)}/transactions`,
       );
+      url.searchParams.set("since_date", YNAB_EARLIEST_SINCE_DATE);
+
+      const response = await authorizedFetch(url.toString());
       const payload = await getJson(response, YnabTransactionsResponseSchema);
 
       return payload.data.transactions.map(toYnabTransaction);
     },
     async listTransactionsByPayee(planId: string, payeeId: string) {
-      const response = await authorizedFetch(
+      const url = new URL(
         `${baseUrl}/plans/${encodeURIComponent(planId)}/payees/${encodeURIComponent(payeeId)}/transactions`,
       );
+      url.searchParams.set("since_date", YNAB_EARLIEST_SINCE_DATE);
+
+      const response = await authorizedFetch(url.toString());
       const payload = await getJson(response, YnabTransactionsResponseSchema);
 
       return payload.data.transactions.map(toYnabTransaction);

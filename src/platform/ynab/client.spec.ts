@@ -65,9 +65,9 @@ describe("ynab scoped transaction client methods", () => {
     await client.listTransactionsByPayee("plan-1", "payee-1");
 
     expect(requests.map(String)).toEqual([
-      "https://api.ynab.com/v1/plans/plan-1/accounts/account-1/transactions",
-      "https://api.ynab.com/v1/plans/plan-1/categories/category-1/transactions",
-      "https://api.ynab.com/v1/plans/plan-1/payees/payee-1/transactions",
+      "https://api.ynab.com/v1/plans/plan-1/accounts/account-1/transactions?since_date=1900-01-01",
+      "https://api.ynab.com/v1/plans/plan-1/categories/category-1/transactions?since_date=1900-01-01",
+      "https://api.ynab.com/v1/plans/plan-1/payees/payee-1/transactions?since_date=1900-01-01",
     ]);
   });
 });

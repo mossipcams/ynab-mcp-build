@@ -2,6 +2,7 @@ import type {
   YnabClient,
   YnabTransaction,
 } from "../../platform/ynab/client.js";
+import { YNAB_EARLIEST_SINCE_DATE } from "../../platform/ynab/client.js";
 import {
   formatAmountMilliunits,
   hasPaginationControls,
@@ -318,7 +319,9 @@ export async function listTransactions(
   input: ListTransactionsInput,
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const transactions = (await ynabClient.listTransactions(planId, undefined))
+  const transactions = (
+    await ynabClient.listTransactions(planId, YNAB_EARLIEST_SINCE_DATE)
+  )
     .filter((transaction) => !transaction.deleted)
     .sort((left, right) => compareTransactions(left, right, "date_desc"));
 
