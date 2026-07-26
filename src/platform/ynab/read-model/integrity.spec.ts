@@ -121,4 +121,45 @@ describe("read-model integrity diagnostics", () => {
         "Month 2026-06-01 has synced month/category/transaction data but no month-category rows.",
     });
   });
+
+  it("warns without hard-failing when a month is only partially hydrated", async () => {
+    const db = new FakeD1Database();
+    db.counts.set("FROM ynab_months", 1);
+    db.counts.set("FROM ynab_month_categories", 3);
+    db.counts.set("FROM ynab_categories", 8);
+    db.counts.set("FROM ynab_transactions", 12);
+    db.counts.set("missing_transaction_category_refs", 2);
+    const integrity = createReadModelIntegrity(db as unknown as D1Database);
+
+    await expect(
+      integrity.getMonthCategoryIntegrity({
+        month: "2026-06-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      health_status: "ok",
+      warning:
+        "Month 2026-06-01 has 2 transaction categories with no month-category row.",
+    });
+  });
+
+  it("reports a fully hydrated month as healthy with no warning", async () => {
+    const db = new FakeD1Database();
+    db.counts.set("FROM ynab_months", 1);
+    db.counts.set("FROM ynab_month_categories", 8);
+    db.counts.set("FROM ynab_categories", 8);
+    db.counts.set("FROM ynab_transactions", 12);
+    db.counts.set("missing_transaction_category_refs", 0);
+    const integrity = createReadModelIntegrity(db as unknown as D1Database);
+
+    await expect(
+      integrity.getMonthCategoryIntegrity({
+        month: "2026-06-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      health_status: "ok",
+      warning: null,
+    });
+  });
 });

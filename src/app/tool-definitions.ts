@@ -288,10 +288,13 @@ function hasMonthInput(input: unknown) {
   return getOwnNonBlankString(input, "month") !== undefined;
 }
 
+// An omitted month is not "no month to check" — the slice services resolve it
+// to the current calendar month, so the freshness layer has to check that month
+// too. It owns the resolution because it owns the clock.
 function freshnessContextForExecution(input: unknown) {
   const month = getOwnNonBlankString(input, "month");
 
-  return month ? { month } : undefined;
+  return month ? { month } : {};
 }
 
 function requiredEndpointsForExecution(

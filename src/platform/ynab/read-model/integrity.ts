@@ -304,6 +304,19 @@ export function createReadModelIntegrity(database: D1Database) {
         };
       }
 
+      // Partial hydration is the same corruption class as the zero-row case,
+      // but it cannot hard-fail the tool: after a read-model rebuild YNAB's
+      // month detail no longer returns categories deleted since, while the
+      // month's transactions still reference them. That is a legitimate
+      // non-zero count, so surface it as a warning and keep serving data.
+      if (diagnostics.missingMonthCategoryReferenceCount > 0) {
+        return {
+          diagnostics,
+          health_status: "ok",
+          warning: `Month ${input.month} has ${diagnostics.missingMonthCategoryReferenceCount} transaction categories with no month-category row.`,
+        };
+      }
+
       return {
         diagnostics,
         health_status: "ok",

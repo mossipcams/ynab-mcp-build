@@ -25,6 +25,17 @@ function subtractMinutes(isoDate: string, minutes: number) {
   return new Date(new Date(isoDate).getTime() - minutes * 60_000).toISOString();
 }
 
+// Month inputs reach here as an explicit `YYYY-MM-DD`, the literal "current",
+// or not at all. The latter two both mean the current calendar month, which is
+// what the slice services resolve an omitted month to. Anything that does not
+// normalize to a stored `YYYY-MM-01` key would silently match zero rows and
+// report healthy, so always resolve to a real month key.
+function toIntegrityMonth(month: string | undefined, nowIso: string) {
+  const source = month && month !== "current" ? month : nowIso;
+
+  return `${source.slice(0, 7)}-01`;
+}
+
 export function createReadModelFreshness(
   database: D1Database,
   options: {
@@ -99,13 +110,12 @@ export function createReadModelFreshness(
         options.staleAfterMinutes,
       );
       const stale = !oldestLastSyncedAt || oldestLastSyncedAt < staleBefore;
-      const monthIntegrity =
-        context?.month && requiredEndpoints.includes("months")
-          ? await integrity.getMonthCategoryIntegrity({
-              month: context.month,
-              planId,
-            })
-          : null;
+      const monthIntegrity = requiredEndpoints.includes("months")
+        ? await integrity.getMonthCategoryIntegrity({
+            month: toIntegrityMonth(context?.month, options.now()),
+            planId,
+          })
+        : null;
 
       if (monthIntegrity?.health_status === "unhealthy") {
         return {
@@ -116,13 +126,15 @@ export function createReadModelFreshness(
         };
       }
 
+      const staleWarning = stale
+        ? "Data is stale relative to the configured freshness window."
+        : null;
+
       return {
         health_status: "ok",
         last_synced_at: oldestLastSyncedAt,
         stale,
-        warning: stale
-          ? "Data is stale relative to the configured freshness window."
-          : null,
+        warning: monthIntegrity?.warning ?? staleWarning,
       };
     },
   };
