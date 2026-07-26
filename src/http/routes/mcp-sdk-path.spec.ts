@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sdkMocks = vi.hoisted(() => ({
   constructedTransportCount: 0,
@@ -54,6 +54,14 @@ function createEnv(): Env {
 }
 
 describe("http mcp route SDK path optimization", () => {
+  // The mock counters live in hoisted module state, which the workers pool can
+  // share with any other spec scheduled into the same worker. Reset them so the
+  // absolute-count assertions below measure only this request.
+  beforeEach(() => {
+    sdkMocks.constructedTransportCount = 0;
+    sdkMocks.registeredToolNames.length = 0;
+  });
+
   it("keeps direct tools/call on the SDK path while registering only the called tool", async () => {
     const { createApp } = await import("../../app/create-app.js");
     const app = createApp();
