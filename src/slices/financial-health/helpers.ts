@@ -69,7 +69,10 @@ export function buildAccountSnapshotSummary<TAccount extends AccountLike>(
   const positiveAccounts = activeAccounts.filter(
     (account) => (account.balance ?? 0) >= 0,
   );
-  const positiveOnBudgetAccounts = positiveAccounts.filter((account) =>
+  // Liquid cash is the net across spendable cash accounts, not just the ones in
+  // credit. Dropping an overdrawn checking account instead of subtracting it
+  // overstates coverage in exactly the situation where coverage matters most.
+  const spendableCashAccounts = activeAccounts.filter((account) =>
     isSpendableCashAccount(account),
   );
   const negativeAccounts = activeAccounts.filter(
@@ -84,7 +87,7 @@ export function buildAccountSnapshotSummary<TAccount extends AccountLike>(
       (sum, account) => sum + (account.balance ?? 0),
       0,
     ),
-    liquidCashMilliunits: positiveOnBudgetAccounts.reduce(
+    liquidCashMilliunits: spendableCashAccounts.reduce(
       (sum, account) => sum + (account.balance ?? 0),
       0,
     ),

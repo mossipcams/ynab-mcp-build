@@ -147,6 +147,31 @@ describe("financial health calculation helpers", () => {
     expect(summary.liquidCashMilliunits).toBe(60_000);
   });
 
+  it("reduces liquid cash by overdrawn spendable cash accounts", () => {
+    const summary = buildAccountSnapshotSummary([
+      {
+        id: "savings",
+        type: "savings",
+        balance: 100_000,
+        onBudget: true,
+      },
+      {
+        id: "overdrawn-checking",
+        type: "checking",
+        balance: -40_000,
+        onBudget: true,
+      },
+      {
+        id: "credit",
+        type: "creditCard",
+        balance: -500_000,
+        onBudget: true,
+      },
+    ]);
+
+    expect(summary.liquidCashMilliunits).toBe(60_000);
+  });
+
   it("separates positive available from net available category totals", () => {
     const summary = buildVisibleCategoryHealthSummary([
       {
