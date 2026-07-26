@@ -672,7 +672,7 @@ export function createYnabReadModelClient(
                   transfer_account_id,
                   deleted
            FROM ynab_scheduled_subtransactions
-           WHERE plan_id = ? AND scheduled_transaction_id IN (${sqlPlaceholders(
+           WHERE plan_id = ? AND deleted = 0 AND scheduled_transaction_id IN (${sqlPlaceholders(
              batch.length,
            )})
            ORDER BY scheduled_transaction_id, id`,

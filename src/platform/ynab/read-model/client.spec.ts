@@ -79,7 +79,8 @@ class FakeD1Database {
     }
 
     if (
-      sql.includes("FROM ynab_scheduled_transactions") &&
+      (sql.includes("FROM ynab_scheduled_transactions") ||
+        sql.includes("FROM ynab_scheduled_subtransactions")) &&
       sql.includes("deleted = 0") &&
       row.deleted !== 0 &&
       row.deleted !== false
@@ -255,6 +256,47 @@ describe("YNAB read-model client", () => {
     await expect(
       client.getScheduledTransaction("plan-1", "scheduled-deleted"),
     ).rejects.toThrow("scheduled-deleted was not found");
+  });
+
+  it("does not hydrate deleted scheduled subtransactions", async () => {
+    const db = new FakeD1Database();
+    db.rows.ynab_scheduled_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "scheduled-split",
+        date_first: "2026-05-01",
+        date_next: "2026-06-01",
+        amount_milliunits: -30000,
+        deleted: 0,
+      },
+    ];
+    db.rows.ynab_scheduled_subtransactions = [
+      {
+        plan_id: "plan-1",
+        scheduled_transaction_id: "scheduled-split",
+        id: "scheduled-split-rent",
+        amount_milliunits: -18000,
+        category_name: "Rent",
+        deleted: 0,
+      },
+      {
+        plan_id: "plan-1",
+        scheduled_transaction_id: "scheduled-split",
+        id: "scheduled-split-removed",
+        amount_milliunits: -12000,
+        category_name: "Utilities",
+        deleted: 1,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+
+    await expect(client.listScheduledTransactions("plan-1")).resolves.toEqual([
+      expect.objectContaining({
+        subtransactions: [
+          expect.objectContaining({ id: "scheduled-split-rent" }),
+        ],
+      }),
+    ]);
   });
 
   it("hydrates split subtransactions when listing scheduled transactions", async () => {
