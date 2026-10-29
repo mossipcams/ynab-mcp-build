@@ -26,6 +26,7 @@ class FakeStatement {
           endpoint,
           health_status: "ok",
           last_successful_sync_at: "2026-06-15T12:00:00.000Z",
+          ...this.db.syncStateOverrides[endpoint as string],
         })),
       } as D1Result<T>);
     }
@@ -39,6 +40,7 @@ class FakeStatement {
 class FakeD1Database {
   calls: Array<{ sql: string; params: unknown[] }> = [];
   monthCategoryCount = 1;
+  syncStateOverrides: Record<string, Record<string, unknown>> = {};
 
   prepare(sql: string) {
     return new FakeStatement(this, sql) as unknown as D1PreparedStatement;
@@ -65,6 +67,25 @@ function createFreshness(db: FakeD1Database) {
     staleAfterMinutes: 360,
   });
 }
+
+describe("read-model freshness sync completion", () => {
+  it("reports an endpoint whose first sync never completed as never synced", async () => {
+    // DEFECT: a leased-but-crashed first transactions sync left partial data reported as fresh and ok.
+    const db = new FakeD1Database();
+    db.syncStateOverrides.transactions = {
+      health_status: "never_synced",
+      last_successful_sync_at: null,
+    };
+
+    await expect(
+      createFreshness(db).getFreshness("plan-1", ["accounts", "transactions"]),
+    ).resolves.toMatchObject({
+      health_status: "never_synced",
+      stale: true,
+      warning: "Required endpoint transactions has never completed a sync.",
+    });
+  });
+});
 
 describe("read-model freshness month integrity context", () => {
   it("checks the current calendar month when no month input is given", async () => {

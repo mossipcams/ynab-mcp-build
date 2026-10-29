@@ -2059,6 +2059,40 @@ describe("financial health service", () => {
     });
   });
 
+  it("leaves the in-progress month out of cash resilience average spending", async () => {
+    // DEFECT: early in a month, partial current-month spending dragged the average down and overstated runway.
+    const ynabClient = {
+      listAccounts: async () => [
+        {
+          id: "cash",
+          name: "Checking",
+          type: "checking",
+          closed: false,
+          deleted: false,
+          balance: 1200000,
+        },
+      ],
+      listPlanMonths: async () => [
+        { month: "2026-08-01", deleted: false, activity: -4000000 },
+        { month: "2026-09-01", deleted: false, activity: -4000000 },
+        { month: "2026-10-01", deleted: false, activity: -200000 },
+      ],
+      listScheduledTransactions: async () => [],
+    } as unknown as YnabClient;
+
+    await expect(
+      getCashResilienceSummary(ynabClient, {
+        asOfDate: "2026-10-03",
+        monthsBack: 3,
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      average_monthly_spending: "4000.00",
+      coverage_months: "0.30",
+      status: "critical",
+    });
+  });
+
   it("classifies cash resilience status at coverage month boundaries", async () => {
     // DEFECT: coverage boundary comparisons can classify exact threshold values into the lower risk bucket.
     const makeClient = (balance: number) =>

@@ -1913,8 +1913,15 @@ export async function getCashResilienceSummary(
     ynabClient.listScheduledTransactions(planId),
   ]);
   const liquidCash = buildAccountSnapshotSummary(accounts).liquidCashMilliunits;
+  // An in-progress month's partial activity would understate the average.
+  const firstIncompleteMonth = currentCalendarMonth(input.asOfDate);
   const consideredMonths = months
-    .filter((entry) => !entry.deleted && entry.month <= month)
+    .filter(
+      (entry) =>
+        !entry.deleted &&
+        entry.month <= month &&
+        entry.month < firstIncompleteMonth,
+    )
     .sort((left, right) => right.month.localeCompare(left.month))
     .slice(0, monthsBack);
   const averageMonthlySpending = consideredMonths.length
