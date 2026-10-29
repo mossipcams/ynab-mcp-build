@@ -392,6 +392,12 @@ function toTransaction(row: TransactionRow): YnabTransaction {
   });
 }
 
+// ponytail: flag only known off-budget accounts; absent means on-budget.
+function offBudgetFlag(offBudgetAccountIds: Set<string>) {
+  return (accountId: string | null | undefined) =>
+    accountId && offBudgetAccountIds.has(accountId) ? false : undefined;
+}
+
 function toSubtransaction(row: SubtransactionRow) {
   return compact({
     id: row.id,
@@ -567,7 +573,7 @@ export function createYnabReadModelClient(
               transfer_transaction_id,
               deleted
        FROM ynab_subtransactions
-       WHERE plan_id = ? AND transaction_id = ?
+       WHERE plan_id = ? AND transaction_id = ? AND deleted = 0
        ORDER BY id`,
       planId,
       transactionId,
@@ -598,7 +604,7 @@ export function createYnabReadModelClient(
                   transfer_transaction_id,
                   deleted
            FROM ynab_subtransactions
-           WHERE plan_id = ? AND transaction_id IN (${sqlPlaceholders(
+           WHERE plan_id = ? AND deleted = 0 AND transaction_id IN (${sqlPlaceholders(
              batch.length,
            )})
            ORDER BY transaction_id, id`,
@@ -611,14 +617,29 @@ export function createYnabReadModelClient(
     return rows;
   }
 
+  async function listOffBudgetAccountIds(planId: string) {
+    const rows = await all<{ id: string; on_budget?: number | null }>(
+      `SELECT id, on_budget FROM ynab_accounts WHERE plan_id = ?`,
+      planId,
+    );
+
+    return new Set(
+      rows.filter((row) => row.on_budget === 0).map((row) => row.id),
+    );
+  }
+
   async function hydrateTransactionRows(
     planId: string,
     rows: TransactionRow[],
   ) {
-    const subtransactionRows = await listSubtransactionRowsByTransactionIds(
-      planId,
-      rows.map((row) => row.id),
-    );
+    const [subtransactionRows, offBudgetAccountIds] = await Promise.all([
+      listSubtransactionRowsByTransactionIds(
+        planId,
+        rows.map((row) => row.id),
+      ),
+      listOffBudgetAccountIds(planId),
+    ]);
+    const offBudget = offBudgetFlag(offBudgetAccountIds);
     const subtransactionsByTransactionId = new Map<
       string,
       NonNullable<YnabTransaction["subtransactions"]>
@@ -632,7 +653,12 @@ export function createYnabReadModelClient(
       const subtransactions =
         subtransactionsByTransactionId.get(row.transaction_id) ?? [];
 
-      subtransactions.push(toSubtransaction(row));
+      subtransactions.push(
+        compact({
+          ...toSubtransaction(row),
+          transferAccountOnBudget: offBudget(row.transfer_account_id),
+        }),
+      );
       subtransactionsByTransactionId.set(row.transaction_id, subtransactions);
     }
 
@@ -644,6 +670,8 @@ export function createYnabReadModelClient(
 
       return compact({
         ...transaction,
+        accountOnBudget: offBudget(row.account_id),
+        transferAccountOnBudget: offBudget(row.transfer_account_id),
         subtransactions: subtransactions?.length ? subtransactions : undefined,
       });
     });
@@ -689,11 +717,14 @@ export function createYnabReadModelClient(
     planId: string,
     rows: ScheduledTransactionRow[],
   ) {
-    const subtransactionRows =
-      await listScheduledSubtransactionRowsByScheduledTransactionIds(
+    const [subtransactionRows, offBudgetAccountIds] = await Promise.all([
+      listScheduledSubtransactionRowsByScheduledTransactionIds(
         planId,
         rows.map((row) => row.id),
-      );
+      ),
+      listOffBudgetAccountIds(planId),
+    ]);
+    const offBudget = offBudgetFlag(offBudgetAccountIds);
     const subtransactionsByScheduledTransactionId = new Map<
       string,
       NonNullable<YnabScheduledTransaction["subtransactions"]>
@@ -724,6 +755,7 @@ export function createYnabReadModelClient(
 
       return compact({
         ...scheduledTransaction,
+        transferAccountOnBudget: offBudget(row.transfer_account_id),
         subtransactions: subtransactions?.length ? subtransactions : undefined,
       });
     });

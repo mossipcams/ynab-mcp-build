@@ -1,4 +1,5 @@
 import type { YnabDeltaTransactionRecord } from "../delta-client.js";
+import { isHiddenMatchedImport } from "../mappers.js";
 import { runD1Batches } from "./d1-batch.js";
 
 const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
@@ -444,7 +445,7 @@ export function createTransactionsRepository(database: D1Database) {
             transaction.import_payee_name ?? null,
             transaction.import_payee_name_original ?? null,
             transaction.debt_transaction_type ?? null,
-            transaction.deleted ? 1 : 0,
+            transaction.deleted || isHiddenMatchedImport(transaction) ? 1 : 0,
             input.syncedAt,
             input.syncedAt,
           );

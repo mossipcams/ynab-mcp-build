@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   dollarsToMilliunits,
+  mapTransactionRecord,
   milliunitsToDollars,
   sumSubtransactionAmounts,
 } from "./mappers.js";
@@ -61,5 +62,33 @@ describe("ynab mapper calculation helpers", () => {
         },
       ),
     );
+  });
+});
+
+describe("matched transaction pairs", () => {
+  it("hides the import half of a YNAB matched pair and keeps the visible half", () => {
+    // DEFECT: both halves of a matched pair were counted, doubling rent/MLGW charges YNAB shows once.
+    const visible = mapTransactionRecord({
+      id: "8779293e-5d27-4674-87ab-c4553d8e7a1e_2026-10-01",
+      date: "2026-10-01",
+      amount: -1_550_000,
+      matched_transaction_id: "5c391947-f8a4-4069-9b28-5a5bccb446f9",
+      import_id: "YNAB:-1550000:2026-10-02:1",
+      import_payee_name: "Red Maple Realtors",
+      deleted: false,
+    });
+    const hidden = mapTransactionRecord({
+      id: "5c391947-f8a4-4069-9b28-5a5bccb446f9",
+      date: "2026-10-02",
+      amount: -1_550_000,
+      matched_transaction_id: "8779293e-5d27-4674-87ab-c4553d8e7a1e_2026-10-01",
+      import_id: "YNAB:-1550000:2026-10-02:1",
+      import_payee_name:
+        '{"importedPayee":"Red Maple Realtors","source":"Scheduler","importedSource":"Imported","accepted":true}',
+      deleted: false,
+    });
+
+    expect(visible.deleted).toBe(false);
+    expect(hidden.deleted).toBe(true);
   });
 });

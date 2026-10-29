@@ -194,6 +194,8 @@ export type YnabTransaction = {
   categoryName?: string | null;
   accountId?: string | null;
   accountName?: string | null;
+  accountOnBudget?: boolean;
+  transferAccountOnBudget?: boolean;
   approved?: boolean | null;
   cleared?: string | null;
   flagColor?: string | null;
@@ -220,6 +222,7 @@ export type YnabSubtransaction = {
   categoryId?: string | null;
   categoryName?: string | null;
   transferAccountId?: string | null;
+  transferAccountOnBudget?: boolean;
   transferTransactionId?: string | null;
   deleted?: boolean;
 };
@@ -240,6 +243,7 @@ export type YnabScheduledTransaction = {
   categoryId?: string | null;
   accountName?: string | null;
   transferAccountId?: string | null;
+  transferAccountOnBudget?: boolean;
   deleted?: boolean;
   subtransactions?: YnabScheduledSubtransaction[];
 };

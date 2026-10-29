@@ -404,6 +404,76 @@ describe("financial health service", () => {
     });
   });
 
+  it("counts loan payments, skips tracking-account rows, and nets split transfer lines in monthly review", async () => {
+    // DEFECT: car payments to loan accounts vanished, 401k adjustments counted as inflow, and split transfer lines inflated outflow.
+    const ynabClient = {
+      getPlanMonth: async () => ({
+        activity: -130000,
+        budgeted: 130000,
+        categories: [],
+        income: 0,
+        month: "2026-05-01",
+        toBeBudgeted: 0,
+      }),
+      listTransactions: async () => [
+        {
+          amount: -50000,
+          categoryId: "car",
+          categoryName: "Car Payment",
+          date: "2026-05-02",
+          deleted: false,
+          id: "loan-payment",
+          transferAccountId: "auto-loan",
+          transferAccountOnBudget: false,
+        },
+        {
+          accountId: "401k",
+          accountOnBudget: false,
+          amount: 500000,
+          date: "2026-05-03",
+          deleted: false,
+          id: "market-adjustment",
+        },
+        {
+          amount: -100000,
+          date: "2026-05-04",
+          deleted: false,
+          id: "split-with-transfer",
+          subtransactions: [
+            {
+              amount: -80000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+              id: "split-groceries",
+            },
+            {
+              amount: -20000,
+              deleted: false,
+              id: "split-to-savings",
+              transferAccountId: "savings",
+            },
+          ],
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getMonthlyReview(ynabClient, {
+        month: "2026-05-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      inflow: "0.00",
+      outflow: "130.00",
+      spent: "130.00",
+      top_spending_categories: [
+        { amount: "80.00", id: "groceries", name: "Groceries" },
+        { amount: "50.00", id: "car", name: "Car Payment" },
+      ],
+    });
+  });
+
   it("rolls spending summary categories up from split subtransactions", async () => {
     // DEFECT: split parent transactions with no category can hide large spending in top category summaries.
     const ynabClient = {
