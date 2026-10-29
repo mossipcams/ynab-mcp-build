@@ -1022,6 +1022,34 @@ describe("financial health service", () => {
     });
   });
 
+  it("never reinterprets a large dollar minimumDifference as milliunits", async () => {
+    // DEFECT: a $5,000 threshold with no matches silently re-ran as $5 and returned small spikes.
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories: [
+          {
+            id: "dining",
+            name: "Dining",
+            activity: month === "2026-04-01" ? -40000 : -11000,
+            balance: 0,
+            deleted: false,
+            hidden: false,
+          },
+        ],
+      }),
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingAnomalies(ynabClient, {
+        baselineMonths: 1,
+        latestMonth: "2026-04-01",
+        minimumDifference: 5000,
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({ anomaly_count: 0, anomalies: [] });
+  });
+
   it("uses z-scores to filter noisy spending anomaly candidates", async () => {
     const categoryActivityByMonth: Record<
       string,

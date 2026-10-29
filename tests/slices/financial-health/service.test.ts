@@ -1596,7 +1596,7 @@ describe("financial health service", () => {
     await expect(
       getSpendingAnomalies(ynabClient as never, {
         latestMonth: "2026-04-01",
-        minimumDifference: 5000,
+        minimumDifference: 5,
         thresholdMultiplier: 2,
       }),
     ).resolves.toEqual({
@@ -1778,7 +1778,7 @@ describe("financial health service", () => {
       getSpendingAnomalies(ynabClient as never, {
         latestMonth: "2026-04-01",
         topN: 2,
-        minimumDifference: 7000,
+        minimumDifference: 7,
         thresholdMultiplier: 2,
       }),
     ).resolves.toEqual({
