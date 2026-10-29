@@ -744,12 +744,14 @@ function isReadyToAssignIncome(transaction: YnabTransaction) {
 
 function isNonTransferScheduledTransaction(transaction: {
   deleted?: boolean;
+  accountOnBudget?: boolean;
   transferAccountId?: string | null;
   transferAccountOnBudget?: boolean;
   dateNext?: string | null;
 }) {
   return (
     !transaction.deleted &&
+    transaction.accountOnBudget !== false &&
     !isBudgetNeutralTransfer(transaction) &&
     Boolean(transaction.dateNext)
   );
@@ -900,7 +902,9 @@ function toMonthSpendingRollups(transactions: YnabTransaction[], topN: number) {
     }
   >();
 
-  for (const transaction of transactions.filter((entry) => entry.amount < 0)) {
+  for (const transaction of transactions.filter(
+    (entry) => budgetAmount(entry) < 0,
+  )) {
     for (const line of toSpendingCategoryLines(transaction)) {
       const key = line.categoryId ?? "uncategorized";
       const current = rollups.get(key);
@@ -1528,7 +1532,7 @@ export async function getSpendingSummary(
   const spendingTransactions = transactions.filter(
     (transaction) =>
       isNonTransferRangeTransaction(transaction, fromMonth, toMonth) &&
-      transaction.amount < 0,
+      budgetAmount(transaction) < 0,
   );
   const spendingEntries = spendingTransactions
     .map((transaction) => {

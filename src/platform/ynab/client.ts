@@ -243,6 +243,7 @@ export type YnabScheduledTransaction = {
   categoryId?: string | null;
   accountName?: string | null;
   transferAccountId?: string | null;
+  accountOnBudget?: boolean;
   transferAccountOnBudget?: boolean;
   deleted?: boolean;
   subtransactions?: YnabScheduledSubtransaction[];

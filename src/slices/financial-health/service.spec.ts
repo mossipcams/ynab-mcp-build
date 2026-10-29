@@ -1322,6 +1322,83 @@ describe("financial health service", () => {
     });
   });
 
+  it("counts scheduled loan payments but not transfers between tracking accounts", async () => {
+    // DEFECT: scheduled car payments vanished, and tracking-to-tracking transfers could surface as bills.
+    const ynabClient = {
+      listScheduledTransactions: async () => [
+        {
+          id: "car-payment",
+          amount: -400000,
+          dateNext: "2026-05-05",
+          deleted: false,
+          payeeName: "Transfer : Auto Loan",
+          transferAccountId: "auto-loan",
+          transferAccountOnBudget: false,
+        },
+        {
+          id: "brokerage-sweep",
+          amount: -100000,
+          accountOnBudget: false,
+          dateNext: "2026-05-06",
+          deleted: false,
+          transferAccountId: "brokerage",
+          transferAccountOnBudget: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getUpcomingObligations(ynabClient, {
+        asOfDate: "2026-04-30",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({ obligation_count: 1 });
+  });
+
+  it("keeps split spending when an on-budget transfer line makes the parent positive", async () => {
+    // DEFECT: a +50 split (+350 from savings, -300 groceries) was dropped from spending while cash flow counted it.
+    const ynabClient = {
+      listCategories: async () => [],
+      listPlanMonths: async () => [
+        { month: "2026-05-01", budgeted: 0, activity: -300000, deleted: false },
+      ],
+      listTransactions: async () => [
+        {
+          id: "split-refill",
+          date: "2026-05-12",
+          amount: 50000,
+          deleted: false,
+          subtransactions: [
+            {
+              id: "from-savings",
+              amount: 350000,
+              deleted: false,
+              transferAccountId: "savings",
+            },
+            {
+              id: "groceries",
+              amount: -300000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+            },
+          ],
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingSummary(ynabClient, {
+        fromMonth: "2026-05-01",
+        planId: "plan-1",
+        toMonth: "2026-05-01",
+      }),
+    ).resolves.toMatchObject({
+      spent: "300.00",
+      top_categories: [{ id: "groceries", amount: "300.00" }],
+    });
+  });
+
   it("filters repeated casual merchants out of recurring expense detection", async () => {
     // DEFECT: three roughly monthly purchases can be mistaken for a recurring bill even when amounts vary heavily.
     const ynabClient = {

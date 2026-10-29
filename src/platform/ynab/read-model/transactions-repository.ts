@@ -159,7 +159,7 @@ function buildSearchWhere(
   }
 
   if (!input.includeTransfers) {
-    where.push("ynab_transactions.transfer_account_id IS NULL");
+    where.push(budgetNeutralTransferExclusion("ynab_transactions"));
   }
 
   if (input.accountIds?.length) {
@@ -312,7 +312,20 @@ function buildTransferLineWhere(
 ) {
   return input.includeTransfers
     ? ""
-    : " AND transaction_lines.transfer_account_id IS NULL";
+    : ` AND ${budgetNeutralTransferExclusion("transaction_lines")}`;
+}
+
+// Transfers to off-budget (tracking/loan) accounts leave the budget, so they
+// stay in non-transfer views; on-budget transfers net to zero.
+function budgetNeutralTransferExclusion(table: string) {
+  return `(${table}.transfer_account_id IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM ynab_accounts transfer_account
+      WHERE transfer_account.plan_id = ${table}.plan_id
+        AND transfer_account.id = ${table}.transfer_account_id
+        AND transfer_account.on_budget = 0
+    ))`;
 }
 
 function buildTransactionLinesCte(searchWhereClause: string) {
@@ -366,6 +379,8 @@ export function createTransactionsRepository(database: D1Database) {
   return {
     async upsertTransactions(input: UpsertTransactionsInput) {
       const statements = input.transactions.flatMap((transaction) => {
+        const isDeleted =
+          transaction.deleted || isHiddenMatchedImport(transaction);
         const transactionStatement = database
           .prepare(
             `INSERT INTO ynab_transactions (
@@ -445,7 +460,7 @@ export function createTransactionsRepository(database: D1Database) {
             transaction.import_payee_name ?? null,
             transaction.import_payee_name_original ?? null,
             transaction.debt_transaction_type ?? null,
-            transaction.deleted || isHiddenMatchedImport(transaction) ? 1 : 0,
+            isDeleted ? 1 : 0,
             input.syncedAt,
             input.syncedAt,
           );
@@ -526,7 +541,7 @@ export function createTransactionsRepository(database: D1Database) {
               subtransaction.category_name ?? null,
               subtransaction.transfer_account_id ?? null,
               subtransaction.transfer_transaction_id ?? null,
-              subtransaction.deleted ? 1 : 0,
+              isDeleted || subtransaction.deleted ? 1 : 0,
               input.syncedAt,
               input.syncedAt,
             ),
@@ -546,7 +561,8 @@ export function createTransactionsRepository(database: D1Database) {
       return {
         rowsUpserted: input.transactions.length,
         rowsDeleted: input.transactions.filter(
-          (transaction) => transaction.deleted,
+          (transaction) =>
+            transaction.deleted || isHiddenMatchedImport(transaction),
         ).length,
       };
     },

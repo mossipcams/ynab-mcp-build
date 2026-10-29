@@ -393,7 +393,7 @@ function toTransaction(row: TransactionRow): YnabTransaction {
 }
 
 // ponytail: flag only known off-budget accounts; absent means on-budget.
-function offBudgetFlag(offBudgetAccountIds: Set<string>) {
+function toOnBudgetFlag(offBudgetAccountIds: Set<string>) {
   return (accountId: string | null | undefined) =>
     accountId && offBudgetAccountIds.has(accountId) ? false : undefined;
 }
@@ -559,27 +559,6 @@ export function createYnabReadModelClient(
     );
   }
 
-  async function listSubtransactionRows(planId: string, transactionId: string) {
-    return all<SubtransactionRow>(
-      `SELECT id,
-              transaction_id,
-              amount_milliunits,
-              memo,
-              payee_id,
-              payee_name,
-              category_id,
-              category_name,
-              transfer_account_id,
-              transfer_transaction_id,
-              deleted
-       FROM ynab_subtransactions
-       WHERE plan_id = ? AND transaction_id = ? AND deleted = 0
-       ORDER BY id`,
-      planId,
-      transactionId,
-    );
-  }
-
   async function listSubtransactionRowsByTransactionIds(
     planId: string,
     transactionIds: string[],
@@ -617,7 +596,11 @@ export function createYnabReadModelClient(
     return rows;
   }
 
-  async function listOffBudgetAccountIds(planId: string) {
+  async function listOffBudgetAccountIds(planId: string, rowCount: number) {
+    if (rowCount === 0) {
+      return new Set<string>();
+    }
+
     const rows = await all<{ id: string; on_budget?: number | null }>(
       `SELECT id, on_budget FROM ynab_accounts WHERE plan_id = ?`,
       planId,
@@ -637,9 +620,9 @@ export function createYnabReadModelClient(
         planId,
         rows.map((row) => row.id),
       ),
-      listOffBudgetAccountIds(planId),
+      listOffBudgetAccountIds(planId, rows.length),
     ]);
-    const offBudget = offBudgetFlag(offBudgetAccountIds);
+    const onBudgetFlag = toOnBudgetFlag(offBudgetAccountIds);
     const subtransactionsByTransactionId = new Map<
       string,
       NonNullable<YnabTransaction["subtransactions"]>
@@ -656,7 +639,7 @@ export function createYnabReadModelClient(
       subtransactions.push(
         compact({
           ...toSubtransaction(row),
-          transferAccountOnBudget: offBudget(row.transfer_account_id),
+          transferAccountOnBudget: onBudgetFlag(row.transfer_account_id),
         }),
       );
       subtransactionsByTransactionId.set(row.transaction_id, subtransactions);
@@ -670,8 +653,8 @@ export function createYnabReadModelClient(
 
       return compact({
         ...transaction,
-        accountOnBudget: offBudget(row.account_id),
-        transferAccountOnBudget: offBudget(row.transfer_account_id),
+        accountOnBudget: onBudgetFlag(row.account_id),
+        transferAccountOnBudget: onBudgetFlag(row.transfer_account_id),
         subtransactions: subtransactions?.length ? subtransactions : undefined,
       });
     });
@@ -722,9 +705,9 @@ export function createYnabReadModelClient(
         planId,
         rows.map((row) => row.id),
       ),
-      listOffBudgetAccountIds(planId),
+      listOffBudgetAccountIds(planId, rows.length),
     ]);
-    const offBudget = offBudgetFlag(offBudgetAccountIds);
+    const onBudgetFlag = toOnBudgetFlag(offBudgetAccountIds);
     const subtransactionsByScheduledTransactionId = new Map<
       string,
       NonNullable<YnabScheduledTransaction["subtransactions"]>
@@ -755,7 +738,8 @@ export function createYnabReadModelClient(
 
       return compact({
         ...scheduledTransaction,
-        transferAccountOnBudget: offBudget(row.transfer_account_id),
+        accountOnBudget: onBudgetFlag(row.account_id),
+        transferAccountOnBudget: onBudgetFlag(row.transfer_account_id),
         subtransactions: subtransactions?.length ? subtransactions : undefined,
       });
     });
@@ -1187,20 +1171,14 @@ export function createYnabReadModelClient(
     },
 
     async getTransaction(planId: string, transactionId: string) {
-      const transaction = toTransaction(
+      const [transaction] = await hydrateTransactionRows(planId, [
         first(
           await listTransactionRows(planId, ["id = ?"], [transactionId]),
           `YNAB transaction ${transactionId} was not found in the read model.`,
         ),
-      );
-      const subtransactions = (
-        await listSubtransactionRows(planId, transactionId)
-      ).map(toSubtransaction);
+      ]);
 
-      return compact({
-        ...transaction,
-        subtransactions: subtransactions.length ? subtransactions : undefined,
-      });
+      return transaction!;
     },
 
     async listScheduledTransactions(planId: string) {
@@ -1235,10 +1213,12 @@ export function createYnabReadModelClient(
       planId: string,
       scheduledTransactionId: string,
     ) {
-      const scheduledTransaction = toScheduledTransaction(
-        first(
-          await all<ScheduledTransactionRow>(
-            `SELECT id,
+      const [scheduledTransaction] = await hydrateScheduledTransactionRows(
+        planId,
+        [
+          first(
+            await all<ScheduledTransactionRow>(
+              `SELECT id,
                   date_first,
                   date_next,
                   frequency,
@@ -1257,22 +1237,15 @@ export function createYnabReadModelClient(
            FROM ynab_scheduled_transactions
            WHERE plan_id = ? AND id = ? AND deleted = 0
            LIMIT 1`,
-            planId,
-            scheduledTransactionId,
+              planId,
+              scheduledTransactionId,
+            ),
+            `YNAB scheduled transaction ${scheduledTransactionId} was not found in the read model.`,
           ),
-          `YNAB scheduled transaction ${scheduledTransactionId} was not found in the read model.`,
-        ),
+        ],
       );
-      const subtransactions = (
-        await listScheduledSubtransactionRowsByScheduledTransactionIds(planId, [
-          scheduledTransaction.id,
-        ])
-      ).map(toScheduledSubtransaction);
 
-      return compact({
-        ...scheduledTransaction,
-        subtransactions: subtransactions.length ? subtransactions : undefined,
-      });
+      return scheduledTransaction!;
     },
 
     async listPayees(planId: string) {
