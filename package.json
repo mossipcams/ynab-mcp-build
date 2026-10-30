@@ -43,7 +43,7 @@
     "check:pr": "pnpm check:package-manager && pnpm typegen && pnpm format:check && pnpm lint:fast && pnpm lint:types && pnpm typecheck && pnpm test:coverage && pnpm bundle:check && pnpm check:deps && pnpm check:duplication && pnpm deps:check && pnpm secrets:scan",
     "check:github": "pnpm check:package-manager && pnpm typegen && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm bundle:check && pnpm check:deps && pnpm check:duplication && pnpm deps:check",
     "check:cf": "pnpm typegen && pnpm format:check && pnpm lint:fast && pnpm typecheck && pnpm test && pnpm bundle:check",
-    "db:migrate:prod": "wrangler d1 migrations apply YOUR_DB_NAME --remote",
+    "db:migrate:prod": "wrangler d1 migrations apply ynab-mcp-read-model --remote",
     "deploy:prod": "wrangler deploy",
     "test:smoke:prod": "tsx scripts/smoke-prod.ts",
     "cf:preview:no-op": "echo 'Cloudflare PR preview deploy disabled'",

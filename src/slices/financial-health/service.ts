@@ -613,13 +613,45 @@ function summarizeBudgetHealthMonth(
   };
 }
 
+// On-budget transfers net to zero; transfers to tracking/loan accounts
+// (e.g. a car payment) leave the budget and are real spending in YNAB.
+function isBudgetNeutralTransfer(transaction: {
+  transferAccountId?: string | null;
+  transferAccountOnBudget?: boolean;
+}) {
+  return (
+    Boolean(transaction.transferAccountId) &&
+    transaction.transferAccountOnBudget !== false
+  );
+}
+
+// Amount that hits the budget: excludes transfer lines inside a split.
+function budgetAmount(transaction: YnabTransaction) {
+  return (transaction.subtransactions ?? []).reduce(
+    (amount, subtransaction) =>
+      !subtransaction.deleted && isBudgetNeutralTransfer(subtransaction)
+        ? amount - subtransaction.amount
+        : amount,
+    transaction.amount,
+  );
+}
+
+// Tracking/loan account rows (401k adjustments, loan interest) never touch
+// the budget; net worth reads them separately.
+function isBudgetTransaction(transaction: YnabTransaction) {
+  return (
+    !transaction.deleted &&
+    transaction.accountOnBudget !== false &&
+    !isBudgetNeutralTransfer(transaction)
+  );
+}
+
 function isNonTransferMonthTransaction(
   transaction: YnabTransaction,
   month: string,
 ) {
   return (
-    !transaction.deleted &&
-    !transaction.transferAccountId &&
+    isBudgetTransaction(transaction) &&
     transaction.date.startsWith(month.slice(0, 7))
   );
 }
@@ -631,8 +663,7 @@ function isNonTransferRangeTransaction(
 ) {
   const monthKey = `${transaction.date.slice(0, 7)}-01`;
   return (
-    !transaction.deleted &&
-    !transaction.transferAccountId &&
+    isBudgetTransaction(transaction) &&
     monthKey >= fromMonth &&
     monthKey <= toMonth
   );
@@ -667,13 +698,15 @@ function toSpendingCategoryLine(input: {
 function toSpendingCategoryLines(
   transaction: YnabTransaction,
 ): SpendingCategoryLine[] {
-  const subtransactions =
+  const liveSubtransactions =
     transaction.subtransactions?.filter(
-      (subtransaction) =>
-        !subtransaction.deleted && !subtransaction.transferAccountId,
+      (subtransaction) => !subtransaction.deleted,
     ) ?? [];
+  const subtransactions = liveSubtransactions.filter(
+    (subtransaction) => !isBudgetNeutralTransfer(subtransaction),
+  );
 
-  if (subtransactions.length === 0) {
+  if (liveSubtransactions.length === 0) {
     const line = toSpendingCategoryLine({
       amount: transaction.amount,
       categoryId: transaction.categoryId,
@@ -707,12 +740,15 @@ function isReadyToAssignIncome(transaction: YnabTransaction) {
 
 function isNonTransferScheduledTransaction(transaction: {
   deleted?: boolean;
+  accountOnBudget?: boolean;
   transferAccountId?: string | null;
+  transferAccountOnBudget?: boolean;
   dateNext?: string | null;
 }) {
   return (
     !transaction.deleted &&
-    !transaction.transferAccountId &&
+    transaction.accountOnBudget !== false &&
+    !isBudgetNeutralTransfer(transaction) &&
     Boolean(transaction.dateNext)
   );
 }
@@ -862,7 +898,9 @@ function toMonthSpendingRollups(transactions: YnabTransaction[], topN: number) {
     }
   >();
 
-  for (const transaction of transactions.filter((entry) => entry.amount < 0)) {
+  for (const transaction of transactions.filter(
+    (entry) => budgetAmount(entry) < 0,
+  )) {
     for (const line of toSpendingCategoryLines(transaction)) {
       const key = line.categoryId ?? "uncategorized";
       const current = rollups.get(key);
@@ -1334,12 +1372,13 @@ export async function getMonthlyReview(
   const monthTransactions = transactions.filter((transaction) =>
     isNonTransferMonthTransaction(transaction, monthDetail.month),
   );
-  const inflowMilliunits = monthTransactions
-    .filter((transaction) => transaction.amount > 0)
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
-  const outflowMilliunits = monthTransactions
-    .filter((transaction) => transaction.amount < 0)
-    .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  const budgetAmounts = monthTransactions.map(budgetAmount);
+  const inflowMilliunits = budgetAmounts
+    .filter((amount) => amount > 0)
+    .reduce((sum, amount) => sum + amount, 0);
+  const outflowMilliunits = budgetAmounts
+    .filter((amount) => amount < 0)
+    .reduce((sum, amount) => sum + Math.abs(amount), 0);
   const spentMilliunits =
     monthTransactions.length > 0
       ? outflowMilliunits
@@ -1396,10 +1435,12 @@ export async function getCashFlowSummary(
     const monthKey = `${transaction.date.slice(0, 7)}-01`;
     const flow = periodFlow.get(monthKey) ?? { inflow: 0, outflow: 0 };
 
-    if (transaction.amount >= 0) {
-      flow.inflow += transaction.amount;
+    const amount = budgetAmount(transaction);
+
+    if (amount >= 0) {
+      flow.inflow += amount;
     } else {
-      flow.outflow += Math.abs(transaction.amount);
+      flow.outflow += Math.abs(amount);
     }
 
     periodFlow.set(monthKey, flow);
@@ -1487,7 +1528,7 @@ export async function getSpendingSummary(
   const spendingTransactions = transactions.filter(
     (transaction) =>
       isNonTransferRangeTransaction(transaction, fromMonth, toMonth) &&
-      transaction.amount < 0,
+      budgetAmount(transaction) < 0,
   );
   const spendingEntries = spendingTransactions
     .map((transaction) => {
@@ -2222,8 +2263,7 @@ export async function getRecurringExpenseSummary(
 
   for (const transaction of transactions) {
     if (
-      transaction.deleted ||
-      transaction.transferAccountId ||
+      !isBudgetTransaction(transaction) ||
       transaction.amount >= 0 ||
       transaction.date < input.fromDate ||
       transaction.date > input.toDate
@@ -2288,8 +2328,7 @@ export async function getBudgetCleanupSummary(
   );
   const monthTransactions = transactions.filter(
     (transaction) =>
-      !transaction.deleted &&
-      !transaction.transferAccountId &&
+      isBudgetTransaction(transaction) &&
       toMonthKey(transaction.date) === monthDetail.month,
   );
   const uncategorizedTransactions = monthTransactions.filter(

@@ -548,6 +548,45 @@ describe("YNAB read-model client", () => {
     expect(db.calls[0]?.sql).toContain("date <= ?");
   });
 
+  it("flags off-budget source and transfer accounts when listing transactions", async () => {
+    // DEFECT: tracking-account rows and loan payments were indistinguishable from on-budget activity.
+    const db = new FakeD1Database();
+    db.rows.ynab_accounts = [
+      { plan_id: "plan-1", id: "checking", on_budget: 1, deleted: 0 },
+      { plan_id: "plan-1", id: "auto-loan", on_budget: 0, deleted: 0 },
+    ];
+    db.rows.ynab_transactions = [
+      {
+        plan_id: "plan-1",
+        id: "loan-payment",
+        date: "2026-04-02",
+        amount_milliunits: -50000,
+        account_id: "checking",
+        transfer_account_id: "auto-loan",
+        deleted: 0,
+      },
+      {
+        plan_id: "plan-1",
+        id: "loan-interest",
+        date: "2026-04-03",
+        amount_milliunits: -2000,
+        account_id: "auto-loan",
+        deleted: 0,
+      },
+    ];
+    const client = createYnabReadModelClient(db as unknown as D1Database);
+    const transactions = await client.listTransactions("plan-1");
+    const byId = new Map(transactions.map((entry) => [entry.id, entry]));
+
+    expect(byId.get("loan-payment")).toMatchObject({
+      transferAccountOnBudget: false,
+    });
+    expect(byId.get("loan-payment")).not.toHaveProperty("accountOnBudget");
+    expect(byId.get("loan-interest")).toMatchObject({
+      accountOnBudget: false,
+    });
+  });
+
   it("hydrates split subtransactions when listing transaction ranges", async () => {
     const db = new FakeD1Database();
     db.rows.ynab_transactions = [
