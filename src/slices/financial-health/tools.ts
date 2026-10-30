@@ -124,7 +124,12 @@ export function getFinancialHealthToolDefinitions(
         baselineMonths: z.number().int().min(1).max(12).optional(),
         topN: z.number().int().min(1).max(10).optional(),
         thresholdMultiplier: z.number().min(1).optional(),
-        minimumDifference: z.number().int().min(0).optional(),
+        minimumDifference: z
+          .number()
+          .int()
+          .min(0)
+          .describe("Minimum spending increase in whole dollars.")
+          .optional(),
         detailLevel: detailLevelSchema,
       },
       execute: async ({ month, ...input }) =>

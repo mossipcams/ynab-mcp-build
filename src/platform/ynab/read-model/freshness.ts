@@ -105,6 +105,19 @@ export function createReadModelFreshness(
         };
       }
 
+      // A lease creates the row before the first sync finishes; a crashed or
+      // lost first run leaves it with no success and possibly partial data.
+      const neverCompleted = rows.find((row) => !row.last_successful_sync_at);
+
+      if (neverCompleted) {
+        return {
+          health_status: "never_synced",
+          last_synced_at: null,
+          stale: true,
+          warning: `Required endpoint ${neverCompleted.endpoint} has never completed a sync.`,
+        };
+      }
+
       const staleBefore = subtractMinutes(
         options.now(),
         options.staleAfterMinutes,

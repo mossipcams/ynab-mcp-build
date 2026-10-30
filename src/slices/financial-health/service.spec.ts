@@ -1022,6 +1022,34 @@ describe("financial health service", () => {
     });
   });
 
+  it("never reinterprets a large dollar minimumDifference as milliunits", async () => {
+    // DEFECT: a $5,000 threshold with no matches silently re-ran as $5 and returned small spikes.
+    const ynabClient = {
+      getPlanMonth: async (_planId: string, month: string) => ({
+        month,
+        categories: [
+          {
+            id: "dining",
+            name: "Dining",
+            activity: month === "2026-04-01" ? -40000 : -11000,
+            balance: 0,
+            deleted: false,
+            hidden: false,
+          },
+        ],
+      }),
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingAnomalies(ynabClient, {
+        baselineMonths: 1,
+        latestMonth: "2026-04-01",
+        minimumDifference: 5000,
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({ anomaly_count: 0, anomalies: [] });
+  });
+
   it("uses z-scores to filter noisy spending anomaly candidates", async () => {
     const categoryActivityByMonth: Record<
       string,
@@ -2056,6 +2084,40 @@ describe("financial health service", () => {
         expect.objectContaining({ id: "due-14" }),
         expect.objectContaining({ id: "due-30" }),
       ],
+    });
+  });
+
+  it("leaves the in-progress month out of cash resilience average spending", async () => {
+    // DEFECT: early in a month, partial current-month spending dragged the average down and overstated runway.
+    const ynabClient = {
+      listAccounts: async () => [
+        {
+          id: "cash",
+          name: "Checking",
+          type: "checking",
+          closed: false,
+          deleted: false,
+          balance: 1200000,
+        },
+      ],
+      listPlanMonths: async () => [
+        { month: "2026-08-01", deleted: false, activity: -4000000 },
+        { month: "2026-09-01", deleted: false, activity: -4000000 },
+        { month: "2026-10-01", deleted: false, activity: -200000 },
+      ],
+      listScheduledTransactions: async () => [],
+    } as unknown as YnabClient;
+
+    await expect(
+      getCashResilienceSummary(ynabClient, {
+        asOfDate: "2026-10-03",
+        monthsBack: 3,
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      average_monthly_spending: "4000.00",
+      coverage_months: "0.30",
+      status: "critical",
     });
   });
 

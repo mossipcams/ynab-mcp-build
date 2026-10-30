@@ -308,10 +308,6 @@ function toConfiguredMilliunitThreshold(value: number | undefined) {
   return Math.round(value * 1000);
 }
 
-function toLegacyMilliunitThreshold(value: number | undefined) {
-  return value !== undefined && value >= 5000 ? value : undefined;
-}
-
 function toMonthKey(date: string) {
   return `${date.slice(0, 7)}-01`;
 }
@@ -1655,7 +1651,7 @@ export async function getSpendingAnomalies(
   if (!latestMonthDetail) {
     throw new Error(`YNAB month ${input.latestMonth} was not found.`);
   }
-  let anomalies = buildSpendingAnomalies(
+  const anomalies = buildSpendingAnomalies(
     latestMonthDetail.categories ?? [],
     monthDetails.slice(0, baselineMonthIds.length),
     {
@@ -1664,22 +1660,6 @@ export async function getSpendingAnomalies(
       topN,
     },
   );
-  const legacyMinimumDifference = toLegacyMilliunitThreshold(
-    input.minimumDifference,
-  );
-
-  if (anomalies.length === 0 && legacyMinimumDifference !== undefined) {
-    anomalies = buildSpendingAnomalies(
-      latestMonthDetail.categories ?? [],
-      monthDetails.slice(0, baselineMonthIds.length),
-      {
-        minimumDifference: legacyMinimumDifference,
-        thresholdMultiplier,
-        topN,
-      },
-    );
-  }
-
   return {
     latest_month: input.latestMonth,
     baseline_month_count: baselineMonthIds.length,
@@ -1913,8 +1893,15 @@ export async function getCashResilienceSummary(
     ynabClient.listScheduledTransactions(planId),
   ]);
   const liquidCash = buildAccountSnapshotSummary(accounts).liquidCashMilliunits;
+  // An in-progress month's partial activity would understate the average.
+  const firstIncompleteMonth = currentCalendarMonth(input.asOfDate);
   const consideredMonths = months
-    .filter((entry) => !entry.deleted && entry.month <= month)
+    .filter(
+      (entry) =>
+        !entry.deleted &&
+        entry.month <= month &&
+        entry.month < firstIncompleteMonth,
+    )
     .sort((left, right) => right.month.localeCompare(left.month))
     .slice(0, monthsBack);
   const averageMonthlySpending = consideredMonths.length
