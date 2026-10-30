@@ -1,4 +1,5 @@
 import type { YnabDeltaTransactionRecord } from "../delta-client.js";
+import { isHiddenMatchedImport } from "../mappers.js";
 import { runD1Batches } from "./d1-batch.js";
 
 const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
@@ -161,10 +162,11 @@ function buildSearchWhere(
   }
 
   if (!input.includeTransfers) {
-    // Budget-to-budget transfers carry no category and net to zero; a
-    // categorized transfer (e.g. to a tracking loan account) is real spending.
     where.push(
-      "(ynab_transactions.transfer_account_id IS NULL OR ynab_transactions.category_id IS NOT NULL)",
+      budgetNeutralTransferExclusion(
+        "ynab_transactions.plan_id",
+        "ynab_transactions.transfer_account_id",
+      ),
     );
   }
 
@@ -323,7 +325,7 @@ function buildLineWhere(
 ): { params: Array<string | number>; whereClause: string } {
   let whereClause = input.includeTransfers
     ? ""
-    : ` AND (${columns.transferAccountId} IS NULL OR ${columns.categoryId} IS NOT NULL)`;
+    : ` AND ${budgetNeutralTransferExclusion(columns.planId, columns.transferAccountId)}`;
   const params: Array<string | number> = [];
 
   if (input.categoryIds?.length) {
@@ -378,6 +380,22 @@ function buildSearchAmountColumns(input: SearchTransactionsInput) {
   };
 }
 
+// Transfers to off-budget (tracking/loan) accounts leave the budget, so they
+// stay in non-transfer views; on-budget transfers net to zero.
+function budgetNeutralTransferExclusion(
+  planIdColumn: string,
+  transferAccountIdColumn: string,
+) {
+  return `(${transferAccountIdColumn} IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM ynab_accounts transfer_account
+      WHERE transfer_account.plan_id = ${planIdColumn}
+        AND transfer_account.id = ${transferAccountIdColumn}
+        AND transfer_account.on_budget = 0
+    ))`;
+}
+
 function buildTransactionLinesCte(searchWhereClause: string) {
   return `WITH matching_transactions AS (
              SELECT plan_id,
@@ -429,6 +447,8 @@ export function createTransactionsRepository(database: D1Database) {
   return {
     async upsertTransactions(input: UpsertTransactionsInput) {
       const statements = input.transactions.flatMap((transaction) => {
+        const isDeleted =
+          transaction.deleted || isHiddenMatchedImport(transaction);
         const transactionStatement = database
           .prepare(
             `INSERT INTO ynab_transactions (
@@ -508,7 +528,7 @@ export function createTransactionsRepository(database: D1Database) {
             transaction.import_payee_name ?? null,
             transaction.import_payee_name_original ?? null,
             transaction.debt_transaction_type ?? null,
-            transaction.deleted ? 1 : 0,
+            isDeleted ? 1 : 0,
             input.syncedAt,
             input.syncedAt,
           );
@@ -589,7 +609,7 @@ export function createTransactionsRepository(database: D1Database) {
               subtransaction.category_name ?? null,
               subtransaction.transfer_account_id ?? null,
               subtransaction.transfer_transaction_id ?? null,
-              subtransaction.deleted ? 1 : 0,
+              isDeleted || subtransaction.deleted ? 1 : 0,
               input.syncedAt,
               input.syncedAt,
             ),
@@ -609,7 +629,8 @@ export function createTransactionsRepository(database: D1Database) {
       return {
         rowsUpserted: input.transactions.length,
         rowsDeleted: input.transactions.filter(
-          (transaction) => transaction.deleted,
+          (transaction) =>
+            transaction.deleted || isHiddenMatchedImport(transaction),
         ).length,
       };
     },

@@ -182,6 +182,60 @@ describe("transactions repository", () => {
     expect(db.batchStatements).toHaveLength(4_379);
   });
 
+  it("hides a matched import half and its split lines", async () => {
+    // DEFECT: YNAB returns both halves of a matched pair; the hidden half and its split lines were stored live.
+    const db = new FakeD1Database();
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    const result = await repository.upsertTransactions({
+      planId: "plan-1",
+      syncedAt: "2026-04-28T12:00:00.000Z",
+      transactions: [
+        {
+          amount: -1550000,
+          date: "2026-10-02",
+          deleted: false,
+          id: "hidden-import",
+          import_payee_name: '{"importedSource":"Imported"}',
+          matched_transaction_id: "visible-entry_2026-10-01",
+          subtransactions: [
+            {
+              amount: -1550000,
+              deleted: false,
+              id: "hidden-line",
+              transaction_id: "hidden-import",
+            },
+          ],
+        },
+      ],
+    });
+    const deletedFlag = (table: string) =>
+      db.batchStatements
+        .find((statement) => statement.sql.includes(`INSERT INTO ${table}`))
+        ?.params.at(-3);
+
+    expect(deletedFlag("ynab_transactions")).toBe(1);
+    expect(deletedFlag("ynab_subtransactions")).toBe(1);
+    expect(result.rowsDeleted).toBe(1);
+  });
+
+  it("keeps transfers to off-budget accounts in non-transfer summaries", async () => {
+    // DEFECT: loan payments (transfers to tracking accounts) were dropped from transaction summaries.
+    const db = new FakeD1Database();
+    const repository = createTransactionsRepository(
+      db as unknown as D1Database,
+    );
+
+    await repository.summarizeTransactions({ planId: "plan-1" });
+
+    expect(db.allCalls.length).toBeGreaterThan(0);
+    for (const call of db.allCalls) {
+      expect(call.sql).toContain("transfer_account.on_budget = 0");
+    }
+  });
+
   it("marks omitted subtransactions deleted when a parent split is replaced", async () => {
     const db = new FakeD1Database();
     const repository = createTransactionsRepository(

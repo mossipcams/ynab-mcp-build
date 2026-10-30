@@ -175,8 +175,16 @@ describe("read path money accuracy (real SQLite)", () => {
     expect(summary.totals.outflowMilliunits).toBe(450000);
   });
 
-  it("counts categorized transfers to tracking accounts but not budget-to-budget transfers", async () => {
+  it("counts transfers to tracking accounts but not budget-to-budget transfers", async () => {
     const { database, insert } = createSqliteD1();
+    for (const [id, type, onBudget] of [
+      ["checking", "checking", 1],
+      ["savings", "savings", 1],
+      ["credit-card", "creditCard", 1],
+      ["loan-account", "mortgage", 0],
+    ] as const) {
+      insert("ynab_accounts", { id, name: id, type, on_budget: onBudget });
+    }
     insert("ynab_transactions", {
       id: "mortgage",
       date: "2026-10-01",

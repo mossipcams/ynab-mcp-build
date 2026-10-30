@@ -74,6 +74,21 @@ function compact<T extends Record<string, unknown>>(entry: T): Compact<T> {
   ) as Compact<T>;
 }
 
+// YNAB returns both halves of a matched pair; the UI hides the import half,
+// which carries its match metadata as JSON in import_payee_name.
+// ponytail: JSON-prefix heuristic, revisit if YNAB documents a real flag.
+export function isHiddenMatchedImport(
+  transaction: Pick<
+    YnabTransactionRecordInput,
+    "matched_transaction_id" | "import_payee_name"
+  >,
+) {
+  return (
+    Boolean(transaction.matched_transaction_id) &&
+    (transaction.import_payee_name?.startsWith("{") ?? false)
+  );
+}
+
 export function mapTransactionRecord(transaction: YnabTransactionRecordInput) {
   return compact({
     id: transaction.id,
@@ -90,7 +105,7 @@ export function mapTransactionRecord(transaction: YnabTransactionRecordInput) {
     cleared: transaction.cleared,
     flagColor: transaction.flag_color,
     flagName: transaction.flag_name,
-    deleted: transaction.deleted,
+    deleted: isHiddenMatchedImport(transaction) || transaction.deleted,
     transferAccountId: transaction.transfer_account_id,
     transferTransactionId: transaction.transfer_transaction_id,
     matchedTransactionId: transaction.matched_transaction_id,

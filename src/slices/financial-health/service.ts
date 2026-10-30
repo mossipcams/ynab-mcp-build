@@ -686,17 +686,29 @@ type FlowEntry = {
   categoryId?: string | null;
   categoryName?: string | null;
   transferAccountId?: string | null;
+  transferAccountOnBudget?: boolean;
   deleted?: boolean;
 };
 
-// Budget ↔ budget transfers move no budget money. YNAB only categorizes
-// transfers into tracking accounts (e.g. mortgage payments to a loan), and
-// those are real spending.
+// On-budget transfers net to zero; transfers to tracking/loan accounts
+// (e.g. a mortgage payment) leave the budget and are real spending in YNAB.
 function isBudgetFlowEntry(entry: FlowEntry, offBudgetAccountIds: Set<string>) {
   return (
     !entry.transferAccountId ||
-    (Boolean(entry.categoryId) &&
-      offBudgetAccountIds.has(entry.transferAccountId))
+    entry.transferAccountOnBudget === false ||
+    offBudgetAccountIds.has(entry.transferAccountId)
+  );
+}
+
+// Tracking/loan account rows (401k adjustments, loan interest) never touch
+// the budget; net worth reads them separately.
+function isOffBudgetAccountEntry(
+  entry: { accountId?: string | null; accountOnBudget?: boolean },
+  offBudgetAccountIds: Set<string>,
+) {
+  return (
+    entry.accountOnBudget === false ||
+    Boolean(entry.accountId && offBudgetAccountIds.has(entry.accountId))
   );
 }
 
@@ -763,7 +775,7 @@ function toBudgetTransactions(
       transaction.deleted ||
       monthKey < fromMonth ||
       monthKey > toMonth ||
-      (transaction.accountId && offBudgetAccountIds.has(transaction.accountId))
+      isOffBudgetAccountEntry(transaction, offBudgetAccountIds)
     ) {
       return [];
     }
@@ -854,6 +866,7 @@ function toCategorySpent(category: {
 type ScheduledFlowTransaction = FlowEntry & {
   id: string;
   accountId?: string | null;
+  accountOnBudget?: boolean;
   dateNext?: string | null;
   frequency?: string | null;
   subtransactions?: FlowEntry[] | undefined;
@@ -926,7 +939,7 @@ function toScheduledBudgetOccurrences<T extends ScheduledFlowTransaction>(
   return scheduledTransactions.flatMap((transaction) => {
     const lines =
       transaction.deleted ||
-      (transaction.accountId && offBudgetAccountIds.has(transaction.accountId))
+      isOffBudgetAccountEntry(transaction, offBudgetAccountIds)
         ? []
         : toBudgetFlowLines(transaction, offBudgetAccountIds);
 

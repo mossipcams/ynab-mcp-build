@@ -404,6 +404,76 @@ describe("financial health service", () => {
     });
   });
 
+  it("counts loan payments, skips tracking-account rows, and nets split transfer lines in monthly review", async () => {
+    // DEFECT: car payments to loan accounts vanished, 401k adjustments counted as inflow, and split transfer lines inflated outflow.
+    const ynabClient = {
+      getPlanMonth: async () => ({
+        activity: -130000,
+        budgeted: 130000,
+        categories: [],
+        income: 0,
+        month: "2026-05-01",
+        toBeBudgeted: 0,
+      }),
+      listTransactions: async () => [
+        {
+          amount: -50000,
+          categoryId: "car",
+          categoryName: "Car Payment",
+          date: "2026-05-02",
+          deleted: false,
+          id: "loan-payment",
+          transferAccountId: "auto-loan",
+          transferAccountOnBudget: false,
+        },
+        {
+          accountId: "401k",
+          accountOnBudget: false,
+          amount: 500000,
+          date: "2026-05-03",
+          deleted: false,
+          id: "market-adjustment",
+        },
+        {
+          amount: -100000,
+          date: "2026-05-04",
+          deleted: false,
+          id: "split-with-transfer",
+          subtransactions: [
+            {
+              amount: -80000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+              id: "split-groceries",
+            },
+            {
+              amount: -20000,
+              deleted: false,
+              id: "split-to-savings",
+              transferAccountId: "savings",
+            },
+          ],
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getMonthlyReview(ynabClient, {
+        month: "2026-05-01",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({
+      inflow: "0.00",
+      outflow: "130.00",
+      spent: "130.00",
+      top_spending_categories: [
+        { amount: "80.00", id: "groceries", name: "Groceries" },
+        { amount: "50.00", id: "car", name: "Car Payment" },
+      ],
+    });
+  });
+
   it("rolls spending summary categories up from split subtransactions", async () => {
     // DEFECT: split parent transactions with no category can hide large spending in top category summaries.
     const ynabClient = {
@@ -1277,6 +1347,83 @@ describe("financial health service", () => {
           type: "outflow",
         }),
       ],
+    });
+  });
+
+  it("counts scheduled loan payments but not transfers between tracking accounts", async () => {
+    // DEFECT: scheduled car payments vanished, and tracking-to-tracking transfers could surface as bills.
+    const ynabClient = {
+      listScheduledTransactions: async () => [
+        {
+          id: "car-payment",
+          amount: -400000,
+          dateNext: "2026-05-05",
+          deleted: false,
+          payeeName: "Transfer : Auto Loan",
+          transferAccountId: "auto-loan",
+          transferAccountOnBudget: false,
+        },
+        {
+          id: "brokerage-sweep",
+          amount: -100000,
+          accountOnBudget: false,
+          dateNext: "2026-05-06",
+          deleted: false,
+          transferAccountId: "brokerage",
+          transferAccountOnBudget: false,
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getUpcomingObligations(ynabClient, {
+        asOfDate: "2026-04-30",
+        planId: "plan-1",
+      }),
+    ).resolves.toMatchObject({ obligation_count: 1 });
+  });
+
+  it("keeps split spending when an on-budget transfer line makes the parent positive", async () => {
+    // DEFECT: a +50 split (+350 from savings, -300 groceries) was dropped from spending while cash flow counted it.
+    const ynabClient = {
+      listCategories: async () => [],
+      listPlanMonths: async () => [
+        { month: "2026-05-01", budgeted: 0, activity: -300000, deleted: false },
+      ],
+      listTransactions: async () => [
+        {
+          id: "split-refill",
+          date: "2026-05-12",
+          amount: 50000,
+          deleted: false,
+          subtransactions: [
+            {
+              id: "from-savings",
+              amount: 350000,
+              deleted: false,
+              transferAccountId: "savings",
+            },
+            {
+              id: "groceries",
+              amount: -300000,
+              categoryId: "groceries",
+              categoryName: "Groceries",
+              deleted: false,
+            },
+          ],
+        },
+      ],
+    } as unknown as YnabClient;
+
+    await expect(
+      getSpendingSummary(ynabClient, {
+        fromMonth: "2026-05-01",
+        planId: "plan-1",
+        toMonth: "2026-05-01",
+      }),
+    ).resolves.toMatchObject({
+      spent: "300.00",
+      top_categories: [{ id: "groceries", amount: "300.00" }],
     });
   });
 
