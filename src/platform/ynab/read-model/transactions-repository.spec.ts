@@ -342,6 +342,11 @@ describe("transactions repository", () => {
     expect(rowCall.sql).toContain("payee_name LIKE ?");
     expect(rowCall.sql).toContain("LIMIT ? OFFSET ?");
     expect(rowCall.params).toEqual([
+      // split-line category share in the amount column
+      "category-1",
+      "category-2",
+      "category-1",
+      "category-2",
       "plan-1",
       "2026-04-01",
       "2026-04-30",

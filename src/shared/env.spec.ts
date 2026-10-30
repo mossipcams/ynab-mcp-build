@@ -103,6 +103,20 @@ describe("resolveAppEnv", () => {
     ).toThrowError("YNAB_READ_SOURCE must be d1.");
   });
 
+  it("accepts IANA time zones for calendar dates and rejects unknown ones", () => {
+    expect(resolveAppEnv({}).ynabTimeZone).toBeUndefined();
+    expect(
+      resolveAppEnv({
+        YNAB_TIME_ZONE: "America/New_York",
+      } as Partial<Env> & { YNAB_TIME_ZONE: string }).ynabTimeZone,
+    ).toBe("America/New_York");
+    expect(() =>
+      resolveAppEnv({
+        YNAB_TIME_ZONE: "Mars/Olympus",
+      } as Partial<Env> & { YNAB_TIME_ZONE: string }),
+    ).toThrowError("YNAB_TIME_ZONE must be an IANA time zone");
+  });
+
   it("defaults the read-model freshness warning window to hot-poll expectations", () => {
     expect(resolveAppEnv({}).ynabStaleAfterMinutes).toBe(30);
   });

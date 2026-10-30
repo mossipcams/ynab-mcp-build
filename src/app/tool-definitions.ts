@@ -94,7 +94,7 @@ export function getRegisteredToolDefinitions(
         env.ynabDatabase,
       ),
     }),
-    ...getFinancialHealthToolDefinitions(ynabClient),
+    ...getFinancialHealthToolDefinitions(ynabClient, env.ynabTimeZone),
   ];
 
   const planIdResolver = createDefaultPlanIdResolver({

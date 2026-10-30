@@ -193,6 +193,11 @@ function toDisplayTransaction(row: TransactionSearchRow) {
     id: row.id,
     date: row.date,
     amount: formatAmountMilliunits(row.amount_milliunits),
+    split_total:
+      row.transaction_amount_milliunits === undefined ||
+      row.transaction_amount_milliunits === row.amount_milliunits
+        ? undefined
+        : formatAmountMilliunits(row.transaction_amount_milliunits),
     cleared: row.cleared,
     approved:
       row.approved === undefined || row.approved === null
@@ -375,8 +380,17 @@ export async function searchTransactions(
   input: DbTransactionSearchInput,
 ) {
   const planId = resolvePlanId(input, dependencies.defaultPlanId);
-  const startDate = input.month ? input.month : input.fromDate;
-  const endDate = input.month ? endOfMonth(input.month) : input.toDate;
+  // ISO dates compare lexically, so the tighter bound of month vs explicit
+  // dates is a plain string max/min.
+  const monthEnd = input.month ? endOfMonth(input.month) : undefined;
+  const startDate =
+    input.month && input.fromDate
+      ? [input.month, input.fromDate].sort()[1]
+      : (input.month ?? input.fromDate);
+  const endDate =
+    monthEnd && input.toDate
+      ? [monthEnd, input.toDate].sort()[0]
+      : (monthEnd ?? input.toDate);
   const freshness = await dependencies.freshness.getFreshness(
     planId,
     REQUIRED_ENDPOINTS,
@@ -449,9 +463,9 @@ export async function searchTransactions(
       {
         ...summary,
         filters: compactObject({
-          from_date: input.fromDate,
+          from_date: input.fromDate ? startDate : undefined,
           month: input.month,
-          to_date: input.toDate,
+          to_date: input.toDate ? endDate : undefined,
           payee_id: input.payeeId,
           account_id: input.accountId,
           category_id: input.categoryId,

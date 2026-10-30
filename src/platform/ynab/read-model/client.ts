@@ -933,7 +933,7 @@ export function createYnabReadModelClient(
                   goal_snoozed_at,
                   goal_under_funded_milliunits
            FROM ynab_month_categories
-           WHERE plan_id = ? AND month = ? AND category_id = ?
+           WHERE plan_id = ? AND month = ? AND category_id = ? AND deleted = 0
            LIMIT 1`,
           planId,
           month,
@@ -1057,7 +1057,7 @@ export function createYnabReadModelClient(
                   hidden,
                   deleted
            FROM ynab_month_categories
-           WHERE plan_id = ? AND month = ?
+           WHERE plan_id = ? AND month = ? AND deleted = 0
            ORDER BY category_group_name, name, category_id`,
           planId,
           month,

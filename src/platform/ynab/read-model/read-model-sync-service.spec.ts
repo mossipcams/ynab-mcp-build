@@ -149,6 +149,74 @@ describe("read-model sync service", () => {
     expect(syncStateRepository.acquireLease).toHaveBeenCalledTimes(5);
   });
 
+  it("stamps each endpoint's lease, writes, and cursor with the clock at that endpoint, not the run start", async () => {
+    const emptyDelta = vi.fn(async () => ({ records: [], serverKnowledge: 1 }));
+    const deltaClient = {
+      listAccountsDelta: emptyDelta,
+      listCategoriesDelta: emptyDelta,
+      listMonthsDelta: emptyDelta,
+      listScheduledTransactionsDelta: emptyDelta,
+      listTransactionsDelta: emptyDelta,
+    } as unknown as YnabDeltaClient;
+    const syncStateRepository = createSyncStateRepository();
+    const transactionsRepository = {
+      upsertTransactions: vi.fn(async () => ({
+        rowsDeleted: 0,
+        rowsUpserted: 0,
+      })),
+    };
+    let tick = 0;
+    const service = createReadModelSyncService({
+      clock: () => `2026-04-28T12:0${(tick += 1)}:00.000Z`,
+      deltaClient,
+      readModelRepository: {
+        upsertAccounts: vi.fn(async () => ({ rowsUpserted: 0 })),
+        upsertCategoryGroups: vi.fn(async () => ({
+          categoriesUpserted: 0,
+          categoryGroupsUpserted: 0,
+        })),
+        upsertMonths: vi.fn(async () => ({
+          monthCategoriesUpserted: 0,
+          monthsUpserted: 0,
+        })),
+        upsertMoneyMovementGroups: vi.fn(async () => ({ rowsUpserted: 0 })),
+        upsertMoneyMovements: vi.fn(async () => ({ rowsUpserted: 0 })),
+        upsertPayees: vi.fn(async () => ({ rowsUpserted: 0 })),
+        upsertPayeeLocations: vi.fn(async () => ({ rowsUpserted: 0 })),
+        upsertPlanDetail: vi.fn(async () => ({ rowsUpserted: 1 })),
+        upsertPlans: vi.fn(async () => ({ rowsUpserted: 1 })),
+        upsertPlanSettings: vi.fn(async () => ({ rowsUpserted: 1 })),
+        upsertScheduledTransactions: vi.fn(async () => ({ rowsUpserted: 0 })),
+        upsertUser: vi.fn(async () => ({ rowsUpserted: 1 })),
+      },
+      syncStateRepository,
+      transactionsRepository,
+    });
+
+    await service.syncReadModel({
+      leaseOwner: "cron:hot",
+      now: "2026-04-28T12:00:00.000Z",
+      planId: "plan-1",
+      profile: "hot_financial",
+    });
+
+    for (const minute of [1, 2, 3, 4, 5]) {
+      expect(syncStateRepository.acquireLease).toHaveBeenNthCalledWith(
+        minute,
+        expect.objectContaining({ now: `2026-04-28T12:0${minute}:00.000Z` }),
+      );
+    }
+    expect(transactionsRepository.upsertTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({ syncedAt: "2026-04-28T12:05:00.000Z" }),
+    );
+    expect(syncStateRepository.advanceCursor).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        endpoint: "transactions",
+        now: "2026-04-28T12:05:00.000Z",
+      }),
+    );
+  });
+
   it("records endpoint run history without changing cursor safety", async () => {
     const deltaClient = {
       listAccountsDelta: vi.fn(async () => ({

@@ -432,6 +432,58 @@ describe("read model sync repository", () => {
     expect(db.batchStatements).toEqual([]);
   });
 
+  it("marks month categories omitted from a month snapshot as deleted after the upserts land", async () => {
+    const db = new FakeD1Database();
+    const repository = createReadModelSyncRepository(
+      db as unknown as D1Database,
+    );
+    const syncedAt = "2026-04-28T12:00:00.000Z";
+
+    await repository.upsertMonths({
+      months: [
+        {
+          categories: [
+            {
+              balance: 1000,
+              budgeted: 1000,
+              deleted: false,
+              hidden: false,
+              id: "category-kept",
+              name: "Groceries",
+            },
+          ],
+          deleted: false,
+          month: "2026-04-01",
+        },
+        { deleted: true, month: "2026-03-01" },
+      ],
+      planId: "plan-1",
+      syncedAt,
+    });
+
+    const lastBatch = db.batchCalls.at(-1) ?? [];
+    expect(
+      db.batchCalls
+        .slice(0, -1)
+        .flat()
+        .some((statement) =>
+          statement.sql.includes("UPDATE ynab_month_categories"),
+        ),
+    ).toBe(false);
+    expect(lastBatch).toHaveLength(2);
+    for (const [index, month] of ["2026-04-01", "2026-03-01"].entries()) {
+      expect(lastBatch[index]?.sql).toContain("UPDATE ynab_month_categories");
+      expect(lastBatch[index]?.sql).toContain("updated_at < ?");
+      expect(lastBatch[index]?.params).toEqual([
+        syncedAt,
+        syncedAt,
+        "plan-1",
+        month,
+        syncedAt,
+      ]);
+    }
+  });
+
   it("persists month notes when upserting plan months", async () => {
     const db = new FakeD1Database();
     const repository = createReadModelSyncRepository(
@@ -565,9 +617,9 @@ describe("read model sync repository", () => {
     });
     expect(db.batchCalls.every((batch) => batch.length <= 50)).toBe(true);
     expect(db.batchCalls.map((batch) => batch.length)).toEqual([
-      50, 50, 5, 50, 50, 5,
+      50, 50, 5, 50, 50, 5, 1,
     ]);
-    expect(db.batchStatements).toHaveLength(210);
+    expect(db.batchStatements).toHaveLength(211);
   });
 
   it("chunks large payee and money movement deltas into bounded D1 batches", async () => {

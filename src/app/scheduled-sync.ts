@@ -141,6 +141,8 @@ async function resolveScheduledPlanId(input: {
   return planList.defaultPlan?.id ?? planList.plans[0]?.id ?? null;
 }
 
+const wallClock = () => new Date().toISOString();
+
 function createProductionReadModelSyncService(
   env: ReturnType<typeof resolveScheduledAppEnv>,
 ) {
@@ -175,6 +177,7 @@ function createProductionReadModelSyncService(
   return {
     reason: null,
     service: createReadModelSyncService({
+      clock: wallClock,
       deltaClient,
       metadataClient,
       moneyMovementClient,
@@ -237,6 +240,7 @@ export async function runScheduledReadModelSync(
 
   const service = dependencies.createReadModelSyncService
     ? dependencies.createReadModelSyncService({
+        clock: wallClock,
         deltaClient: createYnabDeltaClient({
           accessToken: appEnv.ynabAccessToken,
           baseUrl: appEnv.ynabApiBaseUrl,

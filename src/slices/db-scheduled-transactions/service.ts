@@ -77,6 +77,11 @@ function toCompactScheduledTransaction(row: ScheduledTransactionRow) {
     date_first: row.date_first,
     date_next: row.date_next,
     amount: formatAmountMilliunits(row.amount_milliunits),
+    split_total:
+      row.transaction_amount_milliunits === undefined ||
+      row.transaction_amount_milliunits === row.amount_milliunits
+        ? undefined
+        : formatAmountMilliunits(row.transaction_amount_milliunits),
     account_name: row.account_name,
     payee_name: row.payee_name,
     category_name: row.category_name,

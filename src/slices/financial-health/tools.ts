@@ -39,7 +39,11 @@ const topNDescription = " topN is capped at 10.";
 
 export function getFinancialHealthToolDefinitions(
   ynabClient: YnabClient,
+  timeZone?: string,
 ): SliceToolDefinition[] {
+  // Decides which calendar day "today" is for current-month resolution.
+  const clock = timeZone ? { timeZone } : {};
+
   return [
     defineTool({
       name: "ynab_get_financial_snapshot",
@@ -51,7 +55,8 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getFinancialSnapshot(ynabClient, input),
+      execute: async (input) =>
+        getFinancialSnapshot(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_budget_health_summary",
@@ -63,7 +68,8 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getBudgetHealthSummary(ynabClient, input),
+      execute: async (input) =>
+        getBudgetHealthSummary(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_financial_health_check",
@@ -75,7 +81,8 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getFinancialHealthCheck(ynabClient, input),
+      execute: async (input) =>
+        getFinancialHealthCheck(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_monthly_review",
@@ -87,7 +94,8 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getMonthlyReview(ynabClient, input),
+      execute: async (input) =>
+        getMonthlyReview(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_cash_flow_summary",
@@ -99,7 +107,8 @@ export function getFinancialHealthToolDefinitions(
         fromMonth: normalizedMonthFieldSchema.optional(),
         toMonth: normalizedMonthFieldSchema.optional(),
       },
-      execute: async (input) => getCashFlowSummary(ynabClient, input),
+      execute: async (input) =>
+        getCashFlowSummary(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_spending_summary",
@@ -112,7 +121,8 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getSpendingSummary(ynabClient, input),
+      execute: async (input) =>
+        getSpendingSummary(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_spending_anomalies",
@@ -150,7 +160,8 @@ export function getFinancialHealthToolDefinitions(
         categoryId: requiredIdSchema.optional(),
         categoryGroupName: z.string().min(1).optional(),
       },
-      execute: async (input) => getCategoryTrendSummary(ynabClient, input),
+      execute: async (input) =>
+        getCategoryTrendSummary(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_cash_resilience_summary",
@@ -164,7 +175,8 @@ export function getFinancialHealthToolDefinitions(
         monthsBack: z.number().int().min(1).max(12).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getCashResilienceSummary(ynabClient, input),
+      execute: async (input) =>
+        getCashResilienceSummary(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_upcoming_obligations",
@@ -176,7 +188,8 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getUpcomingObligations(ynabClient, input),
+      execute: async (input) =>
+        getUpcomingObligations(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_income_summary",
@@ -189,7 +202,8 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getIncomeSummary(ynabClient, input),
+      execute: async (input) =>
+        getIncomeSummary(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_recurring_expense_summary",
@@ -214,7 +228,8 @@ export function getFinancialHealthToolDefinitions(
         topN: z.number().int().min(1).max(10).optional(),
         detailLevel: detailLevelSchema,
       },
-      execute: async (input) => getBudgetCleanupSummary(ynabClient, input),
+      execute: async (input) =>
+        getBudgetCleanupSummary(ynabClient, { ...input, ...clock }),
     }),
     defineTool({
       name: "ynab_get_net_worth_trajectory",
@@ -226,7 +241,8 @@ export function getFinancialHealthToolDefinitions(
         fromMonth: normalizedMonthFieldSchema.optional(),
         toMonth: normalizedMonthFieldSchema.optional(),
       },
-      execute: async (input) => getNetWorthTrajectory(ynabClient, input),
+      execute: async (input) =>
+        getNetWorthTrajectory(ynabClient, { ...input, ...clock }),
     }),
   ];
 }

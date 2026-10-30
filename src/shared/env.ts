@@ -21,6 +21,7 @@ export type AppEnv = {
   ynabDefaultPlanId?: string;
   ynabReadSource: "d1";
   ynabStaleAfterMinutes: number;
+  ynabTimeZone?: string;
 };
 
 const DEFAULT_APP_ENV: AppEnv = {
@@ -56,6 +57,24 @@ function resolveYnabReadSource(value: unknown): AppEnv["ynabReadSource"] {
   }
 
   throw new Error("YNAB_READ_SOURCE must be d1.");
+}
+
+function resolveYnabTimeZone(value: unknown) {
+  const timeZone = getOptionalString(value);
+
+  if (timeZone === undefined) {
+    return undefined;
+  }
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+  } catch {
+    throw new Error(
+      "YNAB_TIME_ZONE must be an IANA time zone such as America/New_York.",
+    );
+  }
+
+  return timeZone;
 }
 
 function getAccessOidcDiscoveryUrl(teamDomain: string, clientId: string) {
@@ -103,6 +122,7 @@ export function resolveAppEnv(
         YNAB_DEFAULT_PLAN_ID?: string;
         YNAB_READ_SOURCE?: string;
         YNAB_STALE_AFTER_MINUTES?: string;
+        YNAB_TIME_ZONE?: string;
       }
     | undefined;
   const accessOidcValues = {
@@ -179,6 +199,7 @@ export function resolveAppEnv(
       runtimeEnv?.YNAB_STALE_AFTER_MINUTES,
       DEFAULT_APP_ENV.ynabStaleAfterMinutes,
     ),
+    ynabTimeZone: resolveYnabTimeZone(runtimeEnv?.YNAB_TIME_ZONE),
   });
 
   if (resolvedEnv.oauthEnabled && !resolvedEnv.publicUrl) {

@@ -54,6 +54,9 @@ export type TransactionSearchRow = {
   import_payee_name_original?: string | null;
   debt_transaction_type?: string | null;
   deleted: number;
+  // Present only under category/payee filters, where amount_milliunits is the
+  // matched split-line share and this is the whole transaction.
+  transaction_amount_milliunits?: number;
 };
 
 type TransactionCountRow = {
@@ -159,7 +162,12 @@ function buildSearchWhere(
   }
 
   if (!input.includeTransfers) {
-    where.push(budgetNeutralTransferExclusion("ynab_transactions"));
+    where.push(
+      budgetNeutralTransferExclusion(
+        "ynab_transactions.plan_id",
+        "ynab_transactions.transfer_account_id",
+      ),
+    );
   }
 
   if (input.accountIds?.length) {
@@ -228,10 +236,20 @@ function buildSearchWhere(
   }
 
   if (input.payeeIds?.length) {
+    const payeePlaceholders = placeholders(input.payeeIds.length);
     where.push(
-      `ynab_transactions.payee_id IN (${placeholders(input.payeeIds.length)})`,
+      `(ynab_transactions.payee_id IN (${payeePlaceholders})
+       OR EXISTS (
+        SELECT 1
+        FROM ynab_subtransactions subtransaction_filter
+        WHERE subtransaction_filter.plan_id = ynab_transactions.plan_id
+          AND subtransaction_filter.transaction_id = ynab_transactions.id
+          AND subtransaction_filter.deleted = 0
+          AND subtransaction_filter.payee_id IN (${payeePlaceholders})
+        LIMIT 1
+       ))`,
     );
-    params.push(...input.payeeIds);
+    params.push(...input.payeeIds, ...input.payeeIds);
   }
 
   if (input.payeeSearch) {
@@ -275,55 +293,105 @@ function buildSearchWhere(
   };
 }
 
-function buildCategoryLineWhere(
-  input: Pick<TransactionSummaryInput, "categoryIds">,
+type LineColumns = {
+  planId: string;
+  categoryId: string;
+  transferAccountId: string;
+  payeeId: string;
+};
+
+const SUMMARY_LINE_COLUMNS: LineColumns = {
+  planId: "transaction_lines.plan_id",
+  categoryId: "transaction_lines.category_id",
+  transferAccountId: "transaction_lines.transfer_account_id",
+  payeeId: "transaction_lines.payee_id",
+};
+
+const SEARCH_ROW_LINE_COLUMNS: LineColumns = {
+  planId: "line.plan_id",
+  categoryId: "line.category_id",
+  transferAccountId: "line.transfer_account_id",
+  payeeId: "COALESCE(line.payee_id, ynab_transactions.payee_id)",
+};
+
+// Line-level (split-aware) filters shared by summaries and search-row amounts,
+// so a split's matched share is computed the same way in both.
+function buildLineWhere(
+  input: Pick<
+    TransactionSummaryInput,
+    "categoryIds" | "includeTransfers" | "payeeIds"
+  >,
+  columns: LineColumns,
 ): { params: Array<string | number>; whereClause: string } {
-  if (!input.categoryIds?.length) {
-    return {
-      params: [],
-      whereClause: "",
-    };
-  }
+  let whereClause = input.includeTransfers
+    ? ""
+    : ` AND ${budgetNeutralTransferExclusion(columns.planId, columns.transferAccountId)}`;
+  const params: Array<string | number> = [];
 
-  const categoryPlaceholders = placeholders(input.categoryIds.length);
-
-  return {
-    params: [...input.categoryIds, ...input.categoryIds],
-    whereClause: ` AND (
-      transaction_lines.category_id IN (${categoryPlaceholders})
+  if (input.categoryIds?.length) {
+    const categoryPlaceholders = placeholders(input.categoryIds.length);
+    whereClause += ` AND (
+      ${columns.categoryId} IN (${categoryPlaceholders})
       OR (
-        transaction_lines.category_id IS NULL
+        ${columns.categoryId} IS NULL
         AND EXISTS (
           SELECT 1
           FROM ynab_categories cat
-          WHERE cat.plan_id = transaction_lines.plan_id
+          WHERE cat.plan_id = ${columns.planId}
             AND cat.id IN (${categoryPlaceholders})
             AND cat.name = 'Uncategorized'
             AND cat.deleted = 0
           LIMIT 1
         )
       )
-    )`,
-  };
+    )`;
+    params.push(...input.categoryIds, ...input.categoryIds);
+  }
+
+  if (input.payeeIds?.length) {
+    whereClause += ` AND ${columns.payeeId} IN (${placeholders(input.payeeIds.length)})`;
+    params.push(...input.payeeIds);
+  }
+
+  return { params, whereClause };
 }
 
-function buildTransferLineWhere(
-  input: Pick<TransactionSummaryInput, "includeTransfers">,
-) {
-  return input.includeTransfers
-    ? ""
-    : ` AND ${budgetNeutralTransferExclusion("transaction_lines")}`;
+// Under category/payee filters a split parent's full amount would overstate
+// the matched spend, so rows report the sum of matching live split lines.
+function buildSearchAmountColumns(input: SearchTransactionsInput) {
+  if (!input.categoryIds?.length && !input.payeeIds?.length) {
+    return { params: [], sql: "amount_milliunits" };
+  }
+
+  const lineWhere = buildLineWhere(input, SEARCH_ROW_LINE_COLUMNS);
+  const splitLines = `FROM ynab_subtransactions line
+                WHERE line.plan_id = ynab_transactions.plan_id
+                  AND line.transaction_id = ynab_transactions.id
+                  AND line.deleted = 0`;
+
+  return {
+    params: lineWhere.params,
+    sql: `CASE
+              WHEN EXISTS (SELECT 1 ${splitLines})
+              THEN (SELECT COALESCE(SUM(line.amount_milliunits), 0) ${splitLines}${lineWhere.whereClause})
+              ELSE ynab_transactions.amount_milliunits
+            END AS amount_milliunits,
+            ynab_transactions.amount_milliunits AS transaction_amount_milliunits`,
+  };
 }
 
 // Transfers to off-budget (tracking/loan) accounts leave the budget, so they
 // stay in non-transfer views; on-budget transfers net to zero.
-function budgetNeutralTransferExclusion(table: string) {
-  return `(${table}.transfer_account_id IS NULL
+function budgetNeutralTransferExclusion(
+  planIdColumn: string,
+  transferAccountIdColumn: string,
+) {
+  return `(${transferAccountIdColumn} IS NULL
     OR EXISTS (
       SELECT 1
       FROM ynab_accounts transfer_account
-      WHERE transfer_account.plan_id = ${table}.plan_id
-        AND transfer_account.id = ${table}.transfer_account_id
+      WHERE transfer_account.plan_id = ${planIdColumn}
+        AND transfer_account.id = ${transferAccountIdColumn}
         AND transfer_account.on_budget = 0
     ))`;
 }
@@ -579,13 +647,19 @@ export function createTransactionsRepository(database: D1Database) {
         )
         .bind(...search.params)
         .all<TransactionCountRow>();
-      const rowParams = [...search.params, input.limit, input.offset ?? 0];
+      const amountColumns = buildSearchAmountColumns(input);
+      const rowParams = [
+        ...amountColumns.params,
+        ...search.params,
+        input.limit,
+        input.offset ?? 0,
+      ];
 
       const resultPromise = database
         .prepare(
           `SELECT id,
                   date,
-                  amount_milliunits,
+                  ${amountColumns.sql},
                   memo,
                   cleared,
                   approved,
@@ -627,9 +701,8 @@ export function createTransactionsRepository(database: D1Database) {
       input: TransactionSummaryInput,
     ): Promise<TransactionSummaryResult> {
       const search = buildSearchWhere(input);
-      const categoryLineWhere = buildCategoryLineWhere(input);
-      const transferLineWhere = buildTransferLineWhere(input);
-      const lineWhereClause = `${transferLineWhere}${categoryLineWhere.whereClause}`;
+      const lineWhere = buildLineWhere(input, SUMMARY_LINE_COLUMNS);
+      const lineWhereClause = lineWhere.whereClause;
       const transactionLinesCte = buildTransactionLinesCte(search.whereClause);
       const topN = Math.max(input.topN ?? 5, 1);
       const totalsResultPromise = database
@@ -640,7 +713,7 @@ export function createTransactionsRepository(database: D1Database) {
            FROM transaction_lines
            WHERE 1 = 1${lineWhereClause}`,
         )
-        .bind(...search.params, ...categoryLineWhere.params)
+        .bind(...search.params, ...lineWhere.params)
         .all<TransactionTotalsRow>();
       const categoryResultPromise = database
         .prepare(
@@ -678,7 +751,7 @@ export function createTransactionsRepository(database: D1Database) {
            ORDER BY rollup.amount_milliunits DESC, name ASC
            LIMIT ?`,
         )
-        .bind(...search.params, ...categoryLineWhere.params, topN)
+        .bind(...search.params, ...lineWhere.params, topN)
         .all<TransactionRollupRow>();
       const payeeResultPromise = database
         .prepare(
@@ -716,7 +789,7 @@ export function createTransactionsRepository(database: D1Database) {
            ORDER BY rollup.amount_milliunits DESC, name ASC
            LIMIT ?`,
         )
-        .bind(...search.params, ...categoryLineWhere.params, topN)
+        .bind(...search.params, ...lineWhere.params, topN)
         .all<TransactionRollupRow>();
       const [totalsResult, categoryResult, payeeResult] = await Promise.all([
         totalsResultPromise,

@@ -69,6 +69,35 @@ describe("DB-backed scheduled transaction service", () => {
     });
   });
 
+  it("shows the matched split share as amount and the whole split separately", async () => {
+    repository.listScheduledTransactions.mockResolvedValueOnce({
+      rows: [
+        {
+          id: "housing",
+          date_first: "2026-01-01",
+          date_next: "2026-11-01",
+          amount_milliunits: -500000,
+          transaction_amount_milliunits: -2000000,
+          category_name: "Split",
+          deleted: 0,
+        },
+      ],
+      totalCount: 1,
+    });
+
+    const result = await searchDbScheduledTransactions(
+      {
+        defaultPlanId: "plan-1",
+        scheduledTransactionsRepository: repository,
+      },
+      { categoryId: "utilities" },
+    );
+
+    expect(result.scheduled_transactions).toEqual([
+      expect.objectContaining({ amount: "-500.00", split_total: "-2000.00" }),
+    ]);
+  });
+
   it("returns a compact scheduled transaction detail", async () => {
     repository.getScheduledTransaction.mockResolvedValueOnce({
       id: "scheduled-1",
