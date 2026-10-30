@@ -173,6 +173,7 @@ export type ReadModelSyncServiceOptions = {
   metadataClient?: MetadataClient;
   moneyMovementClient?: MoneyMovementClient;
   leaseSeconds?: number;
+  clock?: () => string;
 };
 
 export type ReadModelSyncProfile = "full" | "hot_financial" | "reference";
@@ -559,11 +560,14 @@ export function createReadModelSyncService(
     config: EndpointConfig<TRecord>,
     leaseSeconds: number,
   ): Promise<EndpointRunResult> {
+    // Stamp per endpoint: a slow run must not write or lease with its stale
+    // start time, or the updated_at guard drops its newer data.
+    const now = options.clock?.() ?? input.now;
     const lease = await options.syncStateRepository.acquireLease({
       endpoint: config.endpoint,
       leaseOwner: input.leaseOwner,
       leaseSeconds,
-      now: input.now,
+      now,
       planId: input.planId,
     });
 
@@ -591,7 +595,7 @@ export function createReadModelSyncService(
               id: runId,
               planId: input.planId,
               serverKnowledgeBefore: previousServerKnowledge,
-              startedAt: input.now,
+              startedAt: now,
             }),
           );
 
@@ -603,13 +607,13 @@ export function createReadModelSyncService(
       const writeResult = await config.write({
         planId: input.planId,
         records: delta.records,
-        syncedAt: input.now,
+        syncedAt: now,
       });
       const rowsDeleted = writeResult.rowsDeleted ?? 0;
       const cursorResult = await options.syncStateRepository.advanceCursor({
         endpoint: config.endpoint,
         leaseOwner: input.leaseOwner,
-        now: input.now,
+        now,
         planId: input.planId,
         previousServerKnowledge,
         rowsDeleted,
@@ -623,7 +627,7 @@ export function createReadModelSyncService(
           await ignoreRunHistoryFailure(
             options.syncRunRepository.finishEndpointRun({
               error: cursorResult.reason,
-              finishedAt: input.now,
+              finishedAt: now,
               id: runId,
               rowsDeleted,
               rowsUpserted: writeResult.rowsUpserted,
@@ -645,7 +649,7 @@ export function createReadModelSyncService(
         await ignoreRunHistoryFailure(
           options.syncRunRepository.finishEndpointRun({
             error: null,
-            finishedAt: input.now,
+            finishedAt: now,
             id: runId,
             rowsDeleted,
             rowsUpserted: writeResult.rowsUpserted,
@@ -670,7 +674,7 @@ export function createReadModelSyncService(
           endpoint: config.endpoint,
           error: message,
           leaseOwner: input.leaseOwner,
-          now: input.now,
+          now,
           planId: input.planId,
         });
       } catch {
@@ -682,7 +686,7 @@ export function createReadModelSyncService(
         await ignoreRunHistoryFailure(
           options.syncRunRepository.finishEndpointRun({
             error: message,
-            finishedAt: input.now,
+            finishedAt: now,
             id: runId,
             rowsDeleted: 0,
             rowsUpserted: 0,

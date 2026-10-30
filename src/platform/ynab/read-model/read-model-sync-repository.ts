@@ -581,6 +581,32 @@ export function createReadModelSyncRepository(database: D1Database) {
         ...monthStatements,
         ...monthCategoryStatements,
       ]);
+      // Month detail is a full snapshot that omits deleted categories (they
+      // only appear in delta requests), so any row this write did not stamp is
+      // stale. Runs after the upserts because runD1Batches chunks concurrently.
+      await runD1Batches(
+        database,
+        input.months.map((month) =>
+          database
+            .prepare(
+              `UPDATE ynab_month_categories
+               SET deleted = 1,
+                   synced_at = ?,
+                   updated_at = ?
+               WHERE plan_id = ?
+                 AND month = ?
+                 AND deleted = 0
+                 AND updated_at < ?`,
+            )
+            .bind(
+              input.syncedAt,
+              input.syncedAt,
+              input.planId,
+              month.month,
+              input.syncedAt,
+            ),
+        ),
+      );
 
       return {
         monthCategoriesUpserted: monthCategoryStatements.length,

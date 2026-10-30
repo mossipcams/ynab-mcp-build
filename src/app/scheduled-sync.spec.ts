@@ -66,4 +66,27 @@ describe("scheduled read-model sync", () => {
       profile: "hot_financial",
     });
   });
+
+  it("gives the sync service a wall clock so slow runs do not stamp writes with the cron time", async () => {
+    const syncReadModel = vi.fn(async () => ({
+      endpointResults: [],
+      profile: "hot_financial" as const,
+      status: "ok" as const,
+    }));
+    const createReadModelSyncService = vi.fn(
+      (_options: { clock?: () => string }) => ({ syncReadModel }),
+    );
+
+    await runScheduledReadModelSync(
+      createEnv(),
+      Date.parse("2026-04-29T12:00:00.000Z"),
+      { createReadModelSyncService },
+      { cron: HOT_READ_MODEL_SYNC_CRON },
+    );
+
+    const clock = createReadModelSyncService.mock.calls[0]?.[0].clock;
+    expect(Date.parse(clock?.() ?? "")).toBeGreaterThan(
+      Date.parse("2026-04-29T12:00:00.000Z"),
+    );
+  });
 });
