@@ -692,10 +692,7 @@ type FlowEntry = {
 // Budget ↔ budget transfers move no budget money. YNAB only categorizes
 // transfers into tracking accounts (e.g. mortgage payments to a loan), and
 // those are real spending.
-function isBudgetFlowEntry(
-  entry: FlowEntry,
-  offBudgetAccountIds: Set<string>,
-) {
+function isBudgetFlowEntry(entry: FlowEntry, offBudgetAccountIds: Set<string>) {
   return (
     !entry.transferAccountId ||
     (Boolean(entry.categoryId) &&

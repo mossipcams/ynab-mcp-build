@@ -180,7 +180,12 @@ describe("financial health accuracy", () => {
 
   it("counts categorized transfers into tracking accounts as spending", async () => {
     // DEFECT: mortgage payments to a tracking loan account vanished from spending and obligations.
-    const loan = { ...accounts[1], id: "loan", name: "Mortgage", type: "mortgage" };
+    const loan = {
+      ...accounts[1],
+      id: "loan",
+      name: "Mortgage",
+      type: "mortgage",
+    };
     const ynabClient = budgetClient({
       listAccounts: async () => [...accounts, loan],
       listScheduledTransactions: async () => [
