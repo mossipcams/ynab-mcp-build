@@ -28,6 +28,9 @@ export type ScheduledTransactionRow = {
   category_name?: string | null;
   transfer_account_id?: string | null;
   deleted: number;
+  // Present only under a category filter, where amount_milliunits is the
+  // matched split-line share and this is the whole scheduled transaction.
+  transaction_amount_milliunits?: number;
   subtransactions?: ScheduledSubtransactionRow[];
 };
 
@@ -53,12 +56,20 @@ type CountRow = {
 
 const rowsOrEmpty = <T>(result: { results?: T[] }) => result.results ?? [];
 
-function selectScheduledTransactionSql(where: string) {
+const SCHEDULED_SPLIT_LINES = `FROM ynab_scheduled_subtransactions line
+                WHERE line.plan_id = ynab_scheduled_transactions.plan_id
+                  AND line.scheduled_transaction_id = ynab_scheduled_transactions.id
+                  AND line.deleted = 0`;
+
+function selectScheduledTransactionSql(
+  where: string,
+  amountSql = "amount_milliunits",
+) {
   return `SELECT id,
                  date_first,
                  date_next,
                  frequency,
-                 amount_milliunits,
+                 ${amountSql},
                  memo,
                  flag_color,
                  flag_name,
@@ -96,8 +107,10 @@ function buildScheduledTransactionSearch(
   }
 
   if (input.categoryId) {
-    where.push("category_id = ?");
-    params.push(input.categoryId);
+    where.push(
+      `(category_id = ? OR EXISTS (SELECT 1 ${SCHEDULED_SPLIT_LINES} AND line.category_id = ?))`,
+    );
+    params.push(input.categoryId, input.categoryId);
   }
 
   if (input.payeeId) {
@@ -161,13 +174,27 @@ export function createScheduledTransactionsRepository(database: D1Database) {
     ): Promise<ScheduledTransactionSearchResult> {
       const search = buildScheduledTransactionSearch(input);
       const limit = buildLimitSql(input);
+      // A split's full amount would overstate the filtered category, so rows
+      // report the matching live split lines' share.
+      const amountSql = input.categoryId
+        ? `CASE
+             WHEN EXISTS (SELECT 1 ${SCHEDULED_SPLIT_LINES})
+             THEN (SELECT COALESCE(SUM(line.amount_milliunits), 0) ${SCHEDULED_SPLIT_LINES} AND line.category_id = ?)
+             ELSE ynab_scheduled_transactions.amount_milliunits
+           END AS amount_milliunits,
+           ynab_scheduled_transactions.amount_milliunits AS transaction_amount_milliunits`
+        : undefined;
       const resultPromise = database
         .prepare(
-          `${selectScheduledTransactionSql(search.where)}
+          `${selectScheduledTransactionSql(search.where, amountSql)}
            ORDER BY COALESCE(date_next, date_first), id
            ${limit.sql}`,
         )
-        .bind(...search.params, ...limit.params)
+        .bind(
+          ...(input.categoryId ? [input.categoryId] : []),
+          ...search.params,
+          ...limit.params,
+        )
         .all<ScheduledTransactionRow>();
       const countResultPromise = database
         .prepare(

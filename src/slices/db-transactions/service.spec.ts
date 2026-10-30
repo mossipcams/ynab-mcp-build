@@ -348,6 +348,100 @@ describe("DB-backed transaction service", () => {
     );
   });
 
+  it("intersects month with explicit date bounds and echoes the effective range", async () => {
+    // DEFECT: month silently overrode toDate, totalling all of October while echoing to_date 2026-10-15.
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => ({
+        rows: [],
+        totalCount: 0,
+      })),
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-10-28T12:00:00.000Z",
+        stale: false,
+        warning: null,
+      })),
+    };
+
+    const narrowed = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      { month: "2026-10-01", toDate: "2026-10-15" },
+    );
+    const widened = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      { month: "2026-10-01", fromDate: "2026-09-01", toDate: "2026-11-15" },
+    );
+
+    expect(transactionsRepository.searchTransactions).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        endDate: "2026-10-15",
+        startDate: "2026-10-01",
+      }),
+    );
+    expect(narrowed.data).toMatchObject({
+      filters: { month: "2026-10-01", to_date: "2026-10-15" },
+    });
+    expect(transactionsRepository.searchTransactions).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        endDate: "2026-10-31",
+        startDate: "2026-10-01",
+      }),
+    );
+    expect(widened.data).toMatchObject({
+      filters: { from_date: "2026-10-01", to_date: "2026-10-31" },
+    });
+  });
+
+  it("shows the matched split share as amount and the whole split separately", async () => {
+    const transactionsRepository = {
+      searchTransactions: vi.fn(async () => ({
+        rows: [
+          {
+            id: "costco",
+            date: "2026-10-05",
+            amount_milliunits: -50000,
+            transaction_amount_milliunits: -500000,
+            payee_name: "Costco",
+            category_name: "Split",
+            deleted: 0,
+          },
+          {
+            id: "market",
+            date: "2026-10-06",
+            amount_milliunits: -12000,
+            transaction_amount_milliunits: -12000,
+            payee_name: "Market",
+            category_name: "Groceries",
+            deleted: 0,
+          },
+        ],
+        totalCount: 2,
+      })),
+    };
+    const freshness = {
+      getFreshness: vi.fn(async () => ({
+        health_status: "ok",
+        last_synced_at: "2026-10-28T12:00:00.000Z",
+        stale: false,
+        warning: null,
+      })),
+    };
+
+    const result = await searchTransactions(
+      { defaultPlanId: "plan-1", freshness, transactionsRepository },
+      { categoryId: "groceries" },
+    );
+
+    expect(result.data?.transactions).toEqual([
+      expect.objectContaining({ amount: "-50.00", split_total: "-500.00" }),
+      expect.not.objectContaining({ split_total: expect.anything() }),
+    ]);
+  });
+
   it("maps leap-year February and December month filters to exact calendar ranges", async () => {
     // DEFECT: month range math can miss leap days or fail when rolling December into January.
     const transactionsRepository = {

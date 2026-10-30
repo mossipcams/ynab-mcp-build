@@ -100,10 +100,13 @@ describe("scheduled transactions read-model repository", () => {
 
     expect(db.calls[0]).toMatchObject({
       params: [
+        // split-line category share in the amount column
+        "category-1",
         "plan-1",
         "2026-05-01",
         "2026-06-01",
         "account-1",
+        "category-1",
         "category-1",
         "payee-1",
         1,
@@ -122,6 +125,7 @@ describe("scheduled transactions read-model repository", () => {
         "2026-05-01",
         "2026-06-01",
         "account-1",
+        "category-1",
         "category-1",
         "payee-1",
       ],

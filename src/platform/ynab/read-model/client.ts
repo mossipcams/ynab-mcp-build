@@ -567,7 +567,7 @@ export function createYnabReadModelClient(
               transfer_transaction_id,
               deleted
        FROM ynab_subtransactions
-       WHERE plan_id = ? AND transaction_id = ?
+       WHERE plan_id = ? AND transaction_id = ? AND deleted = 0
        ORDER BY id`,
       planId,
       transactionId,
@@ -598,7 +598,7 @@ export function createYnabReadModelClient(
                   transfer_transaction_id,
                   deleted
            FROM ynab_subtransactions
-           WHERE plan_id = ? AND transaction_id IN (${sqlPlaceholders(
+           WHERE plan_id = ? AND deleted = 0 AND transaction_id IN (${sqlPlaceholders(
              batch.length,
            )})
            ORDER BY transaction_id, id`,
@@ -917,7 +917,7 @@ export function createYnabReadModelClient(
                   goal_snoozed_at,
                   goal_under_funded_milliunits
            FROM ynab_month_categories
-           WHERE plan_id = ? AND month = ? AND category_id = ?
+           WHERE plan_id = ? AND month = ? AND category_id = ? AND deleted = 0
            LIMIT 1`,
           planId,
           month,
@@ -1041,7 +1041,7 @@ export function createYnabReadModelClient(
                   hidden,
                   deleted
            FROM ynab_month_categories
-           WHERE plan_id = ? AND month = ?
+           WHERE plan_id = ? AND month = ? AND deleted = 0
            ORDER BY category_group_name, name, category_id`,
           planId,
           month,
