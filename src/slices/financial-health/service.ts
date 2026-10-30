@@ -19,11 +19,16 @@ import {
   toSpentMilliunits,
 } from "./helpers.js";
 
+// timeZone is server configuration (YNAB_TIME_ZONE), not a tool input; it
+// decides which calendar day "today" is.
+type Clock = { asOfDate?: string; timeZone?: string };
+
 export type FinancialHealthInput = {
   planId?: string;
   month?: string;
   topN?: number;
   detailLevel?: DetailLevel;
+  timeZone?: string;
 };
 
 export type BudgetChangeDigestInput = FinancialHealthInput;
@@ -42,6 +47,7 @@ export type FinancialHealthRangeInput = {
   toMonth?: string;
   topN?: number;
   detailLevel?: DetailLevel;
+  timeZone?: string;
 };
 
 export type SpendingAnomaliesInput = {
@@ -60,6 +66,7 @@ export type CategoryTrendSummaryInput = {
   toMonth?: string;
   categoryId?: string;
   categoryGroupName?: string;
+  timeZone?: string;
 };
 
 type DisplayRollup = {
@@ -99,7 +106,7 @@ export async function getBudgetChangeDigest(
   input: BudgetChangeDigestInput,
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const month = await resolveMonth(ynabClient, planId, input.month);
+  const month = await resolveMonth(ynabClient, planId, input.month, input);
   const previousMonth = addMonths(month, -1);
   const topN = resolveTopN(input);
   const [
@@ -107,11 +114,13 @@ export async function getBudgetChangeDigest(
     previousMonthDetail,
     transactions,
     scheduledTransactions,
+    offBudgetAccountIds,
   ] = await Promise.all([
     ynabClient.getPlanMonth(planId, month),
     ynabClient.getPlanMonth(planId, previousMonth),
     ynabClient.listTransactions(planId, month, endOfMonth(month)),
     ynabClient.listScheduledTransactions(planId),
+    listOffBudgetAccountIds(ynabClient, planId),
   ]);
 
   const topChanges = buildDigestTopChanges(
@@ -124,14 +133,14 @@ export async function getBudgetChangeDigest(
     topN,
   );
   const newLargeTransactions = buildDigestLargeTransactions(
-    transactions,
-    month,
+    toBudgetTransactions(transactions, offBudgetAccountIds, month),
     topN,
   );
   const upcomingObligations = buildDigestUpcomingObligations(
     scheduledTransactions,
     `${month.slice(0, 7)}-01`,
     topN,
+    offBudgetAccountIds,
   );
   const unusualSpending = topChanges.filter(
     (change) => change.reason === "spending_increased",
@@ -168,15 +177,17 @@ export async function explainMonthDelta(
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const topN = resolveTopN(input);
-  const [baseline, comparison, transactions] = await Promise.all([
-    ynabClient.getPlanMonth(planId, input.baselineMonth),
-    ynabClient.getPlanMonth(planId, input.comparisonMonth),
-    ynabClient.listTransactions(
-      planId,
-      input.comparisonMonth,
-      endOfMonth(input.comparisonMonth),
-    ),
-  ]);
+  const [baseline, comparison, transactions, offBudgetAccountIds] =
+    await Promise.all([
+      ynabClient.getPlanMonth(planId, input.baselineMonth),
+      ynabClient.getPlanMonth(planId, input.comparisonMonth),
+      ynabClient.listTransactions(
+        planId,
+        input.comparisonMonth,
+        endOfMonth(input.comparisonMonth),
+      ),
+      listOffBudgetAccountIds(ynabClient, planId),
+    ]);
   const baselineSpending = toSpentFromActivity(baseline.activity);
   const comparisonSpending = toSpentFromActivity(comparison.activity);
   const incomeDelta = (comparison.income ?? 0) - (baseline.income ?? 0);
@@ -216,8 +227,11 @@ export async function explainMonthDelta(
       topN,
     ),
     transaction_evidence: buildDigestLargeTransactions(
-      transactions,
-      input.comparisonMonth,
+      toBudgetTransactions(
+        transactions,
+        offBudgetAccountIds,
+        input.comparisonMonth,
+      ),
       topN,
     ),
   };
@@ -254,20 +268,46 @@ function endOfMonth(month: string) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
-function currentCalendarMonth(asOfDate?: string) {
-  const today = currentCalendarDate(asOfDate);
+function currentCalendarMonth(clock: Clock = {}) {
+  const today = currentCalendarDate(clock);
 
   return `${today.slice(0, 7)}-01`;
 }
 
-function currentCalendarDate(asOfDate?: string) {
-  if (asOfDate) {
-    return asOfDate;
+function currentCalendarDate(clock: Clock = {}) {
+  if (clock.asOfDate) {
+    return clock.asOfDate;
   }
 
-  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: clock.timeZone ?? "UTC",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value;
 
-  return now.toISOString().slice(0, 10);
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function addDays(date: string, days: number) {
+  const next = new Date(`${date}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+
+  return next.toISOString().slice(0, 10);
+}
+
+// Same day-of-month `months` later, clamped to the end of shorter months.
+function addMonthsToDate(date: string, months: number) {
+  const [year = 0, month = 1, day = 1] = date.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month - 1 + months + 1, 0));
+
+  return new Date(
+    Date.UTC(year, month - 1 + months, Math.min(day, lastDay.getUTCDate())),
+  )
+    .toISOString()
+    .slice(0, 10);
 }
 
 function listMonthsInRange(fromMonth: string, toMonth: string) {
@@ -319,11 +359,10 @@ function toNextDateFromMonth(asOfMonth: string) {
 function toCashResilienceScheduledAsOfDate(
   month: string,
   inputMonth: string | undefined,
-  asOfDate: string | undefined,
+  clock: Clock,
 ) {
-  return !isExplicitMonth(inputMonth) &&
-    month === currentCalendarMonth(asOfDate)
-    ? currentCalendarDate(asOfDate)
+  return !isExplicitMonth(inputMonth) && month === currentCalendarMonth(clock)
+    ? currentCalendarDate(clock)
     : toNextDateFromMonth(month);
 }
 
@@ -350,7 +389,7 @@ async function resolveMonth(
   ynabClient: YnabClient,
   planId: string,
   month?: string,
-  asOfDate?: string,
+  clock: Clock = {},
 ) {
   if (isExplicitMonth(month)) {
     return month;
@@ -358,7 +397,7 @@ async function resolveMonth(
 
   const months = await ynabClient.listPlanMonths(planId);
   const visibleMonths = months.filter((entry) => !entry.deleted);
-  const calendarMonth = currentCalendarMonth(asOfDate);
+  const calendarMonth = currentCalendarMonth(clock);
   const resolvedMonth =
     visibleMonths
       .filter((entry) => entry.month <= calendarMonth)
@@ -380,10 +419,16 @@ async function resolveMonthRange(
   planId: string,
   fromMonth?: string,
   toMonth?: string,
+  clock: Clock = {},
 ) {
-  const resolvedFromMonth = await resolveMonth(ynabClient, planId, fromMonth);
+  const resolvedFromMonth = await resolveMonth(
+    ynabClient,
+    planId,
+    fromMonth,
+    clock,
+  );
   const resolvedToMonth = toMonth
-    ? await resolveMonth(ynabClient, planId, toMonth)
+    ? await resolveMonth(ynabClient, planId, toMonth, clock)
     : resolvedFromMonth;
 
   if (resolvedFromMonth > resolvedToMonth) {
@@ -401,7 +446,7 @@ async function getMonthDetailContext(
   input: FinancialHealthInput,
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const month = await resolveMonth(ynabClient, planId, input.month);
+  const month = await resolveMonth(ynabClient, planId, input.month, input);
   const monthDetail = await ynabClient.getPlanMonth(planId, month);
 
   return { planId, month, monthDetail };
@@ -412,7 +457,7 @@ async function getMonthAccountContext(
   input: FinancialHealthInput,
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const month = await resolveMonth(ynabClient, planId, input.month);
+  const month = await resolveMonth(ynabClient, planId, input.month, input);
   const [monthDetail, accounts] = await Promise.all([
     ynabClient.getPlanMonth(planId, month),
     ynabClient.listAccounts(planId),
@@ -426,13 +471,23 @@ async function getMonthTransactionContext(
   input: FinancialHealthInput,
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const month = await resolveMonth(ynabClient, planId, input.month);
-  const [monthDetail, transactions] = await Promise.all([
+  const month = await resolveMonth(ynabClient, planId, input.month, input);
+  const [monthDetail, transactions, offBudgetAccountIds] = await Promise.all([
     ynabClient.getPlanMonth(planId, month),
     ynabClient.listTransactions(planId, month, endOfMonth(month)),
+    listOffBudgetAccountIds(ynabClient, planId),
   ]);
 
-  return { planId, month, monthDetail, transactions };
+  return {
+    planId,
+    month,
+    monthDetail,
+    budgetTransactions: toBudgetTransactions(
+      transactions,
+      offBudgetAccountIds,
+      monthDetail.month,
+    ),
+  };
 }
 
 async function getMonthContext(
@@ -440,7 +495,7 @@ async function getMonthContext(
   input: FinancialHealthInput,
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const month = await resolveMonth(ynabClient, planId, input.month);
+  const month = await resolveMonth(ynabClient, planId, input.month, input);
   const [monthDetail, accounts, transactions] = await Promise.all([
     ynabClient.getPlanMonth(planId, month),
     ynabClient.listAccounts(planId),
@@ -460,10 +515,12 @@ async function getRangeContext(
     planId,
     input.fromMonth,
     input.toMonth,
+    input,
   );
-  const [months, transactions] = await Promise.all([
+  const [months, transactions, offBudgetAccountIds] = await Promise.all([
     ynabClient.listPlanMonths(planId),
     ynabClient.listTransactions(planId, fromMonth, endOfMonth(toMonth)),
+    listOffBudgetAccountIds(ynabClient, planId),
   ]);
   const visibleMonths = months
     .filter(
@@ -479,7 +536,18 @@ async function getRangeContext(
       toBeBudgeted: month.toBeBudgeted ?? 0,
     })) satisfies RangeMonthSummary[];
 
-  return { planId, fromMonth, toMonth, months: visibleMonths, transactions };
+  return {
+    planId,
+    fromMonth,
+    toMonth,
+    months: visibleMonths,
+    budgetTransactions: toBudgetTransactions(
+      transactions,
+      offBudgetAccountIds,
+      fromMonth,
+      toMonth,
+    ),
+  };
 }
 
 function toTopRollups(
@@ -613,29 +681,115 @@ function summarizeBudgetHealthMonth(
   };
 }
 
-function isNonTransferMonthTransaction(
-  transaction: YnabTransaction,
-  month: string,
+type FlowEntry = {
+  amount: number;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  transferAccountId?: string | null;
+  deleted?: boolean;
+};
+
+// Budget ↔ budget transfers move no budget money. YNAB only categorizes
+// transfers into tracking accounts (e.g. mortgage payments to a loan), and
+// those are real spending.
+function isBudgetFlowEntry(
+  entry: FlowEntry,
+  offBudgetAccountIds: Set<string>,
 ) {
   return (
-    !transaction.deleted &&
-    !transaction.transferAccountId &&
-    transaction.date.startsWith(month.slice(0, 7))
+    !entry.transferAccountId ||
+    (Boolean(entry.categoryId) &&
+      offBudgetAccountIds.has(entry.transferAccountId))
   );
 }
 
-function isNonTransferRangeTransaction(
-  transaction: YnabTransaction,
-  fromMonth: string,
-  toMonth: string,
+// Live split lines replace the parent.
+function toLiveLines(
+  transaction: FlowEntry & { subtransactions?: FlowEntry[] | undefined },
+): FlowEntry[] {
+  const liveSubtransactions =
+    transaction.subtransactions?.filter(
+      (subtransaction) => !subtransaction.deleted,
+    ) ?? [];
+
+  return liveSubtransactions.length > 0 ? liveSubtransactions : [transaction];
+}
+
+// The lines that move budget money, so a split made only of budget ↔ budget
+// transfers contributes nothing.
+function toBudgetFlowLines(
+  transaction: FlowEntry & { subtransactions?: FlowEntry[] | undefined },
+  offBudgetAccountIds: Set<string>,
 ) {
-  const monthKey = `${transaction.date.slice(0, 7)}-01`;
-  return (
-    !transaction.deleted &&
-    !transaction.transferAccountId &&
-    monthKey >= fromMonth &&
-    monthKey <= toMonth
+  return toLiveLines(transaction).filter((entry) =>
+    isBudgetFlowEntry(entry, offBudgetAccountIds),
   );
+}
+
+function sumAmounts(entries: Array<{ amount: number }>) {
+  return entries.reduce((sum, entry) => sum + entry.amount, 0);
+}
+
+function toOffBudgetAccountIds(
+  accounts: Array<{ id: string; onBudget?: boolean }>,
+) {
+  return new Set(
+    accounts
+      .filter((account) => account.onBudget === false)
+      .map((account) => account.id),
+  );
+}
+
+async function listOffBudgetAccountIds(ynabClient: YnabClient, planId: string) {
+  // ponytail: optional probe like listCategories in category trends; minimal
+  // test clients omit listAccounts. Cast: YnabClient declares it required.
+  const { listAccounts } = ynabClient as Partial<YnabClient>;
+
+  return toOffBudgetAccountIds(
+    listAccounts ? await listAccounts.call(ynabClient, planId) : [],
+  );
+}
+
+// The budget's view of transactions: live, on-budget (tracking-account
+// activity never moves budget money), dated within the month range, and
+// carrying only the amount that moves budget money.
+function toBudgetTransactions(
+  transactions: YnabTransaction[],
+  offBudgetAccountIds: Set<string>,
+  fromMonth: string,
+  toMonth: string = fromMonth,
+): YnabTransaction[] {
+  return transactions.flatMap((transaction) => {
+    const monthKey = toMonthKey(transaction.date);
+
+    if (
+      transaction.deleted ||
+      monthKey < fromMonth ||
+      monthKey > toMonth ||
+      (transaction.accountId && offBudgetAccountIds.has(transaction.accountId))
+    ) {
+      return [];
+    }
+
+    const lines = toBudgetFlowLines(transaction, offBudgetAccountIds);
+
+    return lines.length === 0
+      ? []
+      : [
+          {
+            ...transaction,
+            amount: sumAmounts(lines),
+            // Downstream line readers (toLiveLines) see only the kept lines.
+            ...(transaction.subtransactions
+              ? {
+                  subtransactions: transaction.subtransactions.filter(
+                    (subtransaction) => lines.includes(subtransaction),
+                  ),
+                }
+              : {}),
+          },
+        ];
+  });
 }
 
 function toSpendingCategoryLine(input: {
@@ -664,31 +818,15 @@ function toSpendingCategoryLine(input: {
   return line;
 }
 
+// Expects a toBudgetTransactions entry: excluded lines are already gone.
 function toSpendingCategoryLines(
   transaction: YnabTransaction,
 ): SpendingCategoryLine[] {
-  const subtransactions =
-    transaction.subtransactions?.filter(
-      (subtransaction) =>
-        !subtransaction.deleted && !subtransaction.transferAccountId,
-    ) ?? [];
-
-  if (subtransactions.length === 0) {
+  return toLiveLines(transaction).flatMap((entry) => {
     const line = toSpendingCategoryLine({
-      amount: transaction.amount,
-      categoryId: transaction.categoryId,
-      categoryName: transaction.categoryName,
-      transactionId: transaction.id,
-    });
-
-    return line ? [line] : [];
-  }
-
-  return subtransactions.flatMap((subtransaction) => {
-    const line = toSpendingCategoryLine({
-      amount: subtransaction.amount,
-      categoryId: subtransaction.categoryId,
-      categoryName: subtransaction.categoryName,
+      amount: entry.amount,
+      categoryId: entry.categoryId,
+      categoryName: entry.categoryName,
       transactionId: transaction.id,
     });
 
@@ -696,8 +834,8 @@ function toSpendingCategoryLines(
   });
 }
 
-function isReadyToAssignIncome(transaction: YnabTransaction) {
-  const categoryName = transaction.categoryName?.trim().toLowerCase();
+function isReadyToAssignIncome(entry: { categoryName?: string | null }) {
+  const categoryName = entry.categoryName?.trim().toLowerCase();
 
   return (
     categoryName === "ready to assign" ||
@@ -705,16 +843,111 @@ function isReadyToAssignIncome(transaction: YnabTransaction) {
   );
 }
 
-function isNonTransferScheduledTransaction(transaction: {
-  deleted?: boolean;
-  transferAccountId?: string | null;
-  dateNext?: string | null;
+// Credit card payment activity is new card spending minus payments; the
+// spending itself already shows in the real categories.
+function toCategorySpent(category: {
+  categoryGroupName?: string;
+  activity?: number;
 }) {
-  return (
-    !transaction.deleted &&
-    !transaction.transferAccountId &&
-    Boolean(transaction.dateNext)
-  );
+  return category.categoryGroupName === "Credit Card Payments"
+    ? 0
+    : toSpentFromActivity(category.activity);
+}
+
+type ScheduledFlowTransaction = FlowEntry & {
+  id: string;
+  accountId?: string | null;
+  dateNext?: string | null;
+  frequency?: string | null;
+  subtransactions?: FlowEntry[] | undefined;
+};
+
+const SCHEDULED_FREQUENCY_STEPS: Record<
+  string,
+  { days: number } | { months: number }
+> = {
+  daily: { days: 1 },
+  weekly: { days: 7 },
+  everyOtherWeek: { days: 14 },
+  // ponytail: twice a month approximated as every 15 days; exact only for the
+  // 30-day windows used here, not for long horizons.
+  twiceAMonth: { days: 15 },
+  every4Weeks: { days: 28 },
+  monthly: { months: 1 },
+  everyOtherMonth: { months: 2 },
+  every3Months: { months: 3 },
+  every4Months: { months: 4 },
+  twiceAYear: { months: 6 },
+  yearly: { months: 12 },
+  everyOtherYear: { months: 24 },
+};
+
+// Occurrences due within [asOfDate, asOfDate + horizonDays], starting at
+// dateNext. A past dateNext is not itself counted (YNAB enters scheduled
+// transactions on their due date, so it is already a real transaction), but
+// its later repeats are.
+function listScheduledOccurrences(
+  transaction: ScheduledFlowTransaction,
+  asOfDate: string,
+  horizonDays: number,
+) {
+  const dateNext = transaction.dateNext;
+  if (!dateNext) {
+    return [];
+  }
+
+  const step = SCHEDULED_FREQUENCY_STEPS[transaction.frequency ?? "never"];
+  const occurrences: Array<{ date: string; daysUntilDue: number }> = [];
+
+  for (let index = 0; index === 0 || step; index += 1) {
+    const date = !step
+      ? dateNext
+      : "months" in step
+        ? addMonthsToDate(dateNext, step.months * index)
+        : addDays(dateNext, step.days * index);
+    const daysUntilDue = daysUntil(asOfDate, date);
+
+    if (daysUntilDue > horizonDays) {
+      break;
+    }
+
+    if (daysUntilDue >= 0) {
+      occurrences.push({ date, daysUntilDue });
+    }
+  }
+
+  return occurrences;
+}
+
+// One entry per due occurrence, carrying only the budget-money amount.
+function toScheduledBudgetOccurrences<T extends ScheduledFlowTransaction>(
+  scheduledTransactions: T[],
+  asOfDate: string,
+  horizonDays: number,
+  offBudgetAccountIds: Set<string>,
+) {
+  return scheduledTransactions.flatMap((transaction) => {
+    const lines =
+      transaction.deleted ||
+      (transaction.accountId && offBudgetAccountIds.has(transaction.accountId))
+        ? []
+        : toBudgetFlowLines(transaction, offBudgetAccountIds);
+
+    if (lines.length === 0) {
+      return [];
+    }
+
+    const amount = sumAmounts(lines);
+
+    return listScheduledOccurrences(transaction, asOfDate, horizonDays).map(
+      (occurrence) => ({
+        ...transaction,
+        amount,
+        dateNext: occurrence.date,
+        daysUntilDue: occurrence.daysUntilDue,
+      }),
+    );
+  });
 }
 
 function buildCleanupCounts(transactions: YnabTransaction[]) {
@@ -781,17 +1014,14 @@ function buildSpendingAnomalies(
       new Map(
         (monthDetail.categories ?? [])
           .filter((category) => !category.deleted && !category.hidden)
-          .map(
-            (category) =>
-              [category.id, toSpentFromActivity(category.activity)] as const,
-          ),
+          .map((category) => [category.id, toCategorySpent(category)] as const),
       ),
   );
 
   return latestCategories
     .filter((category) => !category.deleted && !category.hidden)
     .map((category) => {
-      const latestSpent = toSpentFromActivity(category.activity);
+      const latestSpent = toCategorySpent(category);
       const baselineValues = baselineSpentLookups.map(
         (lookup) => lookup.get(category.id) ?? 0,
       );
@@ -941,8 +1171,8 @@ function buildDigestTopChanges(
   return visibleDigestCategories(currentCategories)
     .map((category) => {
       const previous = previousById.get(category.id);
-      const currentSpent = toSpentFromActivity(category.activity);
-      const previousSpent = toSpentFromActivity(previous?.activity);
+      const currentSpent = toCategorySpent(category);
+      const previousSpent = previous ? toCategorySpent(previous) : 0;
       const spendingIncrease = currentSpent - previousSpent;
       const availableDrop = (previous?.balance ?? 0) - category.balance;
       const assignedChange = Math.abs(
@@ -1053,12 +1283,10 @@ function buildDigestCategoryPressure(
 }
 
 function buildDigestLargeTransactions(
-  transactions: YnabTransaction[],
-  month: string,
+  budgetTransactions: YnabTransaction[],
   topN: number,
 ) {
-  return transactions
-    .filter((transaction) => isNonTransferMonthTransaction(transaction, month))
+  return budgetTransactions
     .filter(
       (transaction) =>
         Math.abs(transaction.amount) >= DIGEST_ATTENTION_THRESHOLD_MILLIUNITS,
@@ -1084,27 +1312,22 @@ function buildDigestLargeTransactions(
 }
 
 function buildDigestUpcomingObligations(
-  scheduledTransactions: Array<{
-    id: string;
-    amount: number;
-    dateNext?: string | null;
-    deleted?: boolean;
-    transferAccountId?: string | null;
-    payeeName?: string | null;
-    categoryName?: string | null;
-    accountName?: string | null;
-  }>,
+  scheduledTransactions: Array<
+    ScheduledFlowTransaction & {
+      payeeName?: string | null;
+      accountName?: string | null;
+    }
+  >,
   asOfDate: string,
   topN: number,
+  offBudgetAccountIds: Set<string>,
 ) {
-  return scheduledTransactions
-    .filter(isNonTransferScheduledTransaction)
-    .map((transaction) => ({
-      ...transaction,
-      daysUntilDue: daysUntil(asOfDate, transaction.dateNext!),
-    }))
-    .filter((transaction) => transaction.daysUntilDue >= 0)
-    .filter((transaction) => transaction.daysUntilDue <= 30)
+  return toScheduledBudgetOccurrences(
+    scheduledTransactions,
+    asOfDate,
+    30,
+    offBudgetAccountIds,
+  )
     .sort(
       (left, right) =>
         left.daysUntilDue - right.daysUntilDue ||
@@ -1274,10 +1497,13 @@ export async function getFinancialHealthCheck(
   const snapshot = buildAccountSnapshotSummary(
     accounts as YnabAccountSummary[],
   );
-  const monthTransactions = transactions.filter((transaction) =>
-    isNonTransferMonthTransaction(transaction, monthDetail.month),
+  const cleanup = buildCleanupCounts(
+    toBudgetTransactions(
+      transactions,
+      toOffBudgetAccountIds(accounts),
+      monthDetail.month,
+    ),
   );
-  const cleanup = buildCleanupCounts(monthTransactions);
   const risks = buildHealthRisks({
     overspentCategoryCount: budgetHealth.overspent_category_count,
     underfundedCategoryCount: budgetHealth.underfunded_category_count,
@@ -1326,14 +1552,9 @@ export async function getMonthlyReview(
   input: FinancialHealthInput,
 ) {
   const topN = resolveTopN(input);
-  const { monthDetail, transactions } = await getMonthTransactionContext(
-    ynabClient,
-    input,
-  );
+  const { monthDetail, budgetTransactions: monthTransactions } =
+    await getMonthTransactionContext(ynabClient, input);
   const budgetHealth = summarizeBudgetHealthMonth(monthDetail, topN);
-  const monthTransactions = transactions.filter((transaction) =>
-    isNonTransferMonthTransaction(transaction, monthDetail.month),
-  );
   const inflowMilliunits = monthTransactions
     .filter((transaction) => transaction.amount > 0)
     .reduce((sum, transaction) => sum + transaction.amount, 0);
@@ -1380,19 +1601,13 @@ export async function getCashFlowSummary(
   ynabClient: YnabClient,
   input: FinancialHealthRangeInput,
 ) {
-  const { fromMonth, toMonth, months, transactions } = await getRangeContext(
-    ynabClient,
-    input,
-  );
+  const { fromMonth, toMonth, months, budgetTransactions } =
+    await getRangeContext(ynabClient, input);
   const periodFlow = new Map<string, { inflow: number; outflow: number }>(
     months.map((month) => [month.month, { inflow: 0, outflow: 0 }]),
   );
 
-  for (const transaction of transactions) {
-    if (!isNonTransferRangeTransaction(transaction, fromMonth, toMonth)) {
-      continue;
-    }
-
+  for (const transaction of budgetTransactions) {
     const monthKey = `${transaction.date.slice(0, 7)}-01`;
     const flow = periodFlow.get(monthKey) ?? { inflow: 0, outflow: 0 };
 
@@ -1451,7 +1666,7 @@ export async function getSpendingSummary(
   input: FinancialHealthRangeInput,
 ) {
   const topN = resolveTopN(input);
-  const { planId, fromMonth, toMonth, months, transactions } =
+  const { planId, fromMonth, toMonth, months, budgetTransactions } =
     await getRangeContext(ynabClient, input);
   const categoryGroups = await ynabClient.listCategories(planId);
   const categoryGroupLookup = new Map(
@@ -1484,10 +1699,8 @@ export async function getSpendingSummary(
     }
   >();
 
-  const spendingTransactions = transactions.filter(
-    (transaction) =>
-      isNonTransferRangeTransaction(transaction, fromMonth, toMonth) &&
-      transaction.amount < 0,
+  const spendingTransactions = budgetTransactions.filter(
+    (transaction) => transaction.amount < 0,
   );
   const spendingEntries = spendingTransactions
     .map((transaction) => {
@@ -1682,6 +1895,7 @@ export async function getCategoryTrendSummary(
     planId,
     input.fromMonth,
     input.toMonth,
+    input,
   );
   const months = listMonthsInRange(fromMonth, toMonth);
   const listCategories = (
@@ -1780,7 +1994,7 @@ export async function getCategoryTrendSummary(
       0,
     );
     const spentMilliunits = matchingCategories.reduce(
-      (sum, category) => sum + toSpentFromActivity(category.activity),
+      (sum, category) => sum + toCategorySpent(category),
       0,
     );
     const availableMilliunits = matchingCategories.reduce(
@@ -1816,21 +2030,27 @@ export async function getCategoryTrendSummary(
     };
   }
 
-  const totalSpentMilliunits = periods.reduce(
+  // An in-progress month's partial spending would skew the trend statistics.
+  const firstIncompleteMonth = currentCalendarMonth(input);
+  const completedPeriods = periods.filter(
+    (period) => period.month < firstIncompleteMonth,
+  );
+  const trendPeriods = completedPeriods.length > 0 ? completedPeriods : periods;
+  const totalSpentMilliunits = trendPeriods.reduce(
     (sum, period) => sum + period.spentMilliunits,
     0,
   );
-  const peakPeriod = periods.reduce(
+  const peakPeriod = trendPeriods.reduce(
     (peak, period) =>
       !peak || period.spentMilliunits > peak.spentMilliunits ? period : peak,
-    periods[0],
+    trendPeriods[0],
   );
   const spentSlope = calculateLinearRegressionSlope(
-    periods.map((period) => period.spentMilliunits),
+    trendPeriods.map((period) => period.spentMilliunits),
   );
   const assignedSpentCorrelation = calculatePearsonCorrelation(
-    periods.map((period) => period.assignedMilliunits),
-    periods.map((period) => period.spentMilliunits),
+    trendPeriods.map((period) => period.assignedMilliunits),
+    trendPeriods.map((period) => period.spentMilliunits),
   );
 
   return {
@@ -1838,12 +2058,12 @@ export async function getCategoryTrendSummary(
     to_month: toMonth,
     scope,
     average_spent: formatMilliunits(
-      Math.round(totalSpentMilliunits / Math.max(periods.length, 1)),
+      Math.round(totalSpentMilliunits / Math.max(trendPeriods.length, 1)),
     ),
     peak_month: peakPeriod?.month,
     spent_change: formatMilliunits(
-      (periods[periods.length - 1]?.spentMilliunits ?? 0) -
-        (periods[0]?.spentMilliunits ?? 0),
+      (trendPeriods[trendPeriods.length - 1]?.spentMilliunits ?? 0) -
+        (trendPeriods[0]?.spentMilliunits ?? 0),
     ),
     trend: compactObject({
       spent_slope_per_month:
@@ -1877,15 +2097,11 @@ export async function getCashResilienceSummary(
     asOfDate?: string;
     monthsBack?: number;
     detailLevel?: DetailLevel;
+    timeZone?: string;
   },
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const month = await resolveMonth(
-    ynabClient,
-    planId,
-    input.month,
-    input.asOfDate,
-  );
+  const month = await resolveMonth(ynabClient, planId, input.month, input);
   const monthsBack = input.monthsBack ?? 3;
   const [accounts, months, scheduledTransactions] = await Promise.all([
     ynabClient.listAccounts(planId),
@@ -1894,7 +2110,7 @@ export async function getCashResilienceSummary(
   ]);
   const liquidCash = buildAccountSnapshotSummary(accounts).liquidCashMilliunits;
   // An in-progress month's partial activity would understate the average.
-  const firstIncompleteMonth = currentCalendarMonth(input.asOfDate);
+  const firstIncompleteMonth = currentCalendarMonth(input);
   const consideredMonths = months
     .filter(
       (entry) =>
@@ -1911,18 +2127,15 @@ export async function getCashResilienceSummary(
       ) / consideredMonths.length
     : 0;
   const averageDailyOutflow = averageMonthlySpending / 30;
-  const asOfDate = toCashResilienceScheduledAsOfDate(
-    month,
-    input.month,
-    input.asOfDate,
+  const asOfDate = toCashResilienceScheduledAsOfDate(month, input.month, input);
+  const scheduledNetNext30d = sumAmounts(
+    toScheduledBudgetOccurrences(
+      scheduledTransactions,
+      asOfDate,
+      30,
+      toOffBudgetAccountIds(accounts),
+    ),
   );
-  const scheduledNetNext30d = scheduledTransactions
-    .filter(isNonTransferScheduledTransaction)
-    .filter((transaction) => {
-      const dueInDays = daysUntil(asOfDate, transaction.dateNext!);
-      return dueInDays >= 0 && dueInDays <= 30;
-    })
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
   const coverageMonths =
     averageMonthlySpending === 0
       ? undefined
@@ -1970,29 +2183,32 @@ export async function getUpcomingObligations(
     asOfDate?: string;
     topN?: number;
     detailLevel?: DetailLevel;
+    timeZone?: string;
   },
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
-  const asOfDate = currentCalendarDate(input.asOfDate);
+  const asOfDate = currentCalendarDate(input);
   const topN = resolveTopN(input);
-  const scheduledTransactions = (
-    await ynabClient.listScheduledTransactions(planId)
+  const [scheduled, offBudgetAccountIds] = await Promise.all([
+    ynabClient.listScheduledTransactions(planId),
+    listOffBudgetAccountIds(ynabClient, planId),
+  ]);
+  const scheduledTransactions = toScheduledBudgetOccurrences(
+    scheduled,
+    asOfDate,
+    30,
+    offBudgetAccountIds,
   )
-    .filter(isNonTransferScheduledTransaction)
     .filter((transaction) => transaction.amount !== 0)
     .map((transaction) => ({
       id: transaction.id,
-      date_next: transaction.dateNext!,
+      date_next: transaction.dateNext,
       payee_name: transaction.payeeName,
       category_name: transaction.categoryName,
       account_name: transaction.accountName,
       amount: transaction.amount,
-      days_until_due: daysUntil(asOfDate, transaction.dateNext!),
+      days_until_due: transaction.daysUntilDue,
     }))
-    .filter(
-      (transaction) =>
-        transaction.days_until_due >= 0 && transaction.days_until_due <= 30,
-    )
     .sort(
       (left, right) =>
         left.days_until_due - right.days_until_due ||
@@ -2059,16 +2275,16 @@ export async function getIncomeSummary(
   input: FinancialHealthRangeInput,
 ) {
   const topN = resolveTopN(input);
-  const { fromMonth, toMonth, months, transactions } = await getRangeContext(
-    ynabClient,
-    input,
-  );
-  const incomeTransactions = transactions.filter(
-    (transaction) =>
-      isNonTransferRangeTransaction(transaction, fromMonth, toMonth) &&
-      transaction.amount > 0 &&
-      isReadyToAssignIncome(transaction),
-  );
+  const { fromMonth, toMonth, months, budgetTransactions } =
+    await getRangeContext(ynabClient, input);
+  // Split paychecks carry "Split" on the parent; income lives on the lines.
+  const incomeTransactions = budgetTransactions.flatMap((transaction) => {
+    const amount = sumAmounts(
+      toLiveLines(transaction).filter(isReadyToAssignIncome),
+    );
+
+    return amount > 0 ? [{ ...transaction, amount }] : [];
+  });
   const hasSyncedMonthIncome = months.some((month) => month.income !== 0);
   const syncedIncomeByMonth = new Map(
     months.map((month) => [month.month, month.income] as const),
@@ -2117,10 +2333,17 @@ export async function getIncomeSummary(
   const monthTotals = Array.from(incomeByMonth.entries()).map(
     ([month, income]) => ({ month, income }),
   );
-  const incomeValues = monthTotals.map((entry) => entry.income);
-  const incomeTotal = incomeValues.reduce((sum, value) => sum + value, 0);
+  const incomeTotal = monthTotals.reduce((sum, entry) => sum + entry.income, 0);
+  // An in-progress month's partial income would drag the statistics down.
+  const firstIncompleteMonth = currentCalendarMonth(input);
+  const completedMonthTotals = monthTotals.filter(
+    (entry) => entry.month < firstIncompleteMonth,
+  );
+  const incomeValues = (
+    completedMonthTotals.length > 0 ? completedMonthTotals : monthTotals
+  ).map((entry) => entry.income);
   const averageIncome = incomeValues.length
-    ? incomeTotal / incomeValues.length
+    ? incomeValues.reduce((sum, value) => sum + value, 0) / incomeValues.length
     : 0;
   const sortedIncome = incomeValues.slice().sort((left, right) => left - right);
   const medianIncome =
@@ -2205,11 +2428,10 @@ export async function getRecurringExpenseSummary(
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const topN = resolveTopN(input);
-  const transactions = await ynabClient.listTransactions(
-    planId,
-    input.fromDate,
-    input.toDate,
-  );
+  const [transactions, offBudgetAccountIds] = await Promise.all([
+    ynabClient.listTransactions(planId, input.fromDate, input.toDate),
+    listOffBudgetAccountIds(ynabClient, planId),
+  ]);
   const candidates = new Map<
     string,
     {
@@ -2220,10 +2442,13 @@ export async function getRecurringExpenseSummary(
     }
   >();
 
-  for (const transaction of transactions) {
+  for (const transaction of toBudgetTransactions(
+    transactions,
+    offBudgetAccountIds,
+    toMonthKey(input.fromDate),
+    toMonthKey(input.toDate),
+  )) {
     if (
-      transaction.deleted ||
-      transaction.transferAccountId ||
       transaction.amount >= 0 ||
       transaction.date < input.fromDate ||
       transaction.date > input.toDate
@@ -2282,16 +2507,8 @@ export async function getBudgetCleanupSummary(
   input: FinancialHealthInput,
 ) {
   const topN = resolveTopN(input);
-  const { monthDetail, transactions } = await getMonthTransactionContext(
-    ynabClient,
-    input,
-  );
-  const monthTransactions = transactions.filter(
-    (transaction) =>
-      !transaction.deleted &&
-      !transaction.transferAccountId &&
-      toMonthKey(transaction.date) === monthDetail.month,
-  );
+  const { monthDetail, budgetTransactions: monthTransactions } =
+    await getMonthTransactionContext(ynabClient, input);
   const uncategorizedTransactions = monthTransactions.filter(
     (transaction) => !transaction.categoryId,
   );
@@ -2427,7 +2644,12 @@ function summarizeBalances(
 
 export async function getNetWorthTrajectory(
   ynabClient: YnabClient,
-  input: { planId?: string; fromMonth?: string; toMonth?: string },
+  input: {
+    planId?: string;
+    fromMonth?: string;
+    toMonth?: string;
+    timeZone?: string;
+  },
 ) {
   const planId = await resolvePlanId(ynabClient, input.planId);
   const { fromMonth, toMonth } = await resolveMonthRange(
@@ -2435,25 +2657,36 @@ export async function getNetWorthTrajectory(
     planId,
     input.fromMonth,
     input.toMonth,
+    input,
   );
+  const currentMonth = currentCalendarMonth(input);
   const [accounts, transactions] = await Promise.all([
     ynabClient.listAccounts(planId),
     ynabClient.listTransactions(
       planId,
       fromMonth,
-      endOfMonth(
-        toMonth > currentCalendarMonth() ? toMonth : currentCalendarMonth(),
-      ),
+      endOfMonth(toMonth > currentMonth ? toMonth : currentMonth),
     ),
   ]);
   const months = listMonthsInRange(fromMonth, toMonth);
+  // YNAB only closes zero-balance accounts, so a closed account holds nothing
+  // today but still held its rolled-back balance in earlier months.
+  const historicalAccounts = accounts
+    .filter((account) => !account.deleted)
+    .map((account) =>
+      account.closed ? { ...account, balance: 0, closed: false } : account,
+    );
   const balancesByMonth = reconstructHistoricalBalances(
-    accounts.filter((account) => !account.deleted),
+    historicalAccounts,
     transactions,
     months,
   );
   const monthSummaries = months.map((month) =>
-    summarizeBalances(month, balancesByMonth.get(month) ?? new Map(), accounts),
+    summarizeBalances(
+      month,
+      balancesByMonth.get(month) ?? new Map(),
+      historicalAccounts,
+    ),
   );
   const startSummary = monthSummaries[0];
   const endSummary = monthSummaries[monthSummaries.length - 1];
